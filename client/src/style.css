@@ -1,0 +1,106 @@
+:root {
+  color-scheme: light dark;
+  --bg: #f7f8fb;
+  --panel: #ffffff;
+  --text: #111827;
+  --muted: #6b7280;
+  --border: #d1d5db;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0b1220;
+    --panel: #111827;
+    --text: #e5e7eb;
+    --muted: #9ca3af;
+    --border: #374151;
+  }
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: Inter, system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.app-shell {
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  min-height: 100vh;
+}
+
+.sidebar {
+  border-right: 1px solid var(--border);
+  padding: 1rem;
+  background: var(--panel);
+}
+
+h1 { margin-top: 0; }
+.create-row { display: flex; gap: .5rem; }
+.create-row input {
+  flex: 1;
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: .5rem;
+  padding: .5rem .7rem;
+}
+button {
+  border: 1px solid var(--border);
+  border-radius: .5rem;
+  background: transparent;
+  color: var(--text);
+  padding: .45rem .75rem;
+  cursor: pointer;
+}
+
+.list { margin-top: 1rem; display: flex; flex-direction: column; gap: .4rem; }
+.note-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  text-align: left;
+}
+.note-item.active { outline: 2px solid #3b82f6; }
+.note-item small { display: block; color: var(--muted); }
+.pin { font-size: 1.1rem; }
+
+.editor-area { padding: 1rem; }
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: .7rem;
+  gap: .75rem;
+  flex-wrap: wrap;
+}
+.status { display: flex; gap: .7rem; color: var(--muted); }
+.actions { display: flex; gap: .5rem; }
+.online { color: #22c55e; }
+.offline { color: #f59e0b; }
+.error { color: #ef4444; }
+
+.plain-wrap textarea {
+  width: 100%;
+  min-height: 65vh;
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: .5rem;
+  padding: 1rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, monospace;
+}
+
+.wysiwyg-wrap :deep(.toastui-editor-defaultUI) {
+  border-color: var(--border);
+}
+
+@media (max-width: 900px) {
+  .app-shell {
+    grid-template-columns: 1fr;
+  }
+  .sidebar { border-right: 0; border-bottom: 1px solid var(--border); }
+}
