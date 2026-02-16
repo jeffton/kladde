@@ -226,32 +226,12 @@ button {
 }
 
 .tiptap-root .ProseMirror ul[data-type='taskList'] li input[type='checkbox'] {
-  -webkit-appearance: none;
-  appearance: none;
   width: 16px;
   height: 16px;
   margin: 0;
-  border: 2px solid var(--border);
-  border-radius: 3px;
-  background: transparent;
+  accent-color: #3b82f6;
   cursor: pointer;
   flex-shrink: 0;
-  position: relative;
-}
-
-.tiptap-root .ProseMirror ul[data-type='taskList'] li input[type='checkbox']:checked {
-  background: #3b82f6;
-  border-color: #3b82f6;
-}
-
-.tiptap-root .ProseMirror ul[data-type='taskList'] li input[type='checkbox']:checked::after {
-  content: '✓';
-  position: absolute;
-  top: -1px;
-  left: 2px;
-  font-size: 11px;
-  color: white;
-  font-weight: bold;
 }
 
 .tiptap-root .ProseMirror ul[data-type='taskList'] li[data-checked='true'] > div {
