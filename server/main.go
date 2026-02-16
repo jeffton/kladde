@@ -5,6 +5,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"io/fs"
 	"log"
 	"mime"
@@ -15,7 +16,11 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unicode"
 )
+
+const maxJSONBodySize = 1 << 20 // 1MB
+const maxTitleLength = 200
 
 type NoteMeta struct {
 	Title     string    `json:"title"`
@@ -72,8 +77,8 @@ func (s *Server) handleNotes(w http.ResponseWriter, r *http.Request) {
 			Title   string `json:"title"`
 			Content string `json:"content"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
-			writeError(w, http.StatusBadRequest, errors.New("invalid JSON body"))
+		if err := decodeJSONBody(w, r, &payload); err != nil {
+			writeError(w, http.StatusBadRequest, err)
 			return
 		}
 		title := strings.TrimSpace(payload.Title)
@@ -113,8 +118,8 @@ func (s *Server) handleNoteByTitle(w http.ResponseWriter, r *http.Request) {
 		var payload struct {
 			NewTitle string `json:"newTitle"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
-			writeError(w, http.StatusBadRequest, errors.New("invalid JSON body"))
+		if err := decodeJSONBody(w, r, &payload); err != nil {
+			writeError(w, http.StatusBadRequest, err)
 			return
 		}
 
@@ -165,8 +170,8 @@ func (s *Server) handleNoteByTitle(w http.ResponseWriter, r *http.Request) {
 		var payload struct {
 			Content string `json:"content"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
-			writeError(w, http.StatusBadRequest, errors.New("invalid JSON body"))
+		if err := decodeJSONBody(w, r, &payload); err != nil {
+			writeError(w, http.StatusBadRequest, err)
 			return
 		}
 		note, err := s.saveNote(title, payload.Content)
@@ -219,9 +224,57 @@ func (s *Server) getNote(title string) (*Note, error) {
 	return &Note{Title: title, Content: string(content), UpdatedAt: info.ModTime()}, nil
 }
 
+func writeFileAtomic(path string, data []byte, perm os.FileMode) error {
+	dir := filepath.Dir(path)
+	tmpFile, err := os.CreateTemp(dir, ".noteapp-*.tmp")
+	if err != nil {
+		return err
+	}
+	tmpPath := tmpFile.Name()
+
+	cleanup := func() {
+		_ = os.Remove(tmpPath)
+	}
+
+	if _, err := tmpFile.Write(data); err != nil {
+		_ = tmpFile.Close()
+		cleanup()
+		return err
+	}
+
+	if err := tmpFile.Sync(); err != nil {
+		_ = tmpFile.Close()
+		cleanup()
+		return err
+	}
+
+	if err := tmpFile.Close(); err != nil {
+		cleanup()
+		return err
+	}
+
+	if err := os.Chmod(tmpPath, perm); err != nil {
+		cleanup()
+		return err
+	}
+
+	if err := os.Rename(tmpPath, path); err != nil {
+		cleanup()
+		return err
+	}
+
+	d, err := os.Open(dir)
+	if err == nil {
+		_ = d.Sync()
+		_ = d.Close()
+	}
+
+	return nil
+}
+
 func (s *Server) saveNote(title, content string) (*Note, error) {
 	path := filepath.Join(s.notesDir, title+".md")
-	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+	if err := writeFileAtomic(path, []byte(content), 0o644); err != nil {
 		return nil, err
 	}
 	info, err := os.Stat(path)
@@ -268,9 +321,44 @@ func validateTitle(title string) error {
 	if title == "" {
 		return errors.New("title is required")
 	}
+	if len([]rune(title)) > maxTitleLength {
+		return fmt.Errorf("title exceeds max length of %d characters", maxTitleLength)
+	}
 	if strings.Contains(title, "/") || strings.Contains(title, "\\") || strings.Contains(title, "..") {
 		return errors.New("title contains invalid characters")
 	}
+	for _, r := range title {
+		if unicode.IsControl(r) {
+			return errors.New("title contains control characters")
+		}
+	}
+	return nil
+}
+
+func decodeJSONBody(w http.ResponseWriter, r *http.Request, dest any) error {
+	r.Body = http.MaxBytesReader(w, r.Body, maxJSONBodySize)
+	dec := json.NewDecoder(r.Body)
+	dec.DisallowUnknownFields()
+
+	if err := dec.Decode(dest); err != nil {
+		var synErr *json.SyntaxError
+		if errors.As(err, &synErr) {
+			return errors.New("invalid JSON body")
+		}
+		if errors.Is(err, io.EOF) {
+			return errors.New("empty JSON body")
+		}
+		if strings.Contains(err.Error(), "http: request body too large") {
+			return fmt.Errorf("request body exceeds %d bytes", maxJSONBodySize)
+		}
+		return errors.New("invalid JSON body")
+	}
+
+	var extra any
+	if err := dec.Decode(&extra); err != io.EOF {
+		return errors.New("invalid JSON body")
+	}
+
 	return nil
 }
 
@@ -286,16 +374,34 @@ func (s *Server) handleSPA(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	full := filepath.Join(s.distDir, requested)
-	if info, err := os.Stat(full); err == nil && !info.IsDir() {
-		if ct := mime.TypeByExtension(filepath.Ext(full)); ct != "" {
-			w.Header().Set("Content-Type", ct)
-		}
-		http.ServeFile(w, r, full)
+	absDist, err := filepath.Abs(s.distDir)
+	if err != nil {
+		http.NotFound(w, r)
 		return
 	}
 
-	http.ServeFile(w, r, filepath.Join(s.distDir, "index.html"))
+	full := filepath.Join(absDist, requested)
+	absFull, err := filepath.Abs(full)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+
+	prefix := absDist + string(os.PathSeparator)
+	if absFull != absDist && !strings.HasPrefix(absFull, prefix) {
+		http.NotFound(w, r)
+		return
+	}
+
+	if info, err := os.Stat(absFull); err == nil && !info.IsDir() {
+		if ct := mime.TypeByExtension(filepath.Ext(absFull)); ct != "" {
+			w.Header().Set("Content-Type", ct)
+		}
+		http.ServeFile(w, r, absFull)
+		return
+	}
+
+	http.ServeFile(w, r, filepath.Join(absDist, "index.html"))
 }
 
 func writeError(w http.ResponseWriter, status int, err error) {

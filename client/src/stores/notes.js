@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { deleteCachedNote, getAllCachedNotes, getCachedNote, putCachedNote, putCachedNotes } from './notesDb'
+import { deleteCachedNote, getAllCachedNotes, getCachedNote, putCachedNote } from './notesDb'
 
 const PINNED_KEY = 'noteapp:pinned'
 
@@ -33,7 +33,10 @@ export const useNotesStore = defineStore('notes', {
     dirty: false,
     online: navigator.onLine,
     syncStatus: 'Synkroniseret',
-    syncing: false
+    syncing: false,
+    syncError: '',
+    writeQueue: Promise.resolve(),
+    contentVersion: 0
   }),
   getters: {
     sortedNotes(state) {
@@ -51,16 +54,30 @@ export const useNotesStore = defineStore('notes', {
         this.syncStatus = 'Offline — ændringer gemmes lokalt'
       } else if (this.syncing) {
         this.syncStatus = 'Synkroniserer...'
+      } else if (this.syncError) {
+        this.syncStatus = `Sync-fejl: ${this.syncError}`
       } else {
         this.syncStatus = 'Synkroniseret'
       }
+    },
+
+    setSyncError(message) {
+      this.syncError = message || 'Ukendt fejl'
+      this.updateSyncStatus()
+    },
+
+    clearSyncError() {
+      this.syncError = ''
+      this.updateSyncStatus()
     },
 
     setOnline(value) {
       this.online = value
       this.updateSyncStatus()
       if (value) {
-        this.syncWithServer().catch(() => {})
+        this.syncWithServer().catch((err) => {
+          this.setSyncError(err?.message || 'Kunne ikke synkronisere')
+        })
       }
     },
 
@@ -93,7 +110,9 @@ export const useNotesStore = defineStore('notes', {
       this.updateSyncStatus()
 
       if (this.online) {
-        this.syncWithServer().catch(() => {})
+        this.syncWithServer().catch((err) => {
+          this.setSyncError(err?.message || 'Kunne ikke synkronisere')
+        })
       }
     },
 
@@ -112,26 +131,49 @@ export const useNotesStore = defineStore('notes', {
       }
 
       if (this.online && !cached) {
-        this.syncWithServer().catch(() => {})
+        this.syncWithServer().catch((err) => {
+          this.setSyncError(err?.message || 'Kunne ikke synkronisere')
+        })
       }
+    },
+
+    queueWrite(task) {
+      this.writeQueue = this.writeQueue
+        .then(task)
+        .catch(() => {
+          // queue must keep running after failures
+        })
+      return this.writeQueue
+    },
+
+    async flushPendingWrites() {
+      await this.writeQueue
     },
 
     async setCurrentContent(content) {
       this.currentContent = content
       this.dirty = true
       this.currentUpdatedAt = new Date().toISOString()
+      this.contentVersion += 1
 
       if (!this.selectedTitle) return
 
-      await putCachedNote({
+      const snapshot = {
         title: this.selectedTitle,
         content: this.currentContent,
         updatedAt: this.currentUpdatedAt,
-        dirty: true
-      })
+        dirty: true,
+        version: this.contentVersion
+      }
 
-      await this.refreshStateFromCache()
-      this.updateSyncStatus()
+      await this.queueWrite(async () => {
+        await putCachedNote(snapshot)
+
+        if (this.selectedTitle === snapshot.title && this.contentVersion === snapshot.version) {
+          await this.refreshStateFromCache()
+          this.updateSyncStatus()
+        }
+      })
     },
 
     async pushDirtyNote(title) {
@@ -162,6 +204,8 @@ export const useNotesStore = defineStore('notes', {
     async saveCurrent() {
       if (!this.selectedTitle) return
 
+      await this.flushPendingWrites()
+
       // always persist locally first (offline-first)
       await putCachedNote({
         title: this.selectedTitle,
@@ -182,6 +226,10 @@ export const useNotesStore = defineStore('notes', {
       try {
         await this.pushDirtyNote(this.selectedTitle)
         await this.refreshStateFromCache()
+        this.clearSyncError()
+      } catch (err) {
+        this.setSyncError(err?.message || 'Kunne ikke gemme note')
+        throw err
       } finally {
         this.syncing = false
         this.updateSyncStatus()
@@ -194,6 +242,7 @@ export const useNotesStore = defineStore('notes', {
         return
       }
 
+      await this.flushPendingWrites()
       this.syncing = true
       this.updateSyncStatus()
 
@@ -235,6 +284,10 @@ export const useNotesStore = defineStore('notes', {
         }
 
         await this.refreshStateFromCache()
+        this.clearSyncError()
+      } catch (err) {
+        this.setSyncError(err?.message || 'Kunne ikke synkronisere')
+        throw err
       } finally {
         this.syncing = false
         this.updateSyncStatus()
@@ -270,17 +323,19 @@ export const useNotesStore = defineStore('notes', {
         return resolvedTitle
       }
 
-      this.syncWithServer().catch(() => {})
+      this.syncWithServer().catch((err) => {
+        this.setSyncError(err?.message || 'Kunne ikke synkronisere')
+      })
       return resolvedTitle
     },
 
     async renameCurrent(newTitle) {
       if (!this.selectedTitle) throw new Error('Ingen note valgt')
       const oldTitle = this.selectedTitle
-      const nextTitle = (newTitle || '').trim()
+      const requestedTitle = (newTitle || '').trim()
 
-      if (!nextTitle) throw new Error('Titel er påkrævet')
-      if (nextTitle === oldTitle) return oldTitle
+      if (!requestedTitle) throw new Error('Titel er påkrævet')
+      if (requestedTitle === oldTitle) return oldTitle
       if (!this.online) throw new Error('Du skal være online for at omdøbe noter')
 
       if (this.dirty) {
@@ -290,7 +345,7 @@ export const useNotesStore = defineStore('notes', {
       const res = await fetch(`/api/notes/${encodeURIComponent(oldTitle)}/rename`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ newTitle: nextTitle })
+        body: JSON.stringify({ newTitle: requestedTitle })
       })
 
       let payload = null
@@ -304,12 +359,15 @@ export const useNotesStore = defineStore('notes', {
         throw new Error(payload?.error || 'Kunne ikke omdøbe note')
       }
 
+      const serverTitle = payload?.title?.trim()
+      if (!serverTitle) throw new Error('Server returnerede ugyldig titel')
+
       const contentToPersist = payload?.content ?? this.currentContent
       const updatedAt = normalizeTs(payload?.updatedAt)
 
       await deleteCachedNote(oldTitle)
       await putCachedNote({
-        title: nextTitle,
+        title: serverTitle,
         content: contentToPersist,
         updatedAt,
         dirty: false
@@ -317,17 +375,17 @@ export const useNotesStore = defineStore('notes', {
 
       if (this.pinned.has(oldTitle)) {
         this.pinned.delete(oldTitle)
-        this.pinned.add(nextTitle)
+        this.pinned.add(serverTitle)
         localStorage.setItem(PINNED_KEY, JSON.stringify([...this.pinned]))
       }
 
-      this.selectedTitle = nextTitle
+      this.selectedTitle = serverTitle
       this.currentContent = contentToPersist
       this.currentUpdatedAt = updatedAt
       this.dirty = false
 
       await this.refreshStateFromCache()
-      return nextTitle
+      return serverTitle
     }
   }
 })

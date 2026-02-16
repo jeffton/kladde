@@ -31,15 +31,6 @@ export async function putCachedNote(note) {
   return (await db()).put(NOTES_STORE, note)
 }
 
-export async function putCachedNotes(notes) {
-  const database = await db()
-  const tx = database.transaction(NOTES_STORE, 'readwrite')
-  for (const note of notes) {
-    tx.store.put(note)
-  }
-  await tx.done
-}
-
 export async function deleteCachedNote(title) {
   return (await db()).delete(NOTES_STORE, title)
 }
