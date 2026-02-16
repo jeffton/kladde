@@ -35,12 +35,7 @@ const offline = () => store.setOnline(false)
 
 const sortedNotes = computed(() => store.sortedNotes)
 
-const saveLabel = computed(() => {
-  if (store.dirty) return 'Ikke gemt'
-  if (store.saveStatus === 'Gemmer…') return 'Gemmer...'
-  if (store.saveStatus === 'Fejl ved gem') return 'Ikke gemt'
-  return 'Gemt'
-})
+const saveLabel = computed(() => (store.dirty ? 'Ikke gemt' : 'Gemt'))
 
 function runCommand(command, payload) {
   if (!milkdownEditor.value) return
@@ -93,7 +88,7 @@ async function createEditor(content = '') {
 
 async function load() {
   try {
-    await store.fetchNotes()
+    await store.initialize()
     if (!showPlain.value) await createEditor(store.currentContent)
   } catch (e) {
     error.value = e.message
@@ -143,7 +138,7 @@ onMounted(async () => {
   window.addEventListener('offline', offline)
 
   autosaveTimer = setInterval(async () => {
-    if (!store.online || !store.dirty) return
+    if (!store.dirty) return
     try {
       await store.saveCurrent()
       error.value = ''
@@ -155,7 +150,7 @@ onMounted(async () => {
   syncTimer = setInterval(async () => {
     if (!store.online) return
     try {
-      await store.fetchNotes()
+      await store.syncWithServer()
       if (!showPlain.value && !store.dirty && store.currentContent !== lastRenderedMarkdown) {
         await createEditor(store.currentContent)
       }
@@ -207,6 +202,7 @@ onUnmounted(async () => {
           <div class="status">
             <span :class="store.online ? 'online' : 'offline'">{{ store.online ? 'Online' : 'Offline' }}</span>
             <span>{{ saveLabel }}</span>
+            <span>{{ store.syncStatus }}</span>
           </div>
         </div>
         <div class="actions">

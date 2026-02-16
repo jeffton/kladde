@@ -15,6 +15,7 @@
     "@milkdown/preset-commonmark": "^7.18.0",
     "@milkdown/preset-gfm": "^7.18.0",
     "@milkdown/theme-nord": "^7.18.0",
+    "idb": "^8.0.3",
     "pinia": "^3.0.4",
     "vue": "^3.5.25"
   },

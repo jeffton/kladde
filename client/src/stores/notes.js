@@ -1,4 +1,5 @@
 import { defineStore } from 'pinia'
+import { getAllCachedNotes, getCachedNote, putCachedNote, putCachedNotes } from './notesDb'
 
 const PINNED_KEY = 'noteapp:pinned'
 
@@ -7,6 +8,18 @@ function loadPinned() {
     return new Set(JSON.parse(localStorage.getItem(PINNED_KEY) || '[]'))
   } catch {
     return new Set()
+  }
+}
+
+function normalizeTs(value) {
+  return value ? new Date(value).toISOString() : new Date().toISOString()
+}
+
+function toMeta(note) {
+  return {
+    title: note.title,
+    updatedAt: normalizeTs(note.updatedAt),
+    dirty: Boolean(note.dirty)
   }
 }
 
@@ -19,7 +32,8 @@ export const useNotesStore = defineStore('notes', {
     pinned: loadPinned(),
     dirty: false,
     online: navigator.onLine,
-    saveStatus: ''
+    syncStatus: 'Synkroniseret',
+    syncing: false
   }),
   getters: {
     sortedNotes(state) {
@@ -32,78 +46,219 @@ export const useNotesStore = defineStore('notes', {
     }
   },
   actions: {
+    updateSyncStatus() {
+      if (!this.online) {
+        this.syncStatus = 'Offline — ændringer gemmes lokalt'
+      } else if (this.syncing) {
+        this.syncStatus = 'Synkroniserer...'
+      } else {
+        this.syncStatus = 'Synkroniseret'
+      }
+    },
+
     setOnline(value) {
       this.online = value
+      this.updateSyncStatus()
+      if (value) {
+        this.syncWithServer().catch(() => {})
+      }
     },
+
     togglePin(title) {
       if (this.pinned.has(title)) this.pinned.delete(title)
       else this.pinned.add(title)
       localStorage.setItem(PINNED_KEY, JSON.stringify([...this.pinned]))
     },
-    async fetchNotes() {
-      const res = await fetch('/api/notes')
-      if (!res.ok) throw new Error('Kunne ikke hente noter')
-      const notes = await res.json()
-      this.notes = notes
 
-      if (!this.selectedTitle && notes.length > 0) {
-        await this.selectNote(notes[0].title)
+    async refreshStateFromCache() {
+      const cached = await getAllCachedNotes()
+      this.notes = cached.map(toMeta)
+
+      if (!this.selectedTitle && cached.length > 0) {
+        this.selectedTitle = cached.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt))[0].title
       }
 
       if (this.selectedTitle) {
-        const selectedMeta = notes.find((n) => n.title === this.selectedTitle)
-        if (!selectedMeta) return
-
-        const serverTime = new Date(selectedMeta.updatedAt).getTime()
-        const localTime = this.currentUpdatedAt ? new Date(this.currentUpdatedAt).getTime() : 0
-        if (!this.dirty && serverTime > localTime) {
-          await this.selectNote(this.selectedTitle)
+        const selected = cached.find((n) => n.title === this.selectedTitle)
+        if (selected) {
+          this.currentContent = selected.content || ''
+          this.currentUpdatedAt = normalizeTs(selected.updatedAt)
+          this.dirty = Boolean(selected.dirty)
         }
       }
     },
+
+    async initialize() {
+      await this.refreshStateFromCache()
+      this.updateSyncStatus()
+
+      if (this.online) {
+        this.syncWithServer().catch(() => {})
+      }
+    },
+
     async selectNote(title) {
       this.selectedTitle = title
-      const res = await fetch(`/api/notes/${encodeURIComponent(title)}`)
-      if (!res.ok) throw new Error('Kunne ikke hente noten')
-      const note = await res.json()
-      this.currentContent = note.content
-      this.currentUpdatedAt = note.updatedAt
-      this.dirty = false
+
+      const cached = await getCachedNote(title)
+      if (cached) {
+        this.currentContent = cached.content || ''
+        this.currentUpdatedAt = normalizeTs(cached.updatedAt)
+        this.dirty = Boolean(cached.dirty)
+      } else {
+        this.currentContent = ''
+        this.currentUpdatedAt = null
+        this.dirty = false
+      }
+
+      if (this.online && !cached) {
+        this.syncWithServer().catch(() => {})
+      }
     },
-    setCurrentContent(content) {
+
+    async setCurrentContent(content) {
       this.currentContent = content
       this.dirty = true
-    },
-    async saveCurrent() {
+      this.currentUpdatedAt = new Date().toISOString()
+
       if (!this.selectedTitle) return
-      this.saveStatus = 'Gemmer…'
-      const res = await fetch(`/api/notes/${encodeURIComponent(this.selectedTitle)}`, {
+
+      await putCachedNote({
+        title: this.selectedTitle,
+        content: this.currentContent,
+        updatedAt: this.currentUpdatedAt,
+        dirty: true
+      })
+
+      await this.refreshStateFromCache()
+      this.updateSyncStatus()
+    },
+
+    async pushDirtyNote(title) {
+      const local = await getCachedNote(title)
+      if (!local || !local.dirty) return
+
+      const res = await fetch(`/api/notes/${encodeURIComponent(title)}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: this.currentContent })
+        body: JSON.stringify({ content: local.content })
       })
-      if (!res.ok) {
-        this.saveStatus = 'Fejl ved gem'
-        throw new Error('Save failed')
+      if (!res.ok) throw new Error('Save failed')
+      const saved = await res.json()
+
+      await putCachedNote({
+        title: saved.title,
+        content: saved.content,
+        updatedAt: normalizeTs(saved.updatedAt),
+        dirty: false
+      })
+
+      if (this.selectedTitle === title) {
+        this.currentUpdatedAt = normalizeTs(saved.updatedAt)
+        this.dirty = false
       }
-      const note = await res.json()
-      this.currentUpdatedAt = note.updatedAt
-      this.dirty = false
-      this.saveStatus = 'Gemt'
-      await this.fetchNotes()
     },
-    async createNote(title) {
-      const res = await fetch('/api/notes', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title, content: `# ${title}\n\nNy note.` })
+
+    async saveCurrent() {
+      if (!this.selectedTitle) return
+
+      // always persist locally first (offline-first)
+      await putCachedNote({
+        title: this.selectedTitle,
+        content: this.currentContent,
+        updatedAt: this.currentUpdatedAt || new Date().toISOString(),
+        dirty: true
       })
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ error: 'Ukendt fejl' }))
-        throw new Error(err.error || 'Kunne ikke oprette note')
+
+      await this.refreshStateFromCache()
+
+      if (!this.online) {
+        this.updateSyncStatus()
+        return
       }
-      await this.fetchNotes()
+
+      this.syncing = true
+      this.updateSyncStatus()
+      try {
+        await this.pushDirtyNote(this.selectedTitle)
+        await this.refreshStateFromCache()
+      } finally {
+        this.syncing = false
+        this.updateSyncStatus()
+      }
+    },
+
+    async syncWithServer() {
+      if (!this.online) {
+        this.updateSyncStatus()
+        return
+      }
+
+      this.syncing = true
+      this.updateSyncStatus()
+
+      try {
+        const localNotes = await getAllCachedNotes()
+
+        // 1) Push dirty local notes first
+        for (const local of localNotes) {
+          if (!local.dirty) continue
+          await this.pushDirtyNote(local.title)
+        }
+
+        // 2) Pull server metadata
+        const metaRes = await fetch('/api/notes')
+        if (!metaRes.ok) throw new Error('Kunne ikke hente noter')
+        const serverMetas = await metaRes.json()
+
+        const currentLocalMap = new Map((await getAllCachedNotes()).map((n) => [n.title, n]))
+
+        // 3) Merge from server where needed
+        for (const serverMeta of serverMetas) {
+          const local = currentLocalMap.get(serverMeta.title)
+          const serverTs = new Date(serverMeta.updatedAt).getTime()
+          const localTs = local ? new Date(local.updatedAt).getTime() : 0
+
+          const shouldPull = !local || (!local.dirty && serverTs > localTs)
+          if (!shouldPull) continue
+
+          const noteRes = await fetch(`/api/notes/${encodeURIComponent(serverMeta.title)}`)
+          if (!noteRes.ok) continue
+          const serverNote = await noteRes.json()
+
+          await putCachedNote({
+            title: serverNote.title,
+            content: serverNote.content,
+            updatedAt: normalizeTs(serverNote.updatedAt),
+            dirty: false
+          })
+        }
+
+        await this.refreshStateFromCache()
+      } finally {
+        this.syncing = false
+        this.updateSyncStatus()
+      }
+    },
+
+    async createNote(title) {
+      const localNote = {
+        title,
+        content: `# ${title}\n\nNy note.`,
+        updatedAt: new Date().toISOString(),
+        dirty: true
+      }
+
+      await putCachedNote(localNote)
+      await this.refreshStateFromCache()
       await this.selectNote(title)
+
+      if (!this.online) {
+        this.updateSyncStatus()
+        return
+      }
+
+      this.syncWithServer().catch(() => {})
     }
   }
 })
