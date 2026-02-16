@@ -9,14 +9,17 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@milkdown/core": "^7.18.0",
-    "@milkdown/ctx": "^7.18.0",
-    "@milkdown/plugin-listener": "^7.18.0",
-    "@milkdown/preset-commonmark": "^7.18.0",
-    "@milkdown/preset-gfm": "^7.18.0",
-    "@milkdown/theme-nord": "^7.18.0",
+    "@tiptap/extension-code-block": "^2.11.7",
+    "@tiptap/extension-link": "^2.11.7",
+    "@tiptap/extension-placeholder": "^2.11.7",
+    "@tiptap/extension-strike": "^2.11.7",
+    "@tiptap/extension-task-item": "^2.11.7",
+    "@tiptap/extension-task-list": "^2.11.7",
+    "@tiptap/starter-kit": "^2.11.7",
+    "@tiptap/vue-3": "^2.11.7",
     "idb": "^8.0.3",
     "pinia": "^3.0.4",
+    "tiptap-markdown": "^0.8.10",
     "vue": "^3.5.25"
   },
   "devDependencies": {

@@ -1,28 +1,17 @@
 <script setup>
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
-import { Editor, rootCtx, defaultValueCtx, commandsCtx, editorViewCtx, prosePluginsCtx } from '@milkdown/core'
-import {
-  commonmark,
-  createCodeBlockCommand,
-  insertHrCommand,
-  toggleEmphasisCommand,
-  toggleInlineCodeCommand,
-  toggleLinkCommand,
-  toggleStrongCommand,
-  wrapInBlockquoteCommand,
-  wrapInBulletListCommand,
-  wrapInHeadingCommand,
-  wrapInOrderedListCommand,
-} from '@milkdown/preset-commonmark'
-import { gfm, toggleStrikethroughCommand } from '@milkdown/preset-gfm'
-import { nord } from '@milkdown/theme-nord'
-import { listener, listenerCtx } from '@milkdown/plugin-listener'
-import { Plugin } from '@milkdown/prose/state'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { EditorContent, useEditor } from '@tiptap/vue-3'
+import StarterKit from '@tiptap/starter-kit'
+import TaskList from '@tiptap/extension-task-list'
+import TaskItem from '@tiptap/extension-task-item'
+import Link from '@tiptap/extension-link'
+import CodeBlock from '@tiptap/extension-code-block'
+import Placeholder from '@tiptap/extension-placeholder'
+import Strike from '@tiptap/extension-strike'
+import { Markdown } from 'tiptap-markdown'
 import { useNotesStore } from './stores/notes'
 
 const store = useNotesStore()
-const editorEl = ref(null)
-const milkdownEditor = ref(null)
 const showPlain = ref(false)
 const newTitle = ref('')
 const error = ref('')
@@ -31,7 +20,6 @@ const mobileView = ref('editor') // 'list' | 'editor'
 let ignoreEditorChanges = false
 let autosaveTimer = null
 let syncTimer = null
-let lastRenderedMarkdown = null
 let suppressHistoryPush = false
 let media = null
 let mediaListener = null
@@ -39,6 +27,41 @@ let popStateHandler = null
 
 const online = () => store.setOnline(true)
 const offline = () => store.setOnline(false)
+
+const editor = useEditor({
+  extensions: [
+    StarterKit.configure({
+      strike: false,
+      codeBlock: false,
+    }),
+    Strike,
+    CodeBlock,
+    TaskList,
+    TaskItem.configure({ nested: true }),
+    Link.configure({
+      autolink: true,
+      openOnClick: true,
+      linkOnPaste: true,
+      HTMLAttributes: {
+        rel: 'noopener noreferrer nofollow',
+        target: '_blank',
+      },
+    }),
+    Placeholder.configure({ placeholder: 'Skriv din note her…' }),
+    Markdown.configure({
+      html: false,
+      transformCopiedText: true,
+      transformPastedText: true,
+    }),
+  ],
+  content: store.currentContent || '',
+  contentType: 'markdown',
+  onUpdate: ({ editor: tiptapEditor }) => {
+    if (ignoreEditorChanges) return
+    const markdown = tiptapEditor.storage.markdown.getMarkdown()
+    if (markdown !== store.currentContent) store.setCurrentContent(markdown)
+  },
+})
 
 const sortedNotes = computed(() => store.sortedNotes)
 const appShellClasses = computed(() => ({
@@ -62,115 +85,39 @@ function pushCurrentHistory() {
   }
 }
 
-async function runCommand(command, payload) {
-  if (!milkdownEditor.value) return
+function setEditorMarkdown(markdown = '') {
+  if (!editor.value) return
+  ignoreEditorChanges = true
+  editor.value.commands.setContent(markdown || '', false, { contentType: 'markdown' })
+  ignoreEditorChanges = false
+}
 
-  milkdownEditor.value.action((ctx) => {
-    ctx.get(commandsCtx).call(command.key, payload)
-  })
+function syncEditorFromStore() {
+  if (!editor.value || showPlain.value) return
+  const current = editor.value.storage.markdown.getMarkdown()
+  if (current === store.currentContent) return
+  setEditorMarkdown(store.currentContent)
 }
 
 function applyLink() {
-  const href = window.prompt('Indsæt link (https://...)')
-  if (!href) return
-  runCommand(toggleLinkCommand, { href })
-}
+  if (!editor.value) return
+  const previousUrl = editor.value.getAttributes('link').href
+  const href = window.prompt('Indsæt link (https://...)', previousUrl || '')
 
-function insertTodoItem() {
-  if (!milkdownEditor.value) return
+  if (href === null) return
+  if (href === '') {
+    editor.value.chain().focus().unsetLink().run()
+    return
+  }
 
-  milkdownEditor.value.action((ctx) => {
-    const view = ctx.get(editorViewCtx)
-    const { state, dispatch } = view
-    dispatch(state.tr.insertText('- [ ] '))
-    view.focus()
-  })
-}
-
-function createTaskTogglePlugin() {
-  return new Plugin({
-    props: {
-      handleDOMEvents: {
-        click(view, event) {
-          const target = event.target
-          if (!(target instanceof HTMLInputElement) || target.type !== 'checkbox') return false
-
-          const taskItem = target.closest('li[data-item-type="task"]')
-          if (!taskItem) return false
-
-          event.preventDefault()
-
-          const pos = view.posAtDOM(taskItem, 0)
-          const $pos = view.state.doc.resolve(pos)
-
-          let nodePos = null
-          let node = null
-
-          for (let depth = $pos.depth; depth >= 0; depth--) {
-            const candidate = $pos.node(depth)
-            if (candidate.type.name === 'list_item' && candidate.attrs.checked != null) {
-              nodePos = $pos.before(depth)
-              node = candidate
-              break
-            }
-          }
-
-          if (nodePos == null || !node) return false
-
-          view.dispatch(
-            view.state.tr.setNodeMarkup(nodePos, undefined, {
-              ...node.attrs,
-              checked: !Boolean(node.attrs.checked),
-            })
-          )
-          return true
-        },
-      },
-    },
-  })
-}
-
-async function destroyEditor() {
-  if (!milkdownEditor.value) return
-  await milkdownEditor.value.destroy()
-  milkdownEditor.value = null
-}
-
-async function createEditor(content = '') {
-  await destroyEditor()
-  await nextTick()
-  if (!editorEl.value) return
-
-  ignoreEditorChanges = true
-
-  milkdownEditor.value = await Editor.make()
-    .config((ctx) => {
-      ctx.set(rootCtx, editorEl.value)
-      ctx.set(defaultValueCtx, content || '')
-      ctx.update(prosePluginsCtx, (plugins) => [...plugins, createTaskTogglePlugin()])
-      ctx.get(listenerCtx).markdownUpdated((_ctx, markdown) => {
-        if (ignoreEditorChanges) return
-        if (markdown !== store.currentContent) store.setCurrentContent(markdown)
-      })
-    })
-    .use(commonmark)
-    .use(gfm)
-    .use(listener)
-    .use(nord)
-    .create()
-
-  lastRenderedMarkdown = content || ''
-
-  setTimeout(() => {
-    ignoreEditorChanges = false
-  }, 0)
+  editor.value.chain().focus().setLink({ href }).run()
 }
 
 async function load() {
   try {
     await store.initialize()
     await applyRouteFromLocation(true)
-    if (!showPlain.value) await createEditor(store.currentContent)
+    syncEditorFromStore()
   } catch (e) {
     error.value = e.message
   }
@@ -180,7 +127,7 @@ async function selectNote(title, fromRoute = false) {
   try {
     await store.selectNote(title)
     if (isMobile.value) mobileView.value = 'editor'
-    if (!showPlain.value) await createEditor(store.currentContent)
+    syncEditorFromStore()
     error.value = ''
     if (!fromRoute) pushCurrentHistory()
   } catch (e) {
@@ -194,7 +141,7 @@ async function createNote() {
     await store.createNote(newTitle.value.trim())
     newTitle.value = ''
     if (isMobile.value) mobileView.value = 'editor'
-    if (!showPlain.value) await createEditor(store.currentContent)
+    syncEditorFromStore()
     error.value = ''
     pushCurrentHistory()
   } catch (e) {
@@ -238,13 +185,24 @@ async function applyRouteFromLocation(replace = false) {
   if (replace) history.replaceState({ title: store.selectedTitle, view: mobileView.value }, '', '/')
 }
 
-watch(showPlain, async (isPlain) => {
-  if (!isPlain) {
-    await createEditor(store.currentContent)
-  } else {
-    await destroyEditor()
+watch(showPlain, (isPlain) => {
+  if (isPlain) {
+    if (editor.value) {
+      const markdown = editor.value.storage.markdown.getMarkdown()
+      if (markdown !== store.currentContent) store.setCurrentContent(markdown)
+    }
+    return
   }
+
+  syncEditorFromStore()
 })
+
+watch(
+  () => store.currentContent,
+  () => {
+    syncEditorFromStore()
+  }
+)
 
 onMounted(async () => {
   await load()
@@ -280,9 +238,7 @@ onMounted(async () => {
     if (!store.online) return
     try {
       await store.syncWithServer()
-      if (!showPlain.value && !store.dirty && store.currentContent !== lastRenderedMarkdown) {
-        await createEditor(store.currentContent)
-      }
+      if (!showPlain.value && !store.dirty) syncEditorFromStore()
       error.value = ''
     } catch {
       // ignore transient sync errors
@@ -290,14 +246,13 @@ onMounted(async () => {
   }, 15000)
 })
 
-onUnmounted(async () => {
+onUnmounted(() => {
   if (media && mediaListener) media.removeEventListener('change', mediaListener)
   if (popStateHandler) window.removeEventListener('popstate', popStateHandler)
   window.removeEventListener('online', online)
   window.removeEventListener('offline', offline)
   clearInterval(autosaveTimer)
   clearInterval(syncTimer)
-  await destroyEditor()
 })
 </script>
 
@@ -341,28 +296,30 @@ onUnmounted(async () => {
         </div>
       </header>
 
-      <div v-if="!showPlain" class="editor-toolbar" aria-label="Editor toolbar">
-        <button @click="runCommand(toggleStrongCommand)"><strong>B</strong></button>
-        <button @click="runCommand(toggleEmphasisCommand)"><em>I</em></button>
-        <button @click="runCommand(toggleStrikethroughCommand)"><s>S</s></button>
-        <button @click="runCommand(wrapInHeadingCommand, 1)">H1</button>
-        <button @click="runCommand(wrapInHeadingCommand, 2)">H2</button>
-        <button @click="runCommand(wrapInHeadingCommand, 3)">H3</button>
-        <button @click="runCommand(wrapInBulletListCommand)">• Liste</button>
-        <button @click="runCommand(wrapInOrderedListCommand)">1. Liste</button>
-        <button @click="insertTodoItem">☑ Todo</button>
-        <button @click="applyLink">Link</button>
-        <button @click="runCommand(toggleInlineCodeCommand)">&lt;/&gt;</button>
-        <button @click="runCommand(createCodeBlockCommand)">Kodeblok</button>
-        <button @click="runCommand(wrapInBlockquoteCommand)">Quote</button>
-        <button @click="runCommand(insertHrCommand)">—</button>
+      <div v-if="!showPlain && editor" class="editor-toolbar" aria-label="Editor toolbar">
+        <button :class="{ active: editor.isActive('bold') }" @click="editor.chain().focus().toggleBold().run()"><strong>B</strong></button>
+        <button :class="{ active: editor.isActive('italic') }" @click="editor.chain().focus().toggleItalic().run()"><em>I</em></button>
+        <button :class="{ active: editor.isActive('strike') }" @click="editor.chain().focus().toggleStrike().run()"><s>S</s></button>
+        <button :class="{ active: editor.isActive('heading', { level: 1 }) }" @click="editor.chain().focus().toggleHeading({ level: 1 }).run()">H1</button>
+        <button :class="{ active: editor.isActive('heading', { level: 2 }) }" @click="editor.chain().focus().toggleHeading({ level: 2 }).run()">H2</button>
+        <button :class="{ active: editor.isActive('heading', { level: 3 }) }" @click="editor.chain().focus().toggleHeading({ level: 3 }).run()">H3</button>
+        <button :class="{ active: editor.isActive('bulletList') }" @click="editor.chain().focus().toggleBulletList().run()">• Liste</button>
+        <button :class="{ active: editor.isActive('orderedList') }" @click="editor.chain().focus().toggleOrderedList().run()">1. Liste</button>
+        <button :class="{ active: editor.isActive('taskList') }" @click="editor.chain().focus().toggleTaskList().run()">☑ Todo</button>
+        <button :class="{ active: editor.isActive('link') }" @click="applyLink">Link</button>
+        <button :class="{ active: editor.isActive('code') }" @click="editor.chain().focus().toggleCode().run()">&lt;/&gt;</button>
+        <button :class="{ active: editor.isActive('codeBlock') }" @click="editor.chain().focus().toggleCodeBlock().run()">Kodeblok</button>
+        <button :class="{ active: editor.isActive('blockquote') }" @click="editor.chain().focus().toggleBlockquote().run()">Quote</button>
+        <button @click="editor.chain().focus().setHorizontalRule().run()">—</button>
       </div>
 
       <p v-if="error" class="error">{{ error }}</p>
       <section v-if="showPlain" class="plain-wrap">
         <textarea :value="store.currentContent" @input="store.setCurrentContent($event.target.value)"></textarea>
       </section>
-      <section v-else class="wysiwyg-wrap"><div ref="editorEl" class="milkdown-root"></div></section>
+      <section v-else class="wysiwyg-wrap">
+        <EditorContent v-if="editor" :editor="editor" class="tiptap-root" />
+      </section>
     </main>
   </div>
 </template>
