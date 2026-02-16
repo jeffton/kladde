@@ -154,7 +154,8 @@ onUnmounted(() => {
     </div>
 
     <EditorToolbar
-      :editor="!showPlain ? editor : null"
+      :editor="editor"
+      :is-plain="showPlain"
       :is-mobile="isMobile"
       :mobile-view="mobileView"
       :online="store.online"

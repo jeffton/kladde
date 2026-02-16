@@ -5,7 +5,8 @@ defineProps({
   mobileView: { type: String, default: 'editor' },
   online: { type: Boolean, default: true },
   saveLabel: { type: String, required: true },
-  syncStatus: { type: String, default: '' }
+  syncStatus: { type: String, default: '' },
+  isPlain: { type: Boolean, default: false }
 })
 
 const emit = defineEmits(['toggle-plain', 'back', 'apply-link'])
@@ -21,25 +22,26 @@ const emit = defineEmits(['toggle-plain', 'back', 'apply-link'])
         <span>{{ syncStatus }}</span>
       </div>
     </div>
-    <div class="actions">
-      <button @click="emit('toggle-plain')">Plain markdown</button>
-    </div>
   </header>
 
-  <div v-if="editor" class="editor-toolbar" aria-label="Editor toolbar">
-    <button :class="{ active: editor.isActive('bold') }" @click="editor.chain().focus().toggleBold().run()"><strong>B</strong></button>
-    <button :class="{ active: editor.isActive('italic') }" @click="editor.chain().focus().toggleItalic().run()"><em>I</em></button>
-    <button :class="{ active: editor.isActive('strike') }" @click="editor.chain().focus().toggleStrike().run()"><s>S</s></button>
-    <button :class="{ active: editor.isActive('heading', { level: 1 }) }" @click="editor.chain().focus().toggleHeading({ level: 1 }).run()">H1</button>
-    <button :class="{ active: editor.isActive('heading', { level: 2 }) }" @click="editor.chain().focus().toggleHeading({ level: 2 }).run()">H2</button>
-    <button :class="{ active: editor.isActive('heading', { level: 3 }) }" @click="editor.chain().focus().toggleHeading({ level: 3 }).run()">H3</button>
-    <button :class="{ active: editor.isActive('bulletList') }" @click="editor.chain().focus().toggleBulletList().run()">• Liste</button>
-    <button :class="{ active: editor.isActive('orderedList') }" @click="editor.chain().focus().toggleOrderedList().run()">1. Liste</button>
-    <button :class="{ active: editor.isActive('taskList') }" @click="editor.chain().focus().toggleTaskList().run()">☑ Todo</button>
-    <button :class="{ active: editor.isActive('link') }" @click="emit('apply-link')">Link</button>
-    <button :class="{ active: editor.isActive('code') }" @click="editor.chain().focus().toggleCode().run()">&lt;/&gt;</button>
-    <button :class="{ active: editor.isActive('codeBlock') }" @click="editor.chain().focus().toggleCodeBlock().run()">Kodeblok</button>
-    <button :class="{ active: editor.isActive('blockquote') }" @click="editor.chain().focus().toggleBlockquote().run()">Quote</button>
-    <button @click="editor.chain().focus().setHorizontalRule().run()">—</button>
+  <div class="editor-toolbar" aria-label="Editor toolbar">
+    <button :disabled="!editor || isPlain" :class="{ active: editor?.isActive('bold') }" @click="editor?.chain().focus().toggleBold().run()"><strong>B</strong></button>
+    <button :disabled="!editor || isPlain" :class="{ active: editor?.isActive('italic') }" @click="editor?.chain().focus().toggleItalic().run()"><em>I</em></button>
+    <button :disabled="!editor || isPlain" :class="{ active: editor?.isActive('strike') }" @click="editor?.chain().focus().toggleStrike().run()"><s>S</s></button>
+    <button :disabled="!editor || isPlain" :class="{ active: editor?.isActive('heading', { level: 1 }) }" @click="editor?.chain().focus().toggleHeading({ level: 1 }).run()">H1</button>
+    <button :disabled="!editor || isPlain" :class="{ active: editor?.isActive('heading', { level: 2 }) }" @click="editor?.chain().focus().toggleHeading({ level: 2 }).run()">H2</button>
+    <button :disabled="!editor || isPlain" :class="{ active: editor?.isActive('heading', { level: 3 }) }" @click="editor?.chain().focus().toggleHeading({ level: 3 }).run()">H3</button>
+    <button :disabled="!editor || isPlain" :class="{ active: editor?.isActive('bulletList') }" @click="editor?.chain().focus().toggleBulletList().run()">• Liste</button>
+    <button :disabled="!editor || isPlain" :class="{ active: editor?.isActive('orderedList') }" @click="editor?.chain().focus().toggleOrderedList().run()">1. Liste</button>
+    <button :disabled="!editor || isPlain" :class="{ active: editor?.isActive('taskList') }" @click="editor?.chain().focus().toggleTaskList().run()">☑ Todo</button>
+    <button :disabled="!editor || isPlain" :class="{ active: editor?.isActive('link') }" @click="emit('apply-link')">Link</button>
+    <button :disabled="!editor || isPlain" :class="{ active: editor?.isActive('code') }" @click="editor?.chain().focus().toggleCode().run()">&lt;/&gt;</button>
+    <button :disabled="!editor || isPlain" :class="{ active: editor?.isActive('codeBlock') }" @click="editor?.chain().focus().toggleCodeBlock().run()">Kodeblok</button>
+    <button :disabled="!editor || isPlain" :class="{ active: editor?.isActive('blockquote') }" @click="editor?.chain().focus().toggleBlockquote().run()">Quote</button>
+    <button :disabled="!editor || isPlain" @click="editor?.chain().focus().setHorizontalRule().run()">—</button>
+
+    <button class="mode-toggle" :class="{ active: isPlain }" @click="emit('toggle-plain')">
+      {{ isPlain ? 'WYSIWYG' : 'Plain markdown' }}
+    </button>
   </div>
 </template>
