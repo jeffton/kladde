@@ -39,3 +39,7 @@ export async function putCachedNotes(notes) {
   }
   await tx.done
 }
+
+export async function deleteCachedNote(title) {
+  return (await db()).delete(NOTES_STORE, title)
+}

@@ -92,8 +92,58 @@ func (s *Server) handleNotes(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleNoteByTitle(w http.ResponseWriter, r *http.Request) {
-	title := strings.TrimPrefix(r.URL.Path, "/api/notes/")
-	title, _ = url.PathUnescape(title)
+	rest := strings.TrimPrefix(r.URL.Path, "/api/notes/")
+	rest = strings.TrimSpace(strings.TrimSuffix(rest, "/"))
+	parts := strings.Split(rest, "/")
+
+	if len(parts) == 2 && parts[1] == "rename" {
+		if r.Method != http.MethodPut {
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+
+		oldTitle, _ := url.PathUnescape(parts[0])
+		oldTitle = strings.TrimSpace(oldTitle)
+		if err := validateTitle(oldTitle); err != nil {
+			writeError(w, http.StatusBadRequest, err)
+			return
+		}
+
+		var payload struct {
+			NewTitle string `json:"newTitle"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+			writeError(w, http.StatusBadRequest, errors.New("invalid JSON body"))
+			return
+		}
+
+		note, err := s.renameNote(oldTitle, strings.TrimSpace(payload.NewTitle))
+		if err != nil {
+			switch {
+			case errors.Is(err, fs.ErrNotExist):
+				writeError(w, http.StatusNotFound, errors.New("note not found"))
+			case errors.Is(err, fs.ErrExist):
+				writeError(w, http.StatusConflict, errors.New("note title already exists"))
+			default:
+				if strings.Contains(err.Error(), "title") {
+					writeError(w, http.StatusBadRequest, err)
+				} else {
+					writeError(w, http.StatusInternalServerError, err)
+				}
+			}
+			return
+		}
+
+		writeJSON(w, http.StatusOK, note)
+		return
+	}
+
+	if len(parts) != 1 {
+		writeError(w, http.StatusBadRequest, errors.New("invalid note path"))
+		return
+	}
+
+	title, _ := url.PathUnescape(parts[0])
 	title = strings.TrimSpace(title)
 	if err := validateTitle(title); err != nil {
 		writeError(w, http.StatusBadRequest, err)
@@ -180,6 +230,33 @@ func (s *Server) saveNote(title, content string) (*Note, error) {
 		return nil, err
 	}
 	return &Note{Title: title, Content: content, UpdatedAt: info.ModTime()}, nil
+}
+
+func (s *Server) renameNote(oldTitle, newTitle string) (*Note, error) {
+	if err := validateTitle(newTitle); err != nil {
+		return nil, err
+	}
+
+	oldPath := filepath.Join(s.notesDir, oldTitle+".md")
+	newPath := filepath.Join(s.notesDir, newTitle+".md")
+
+	if _, err := os.Stat(oldPath); err != nil {
+		return nil, err
+	}
+
+	if oldTitle != newTitle {
+		if _, err := os.Stat(newPath); err == nil {
+			return nil, fs.ErrExist
+		} else if !errors.Is(err, fs.ErrNotExist) {
+			return nil, err
+		}
+
+		if err := os.Rename(oldPath, newPath); err != nil {
+			return nil, err
+		}
+	}
+
+	return s.getNote(newTitle)
 }
 
 func validateTitle(title string) error {

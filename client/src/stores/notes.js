@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { getAllCachedNotes, getCachedNote, putCachedNote, putCachedNotes } from './notesDb'
+import { deleteCachedNote, getAllCachedNotes, getCachedNote, putCachedNote, putCachedNotes } from './notesDb'
 
 const PINNED_KEY = 'noteapp:pinned'
 
@@ -241,24 +241,93 @@ export const useNotesStore = defineStore('notes', {
       }
     },
 
-    async createNote(title) {
+    generateDefaultTitle(base = 'Ny note') {
+      const existing = new Set(this.notes.map((n) => n.title))
+      if (!existing.has(base)) return base
+
+      let i = 2
+      while (existing.has(`${base} ${i}`)) i += 1
+      return `${base} ${i}`
+    },
+
+    async createNote(title = '') {
+      const resolvedTitle = (title || this.generateDefaultTitle()).trim()
+      if (!resolvedTitle) throw new Error('Titel er påkrævet')
+
       const localNote = {
-        title,
-        content: `# ${title}\n\nNy note.`,
+        title: resolvedTitle,
+        content: '',
         updatedAt: new Date().toISOString(),
         dirty: true
       }
 
       await putCachedNote(localNote)
       await this.refreshStateFromCache()
-      await this.selectNote(title)
+      await this.selectNote(resolvedTitle)
 
       if (!this.online) {
         this.updateSyncStatus()
-        return
+        return resolvedTitle
       }
 
       this.syncWithServer().catch(() => {})
+      return resolvedTitle
+    },
+
+    async renameCurrent(newTitle) {
+      if (!this.selectedTitle) throw new Error('Ingen note valgt')
+      const oldTitle = this.selectedTitle
+      const nextTitle = (newTitle || '').trim()
+
+      if (!nextTitle) throw new Error('Titel er påkrævet')
+      if (nextTitle === oldTitle) return oldTitle
+      if (!this.online) throw new Error('Du skal være online for at omdøbe noter')
+
+      if (this.dirty) {
+        await this.saveCurrent()
+      }
+
+      const res = await fetch(`/api/notes/${encodeURIComponent(oldTitle)}/rename`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ newTitle: nextTitle })
+      })
+
+      let payload = null
+      try {
+        payload = await res.json()
+      } catch {
+        payload = null
+      }
+
+      if (!res.ok) {
+        throw new Error(payload?.error || 'Kunne ikke omdøbe note')
+      }
+
+      const contentToPersist = payload?.content ?? this.currentContent
+      const updatedAt = normalizeTs(payload?.updatedAt)
+
+      await deleteCachedNote(oldTitle)
+      await putCachedNote({
+        title: nextTitle,
+        content: contentToPersist,
+        updatedAt,
+        dirty: false
+      })
+
+      if (this.pinned.has(oldTitle)) {
+        this.pinned.delete(oldTitle)
+        this.pinned.add(nextTitle)
+        localStorage.setItem(PINNED_KEY, JSON.stringify([...this.pinned]))
+      }
+
+      this.selectedTitle = nextTitle
+      this.currentContent = contentToPersist
+      this.currentUpdatedAt = updatedAt
+      this.dirty = false
+
+      await this.refreshStateFromCache()
+      return nextTitle
     }
   }
 })

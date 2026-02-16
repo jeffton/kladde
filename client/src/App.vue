@@ -13,7 +13,7 @@ import { useNotesStore } from './stores/notes'
 
 const store = useNotesStore()
 const showPlain = ref(false)
-const newTitle = ref('')
+const editableTitle = ref('')
 const error = ref('')
 const isMobile = ref(window.matchMedia('(max-width: 900px)').matches)
 const mobileView = ref('editor') // 'list' | 'editor'
@@ -136,16 +136,36 @@ async function selectNote(title, fromRoute = false) {
 }
 
 async function createNote() {
-  if (!newTitle.value.trim()) return
   try {
-    await store.createNote(newTitle.value.trim())
-    newTitle.value = ''
+    const createdTitle = await store.createNote()
+    editableTitle.value = createdTitle
     if (isMobile.value) mobileView.value = 'editor'
     syncEditorFromStore()
     error.value = ''
     pushCurrentHistory()
   } catch (e) {
     error.value = e.message
+  }
+}
+
+async function commitTitleChange() {
+  if (!store.selectedTitle) return
+  const next = editableTitle.value.trim()
+
+  if (!next) {
+    editableTitle.value = store.selectedTitle
+    return
+  }
+
+  try {
+    const renamedTitle = await store.renameCurrent(next)
+    editableTitle.value = renamedTitle
+    error.value = ''
+    const nextPath = `/note/${encodeURIComponent(renamedTitle)}`
+    history.replaceState({ title: renamedTitle, view: mobileView.value }, '', nextPath)
+  } catch (e) {
+    error.value = e.message
+    editableTitle.value = store.selectedTitle
   }
 }
 
@@ -202,6 +222,14 @@ watch(
   () => {
     syncEditorFromStore()
   }
+)
+
+watch(
+  () => store.selectedTitle,
+  (title) => {
+    editableTitle.value = title || ''
+  },
+  { immediate: true }
 )
 
 onMounted(async () => {
@@ -261,8 +289,7 @@ onUnmounted(() => {
     <aside class="sidebar">
       <h1>Noteapp</h1>
       <div class="create-row">
-        <input v-model="newTitle" placeholder="Ny note titel" @keyup.enter="createNote" />
-        <button @click="createNote">Opret</button>
+        <button class="create-button" @click="createNote" aria-label="Opret ny note">+</button>
       </div>
 
       <div class="list">
@@ -282,6 +309,16 @@ onUnmounted(() => {
     </aside>
 
     <main class="editor-area">
+      <div class="note-title-wrap" v-if="store.selectedTitle">
+        <input
+          v-model="editableTitle"
+          class="note-title-input"
+          type="text"
+          spellcheck="false"
+          @blur="commitTitleChange"
+          @keydown.enter.prevent="$event.target.blur()" />
+      </div>
+
       <header class="toolbar">
         <div class="toolbar-left">
           <button v-if="isMobile && mobileView === 'editor'" class="back-button" @click="goBackToList">← Tilbage</button>
