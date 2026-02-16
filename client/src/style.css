@@ -205,7 +205,7 @@ button {
 .tiptap-root .ProseMirror ul[data-type='taskList'] li {
   display: flex;
   gap: .4rem;
-  align-items: baseline;
+  align-items: center;
   line-height: 1.5;
   margin: .15rem 0;
 }
@@ -214,7 +214,6 @@ button {
   flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
-  height: 1.5em;
 }
 
 .tiptap-root .ProseMirror ul[data-type='taskList'] li > div {
