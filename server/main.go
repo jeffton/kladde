@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"flag"
+	"fmt"
 	"io/fs"
 	"log"
 	"mime"
@@ -122,8 +123,6 @@ func (s *Server) handleNoteByTitle(w http.ResponseWriter, r *http.Request) {
 			switch {
 			case errors.Is(err, fs.ErrNotExist):
 				writeError(w, http.StatusNotFound, errors.New("note not found"))
-			case errors.Is(err, fs.ErrExist):
-				writeError(w, http.StatusConflict, errors.New("note title already exists"))
 			default:
 				if strings.Contains(err.Error(), "title") {
 					writeError(w, http.StatusBadRequest, err)
@@ -245,10 +244,16 @@ func (s *Server) renameNote(oldTitle, newTitle string) (*Note, error) {
 	}
 
 	if oldTitle != newTitle {
-		if _, err := os.Stat(newPath); err == nil {
-			return nil, fs.ErrExist
-		} else if !errors.Is(err, fs.ErrNotExist) {
-			return nil, err
+		// Auto-deduplicate: append (n) if title exists
+		baseTitle := newTitle
+		for n := 2; ; n++ {
+			if _, err := os.Stat(newPath); errors.Is(err, fs.ErrNotExist) {
+				break
+			} else if err != nil {
+				return nil, err
+			}
+			newTitle = fmt.Sprintf("%s (%d)", baseTitle, n)
+			newPath = filepath.Join(s.notesDir, newTitle+".md")
 		}
 
 		if err := os.Rename(oldPath, newPath); err != nil {
