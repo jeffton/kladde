@@ -19,13 +19,22 @@ function isSameDay(a, b) {
   )
 }
 
+const locale = navigator.language || 'en'
+const rtf = typeof Intl.RelativeTimeFormat !== 'undefined'
+  ? new Intl.RelativeTimeFormat(locale, { numeric: 'auto' })
+  : null
+
 function startOfWeek(date) {
   const copy = new Date(date)
   copy.setHours(0, 0, 0, 0)
   const day = copy.getDay()
-  const diff = day === 0 ? 6 : day - 1 // Mandag = ugestart
+  const diff = day === 0 ? 6 : day - 1
   copy.setDate(copy.getDate() - diff)
   return copy
+}
+
+function fmtTime(date) {
+  return new Intl.DateTimeFormat(locale, { hour: '2-digit', minute: '2-digit' }).format(date)
 }
 
 function formatUpdatedAt(value) {
@@ -33,10 +42,7 @@ function formatUpdatedAt(value) {
   if (Number.isNaN(date.getTime())) return ''
 
   const now = new Date()
-  const time = new Intl.DateTimeFormat('da-DK', {
-    hour: '2-digit',
-    minute: '2-digit'
-  }).format(date)
+  const time = fmtTime(date)
 
   if (isSameDay(date, now)) {
     return time
@@ -45,17 +51,18 @@ function formatUpdatedAt(value) {
   const yesterday = new Date(now)
   yesterday.setDate(now.getDate() - 1)
   if (isSameDay(date, yesterday)) {
-    return `I går, ${time}`
+    const label = rtf ? capitalize(rtf.format(-1, 'day')) : 'Yesterday'
+    return `${label}, ${time}`
   }
 
   if (date >= startOfWeek(now)) {
     const weekday = capitalize(
-      new Intl.DateTimeFormat('da-DK', { weekday: 'long' }).format(date)
+      new Intl.DateTimeFormat(locale, { weekday: 'long' }).format(date)
     )
     return `${weekday}, ${time}`
   }
 
-  return new Intl.DateTimeFormat('da-DK', {
+  return new Intl.DateTimeFormat(locale, {
     day: 'numeric',
     month: 'long',
     year: 'numeric',
