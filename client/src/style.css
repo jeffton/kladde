@@ -1,19 +1,21 @@
 :root {
   color-scheme: light dark;
-  --bg: #f7f8fb;
-  --panel: #ffffff;
-  --text: #111827;
-  --muted: #6b7280;
-  --border: #d1d5db;
+  --bg: #f5f5f4;
+  --panel: #fafaf9;
+  --text: #292524;
+  --muted: #78716c;
+  --border: #d6d3d1;
+  --accent: #57534e;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #0b1220;
-    --panel: #111827;
-    --text: #e5e7eb;
-    --muted: #9ca3af;
-    --border: #374151;
+    --bg: #1c1917;
+    --panel: #231f1e;
+    --text: #e7e5e4;
+    --muted: #a8a29e;
+    --border: #44403c;
+    --accent: #a8a29e;
   }
 }
 
@@ -66,7 +68,7 @@ button {
   width: 100%;
   text-align: left;
 }
-.note-item.active { outline: 2px solid #3b82f6; }
+.note-item.active { outline: 2px solid var(--accent); }
 .note-item small { display: block; color: var(--muted); }
 .pin { font-size: 1.1rem; }
 
@@ -106,8 +108,8 @@ button {
 }
 
 .editor-toolbar button.active {
-  background: color-mix(in srgb, #3b82f6 25%, transparent);
-  border-color: #3b82f6;
+  background: color-mix(in srgb, var(--accent) 25%, transparent);
+  border-color: var(--accent);
 }
 .toolbar-left { display: flex; align-items: center; gap: .6rem; }
 .status { display: flex; gap: .7rem; color: var(--muted); }
@@ -229,7 +231,7 @@ button {
   width: 16px;
   height: 16px;
   margin: 0;
-  accent-color: #3b82f6;
+  accent-color: var(--accent);
   cursor: pointer;
   flex-shrink: 0;
 }
