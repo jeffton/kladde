@@ -3,7 +3,7 @@ import { createPinia } from 'pinia'
 import { registerSW } from 'virtual:pwa-register'
 import App from './App.vue'
 import './style.css'
-import '@toast-ui/editor/dist/toastui-editor.css'
+import '@milkdown/theme-nord/style.css'
 
 registerSW({ immediate: true })
 

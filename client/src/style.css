@@ -18,6 +18,7 @@
 }
 
 * { box-sizing: border-box; }
+html, body, #app { height: 100%; }
 body {
   margin: 0;
   font-family: Inter, system-ui, sans-serif;
@@ -27,7 +28,7 @@ body {
 
 .app-shell {
   display: grid;
-  grid-template-columns: 320px 1fr;
+  grid-template-columns: 320px minmax(0, 1fr);
   min-height: 100vh;
 }
 
@@ -35,6 +36,7 @@ body {
   border-right: 1px solid var(--border);
   padding: 1rem;
   background: var(--panel);
+  overflow: auto;
 }
 
 h1 { margin-top: 0; }
@@ -68,7 +70,13 @@ button {
 .note-item small { display: block; color: var(--muted); }
 .pin { font-size: 1.1rem; }
 
-.editor-area { padding: 1rem; }
+.editor-area {
+  padding: 1rem;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
 .toolbar {
   display: flex;
   align-items: center;
@@ -77,15 +85,24 @@ button {
   gap: .75rem;
   flex-wrap: wrap;
 }
+.toolbar-left { display: flex; align-items: center; gap: .6rem; }
 .status { display: flex; gap: .7rem; color: var(--muted); }
 .actions { display: flex; gap: .5rem; }
 .online { color: #22c55e; }
 .offline { color: #f59e0b; }
 .error { color: #ef4444; }
+.mobile-only { display: none; }
+
+.plain-wrap,
+.wysiwyg-wrap {
+  flex: 1;
+  min-height: 0;
+}
 
 .plain-wrap textarea {
   width: 100%;
-  min-height: 65vh;
+  height: 100%;
+  min-height: 70vh;
   background: var(--panel);
   color: var(--text);
   border: 1px solid var(--border);
@@ -94,13 +111,55 @@ button {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, monospace;
 }
 
-.wysiwyg-wrap :deep(.toastui-editor-defaultUI) {
-  border-color: var(--border);
+.milkdown-root,
+.milkdown {
+  height: 100%;
+}
+
+.milkdown {
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: .5rem;
+}
+
+.milkdown .editor {
+  min-height: 70vh;
+  color: var(--text);
 }
 
 @media (max-width: 900px) {
   .app-shell {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
-  .sidebar { border-right: 0; border-bottom: 1px solid var(--border); }
+
+  .sidebar {
+    position: fixed;
+    inset: 0 auto 0 0;
+    width: min(85vw, 320px);
+    max-width: 320px;
+    border-right: 1px solid var(--border);
+    border-bottom: 0;
+    transform: translateX(-105%);
+    transition: transform .2s ease;
+    z-index: 20;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, .25);
+  }
+
+  .mobile-sidebar-open .sidebar {
+    transform: translateX(0);
+  }
+
+  .editor-area {
+    width: 100%;
+    min-width: 0;
+    padding: .75rem;
+  }
+
+  .mobile-only { display: inline-block; }
+
+  .plain-wrap textarea,
+  .milkdown .editor {
+    min-height: calc(100vh - 140px);
+  }
 }
