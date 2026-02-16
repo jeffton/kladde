@@ -204,17 +204,17 @@ button {
 
 .tiptap-root .ProseMirror ul[data-type='taskList'] li {
   display: flex;
-  gap: .55rem;
-  align-items: flex-start;
-  line-height: 1.45;
-  margin: .2rem 0;
+  gap: .4rem;
+  align-items: baseline;
+  line-height: 1.5;
+  margin: .15rem 0;
 }
 
 .tiptap-root .ProseMirror ul[data-type='taskList'] li > label {
   flex: 0 0 auto;
-  margin-top: .1rem;
   display: inline-flex;
   align-items: center;
+  height: 1.5em;
 }
 
 .tiptap-root .ProseMirror ul[data-type='taskList'] li > div {
@@ -222,12 +222,37 @@ button {
   min-width: 0;
 }
 
-.tiptap-root .ProseMirror ul[data-type='taskList'] li input[type='checkbox'] {
-  width: 17px;
-  height: 17px;
+.tiptap-root .ProseMirror ul[data-type='taskList'] li > div p {
   margin: 0;
-  accent-color: #3b82f6;
+}
+
+.tiptap-root .ProseMirror ul[data-type='taskList'] li input[type='checkbox'] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  border: 2px solid var(--border);
+  border-radius: 3px;
+  background: transparent;
   cursor: pointer;
+  flex-shrink: 0;
+  position: relative;
+}
+
+.tiptap-root .ProseMirror ul[data-type='taskList'] li input[type='checkbox']:checked {
+  background: #3b82f6;
+  border-color: #3b82f6;
+}
+
+.tiptap-root .ProseMirror ul[data-type='taskList'] li input[type='checkbox']:checked::after {
+  content: '✓';
+  position: absolute;
+  top: -1px;
+  left: 2px;
+  font-size: 11px;
+  color: white;
+  font-weight: bold;
 }
 
 .tiptap-root .ProseMirror ul[data-type='taskList'] li[data-checked='true'] > div {
