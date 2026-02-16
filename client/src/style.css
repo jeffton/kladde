@@ -85,6 +85,25 @@ button {
   gap: .75rem;
   flex-wrap: wrap;
 }
+
+.editor-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  flex-wrap: wrap;
+  gap: .4rem;
+  margin-bottom: .7rem;
+  padding: .55rem;
+  border: 1px solid var(--border);
+  border-radius: .5rem;
+  background: var(--panel);
+}
+
+.editor-toolbar button {
+  padding: .35rem .55rem;
+  font-size: .9rem;
+}
 .toolbar-left { display: flex; align-items: center; gap: .6rem; }
 .status { display: flex; gap: .7rem; color: var(--muted); }
 .actions { display: flex; gap: .5rem; }

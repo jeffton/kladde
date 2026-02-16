@@ -1,7 +1,20 @@
 <script setup>
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
-import { Editor, rootCtx, defaultValueCtx } from '@milkdown/core'
-import { commonmark } from '@milkdown/preset-commonmark'
+import { Editor, rootCtx, defaultValueCtx, commandsCtx } from '@milkdown/core'
+import {
+  commonmark,
+  createCodeBlockCommand,
+  insertHrCommand,
+  toggleEmphasisCommand,
+  toggleInlineCodeCommand,
+  toggleLinkCommand,
+  toggleStrongCommand,
+  wrapInBlockquoteCommand,
+  wrapInBulletListCommand,
+  wrapInHeadingCommand,
+  wrapInOrderedListCommand,
+} from '@milkdown/preset-commonmark'
+import { gfm, toggleStrikethroughCommand } from '@milkdown/preset-gfm'
 import { nord } from '@milkdown/theme-nord'
 import { listener, listenerCtx } from '@milkdown/plugin-listener'
 import { useNotesStore } from './stores/notes'
@@ -29,6 +42,20 @@ const saveLabel = computed(() => {
   return 'Gemt'
 })
 
+function runCommand(command, payload) {
+  if (!milkdownEditor.value) return
+
+  milkdownEditor.value.action((ctx) => {
+    ctx.get(commandsCtx).call(command.key, payload)
+  })
+}
+
+function applyLink() {
+  const href = window.prompt('Indsæt link (https://...)')
+  if (!href) return
+  runCommand(toggleLinkCommand, { href })
+}
+
 async function destroyEditor() {
   if (!milkdownEditor.value) return
   await milkdownEditor.value.destroy()
@@ -52,6 +79,7 @@ async function createEditor(content = '') {
       })
     })
     .use(commonmark)
+    .use(gfm)
     .use(listener)
     .use(nord)
     .create()
@@ -185,6 +213,22 @@ onUnmounted(async () => {
           <button @click="showPlain = !showPlain">{{ showPlain ? 'WYSIWYG visning' : 'Plain markdown' }}</button>
         </div>
       </header>
+
+      <div v-if="!showPlain" class="editor-toolbar" aria-label="Editor toolbar">
+        <button @click="runCommand(toggleStrongCommand)"><strong>B</strong></button>
+        <button @click="runCommand(toggleEmphasisCommand)"><em>I</em></button>
+        <button @click="runCommand(toggleStrikethroughCommand)"><s>S</s></button>
+        <button @click="runCommand(wrapInHeadingCommand, 1)">H1</button>
+        <button @click="runCommand(wrapInHeadingCommand, 2)">H2</button>
+        <button @click="runCommand(wrapInHeadingCommand, 3)">H3</button>
+        <button @click="runCommand(wrapInBulletListCommand)">• Liste</button>
+        <button @click="runCommand(wrapInOrderedListCommand)">1. Liste</button>
+        <button @click="applyLink">Link</button>
+        <button @click="runCommand(toggleInlineCodeCommand)">&lt;/&gt;</button>
+        <button @click="runCommand(createCodeBlockCommand)">Kodeblok</button>
+        <button @click="runCommand(wrapInBlockquoteCommand)">Quote</button>
+        <button @click="runCommand(insertHrCommand)">—</button>
+      </div>
 
       <p v-if="error" class="error">{{ error }}</p>
       <section v-if="showPlain" class="plain-wrap">
