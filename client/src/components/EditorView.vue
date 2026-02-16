@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onUnmounted, ref, watch } from 'vue'
 import { EditorContent, useEditor } from '@tiptap/vue-3'
 import StarterKit from '@tiptap/starter-kit'
 import TaskList from '@tiptap/extension-task-list'
@@ -22,6 +22,7 @@ const emit = defineEmits(['rename', 'back'])
 const editableTitle = ref('')
 const error = ref('')
 const showPlain = ref(false)
+const plainTextarea = ref(null)
 let ignoreEditorChanges = false
 let updateDebounce = null
 
@@ -95,6 +96,151 @@ function applyLink() {
   editor.value.chain().focus().setLink({ href }).run()
 }
 
+async function updatePlainText(nextValue, selectionStart, selectionEnd) {
+  const textarea = plainTextarea.value
+  if (!textarea) return
+
+  textarea.value = nextValue
+  await props.store.setCurrentContent(nextValue)
+
+  await nextTick()
+  if (plainTextarea.value) {
+    plainTextarea.value.focus()
+    plainTextarea.value.setSelectionRange(selectionStart, selectionEnd)
+  }
+}
+
+function wrapSelection(prefix, suffix = prefix, placeholder = '') {
+  const textarea = plainTextarea.value
+  if (!textarea) return
+
+  const { value } = textarea
+  const start = textarea.selectionStart
+  const end = textarea.selectionEnd
+  const selected = value.slice(start, end)
+  const middle = selected || placeholder
+  const replacement = `${prefix}${middle}${suffix}`
+  const nextValue = value.slice(0, start) + replacement + value.slice(end)
+
+  const selectFrom = start + prefix.length
+  const selectTo = start + prefix.length + middle.length
+  updatePlainText(nextValue, selectFrom, selectTo)
+}
+
+function prefixLines(prefix) {
+  const textarea = plainTextarea.value
+  if (!textarea) return
+
+  const { value } = textarea
+  const start = textarea.selectionStart
+  const end = textarea.selectionEnd
+
+  const blockStart = value.lastIndexOf('\n', Math.max(0, start - 1)) + 1
+  const blockEndIndex = value.indexOf('\n', end)
+  const blockEnd = blockEndIndex === -1 ? value.length : blockEndIndex
+
+  const block = value.slice(blockStart, blockEnd)
+  const lines = block.split('\n')
+  const prefixed = lines.map((line) => `${prefix}${line}`).join('\n')
+  const nextValue = value.slice(0, blockStart) + prefixed + value.slice(blockEnd)
+
+  const shiftAtStart = start - blockStart >= 0 ? prefix.length : 0
+  const lineCount = lines.length
+  const addedChars = prefix.length * lineCount
+
+  const nextStart = start + shiftAtStart
+  const nextEnd = end + addedChars
+
+  updatePlainText(nextValue, nextStart, nextEnd)
+}
+
+function insertHr() {
+  const textarea = plainTextarea.value
+  if (!textarea) return
+
+  const { value } = textarea
+  const start = textarea.selectionStart
+  const end = textarea.selectionEnd
+  const before = value.slice(0, start)
+  const after = value.slice(end)
+
+  const pre = before.length && !before.endsWith('\n') ? '\n' : ''
+  const post = after.length && !after.startsWith('\n') ? '\n' : ''
+  const insert = `${pre}---${post}`
+
+  const nextValue = before + insert + after
+  const cursor = before.length + insert.length
+  updatePlainText(nextValue, cursor, cursor)
+}
+
+function applyPlainLink() {
+  const textarea = plainTextarea.value
+  if (!textarea) return
+
+  const start = textarea.selectionStart
+  const end = textarea.selectionEnd
+  const selected = textarea.value.slice(start, end) || 'text'
+  const href = window.prompt('Indsæt link (https://...)', 'https://')
+  if (href === null) return
+
+  const safeHref = href || 'url'
+  const replacement = `[${selected}](${safeHref})`
+  const nextValue = textarea.value.slice(0, start) + replacement + textarea.value.slice(end)
+
+  const textStart = start + 1
+  const textEnd = textStart + selected.length
+  updatePlainText(nextValue, textStart, textEnd)
+}
+
+function applyPlainAction(action) {
+  switch (action) {
+    case 'bold':
+      wrapSelection('**')
+      break
+    case 'italic':
+      wrapSelection('*')
+      break
+    case 'strike':
+      wrapSelection('~~')
+      break
+    case 'h1':
+      prefixLines('# ')
+      break
+    case 'h2':
+      prefixLines('## ')
+      break
+    case 'h3':
+      prefixLines('### ')
+      break
+    case 'bullet':
+      prefixLines('- ')
+      break
+    case 'ordered':
+      prefixLines('1. ')
+      break
+    case 'task':
+      prefixLines('- [ ] ')
+      break
+    case 'link':
+      applyPlainLink()
+      break
+    case 'code':
+      wrapSelection('`')
+      break
+    case 'codeBlock':
+      wrapSelection('```\n', '\n```')
+      break
+    case 'blockquote':
+      prefixLines('> ')
+      break
+    case 'hr':
+      insertHr()
+      break
+    default:
+      break
+  }
+}
+
 async function commitTitleChange() {
   if (!props.store.selectedTitle) return
   const next = editableTitle.value.trim()
@@ -116,7 +262,10 @@ async function commitTitleChange() {
 }
 
 watch(showPlain, (isPlain) => {
-  if (isPlain) return
+  if (isPlain) {
+    nextTick(() => plainTextarea.value?.focus())
+    return
+  }
   syncEditorFromStore()
 })
 
@@ -162,12 +311,16 @@ onUnmounted(() => {
       :save-label="saveLabel"
       :sync-status="store.syncStatus"
       @toggle-plain="showPlain = !showPlain"
+      @plain-action="applyPlainAction"
       @apply-link="applyLink"
       @back="emit('back')" />
 
     <p v-if="error" class="error">{{ error }}</p>
     <section v-if="showPlain" class="plain-wrap">
-      <textarea :value="store.currentContent" @input="store.setCurrentContent($event.target.value)"></textarea>
+      <textarea
+        ref="plainTextarea"
+        :value="store.currentContent"
+        @input="store.setCurrentContent($event.target.value)"></textarea>
     </section>
     <section v-else class="wysiwyg-wrap">
       <EditorContent v-if="editor" :editor="editor" class="tiptap-root" />
