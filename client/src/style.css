@@ -764,7 +764,16 @@ button:disabled {
 
   .editor-toolbar .toolbar-row-secondary {
     flex-wrap: wrap;
-    overflow-x: visible;
+    overflow: hidden;
+    max-height: 8rem;
+    opacity: 1;
+    transition: max-height .24s ease, opacity .18s ease;
+  }
+
+  .editor-toolbar .toolbar-row-secondary.collapsed {
+    max-height: 0;
+    opacity: 0;
+    pointer-events: none;
   }
 
   .editor-toolbar .toolbar-more {

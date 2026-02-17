@@ -90,7 +90,10 @@ onUnmounted(() => {
       <button v-if="isMobile" class="toolbar-more" :class="{ expanded: showMobileMore }" :title="showMobileMore ? 'Skjul flere værktøjer' : 'Vis flere værktøjer'" :aria-expanded="showMobileMore" @click="toggleMore"><ChevronDown :size="20" /></button>
     </div>
 
-    <div v-if="!isMobile || showMobileMore" class="toolbar-row toolbar-row-secondary">
+    <div
+      class="toolbar-row toolbar-row-secondary"
+      :class="{ collapsed: isMobile && !showMobileMore }"
+      :aria-hidden="isMobile && !showMobileMore">
       <button title="Fed" :disabled="isDisabled()" :class="{ active: !isPlain && editor?.isActive('bold') }" @click="run('bold', () => editor?.chain().focus().toggleBold().run())"><Bold :size="18" /></button>
 
       <button title="Kursiv" :disabled="isDisabled()" :class="{ active: !isPlain && editor?.isActive('italic') }" @click="run('italic', () => editor?.chain().focus().toggleItalic().run())"><Italic :size="18" /></button>
