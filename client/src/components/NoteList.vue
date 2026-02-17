@@ -248,7 +248,7 @@ async function submitPasswordChange() {
         <div>
           <strong>
             <FileText :size="16" class="note-title-icon" />
-            {{ item.note.title }}
+            <span class="note-title-text">{{ item.note.title }}</span>
           </strong>
           <small>{{ formatUpdatedAt(item.note.updatedAt) }}</small>
           <small v-if="item.snippet" class="snippet">{{ item.snippet }}</small>

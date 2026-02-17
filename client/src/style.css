@@ -317,6 +317,9 @@ button:disabled {
   -webkit-tap-highlight-color: transparent;
   border-left: 3px solid transparent;
 }
+.note-item > div {
+  min-width: 0;
+}
 .note-item strong {
   display: flex;
   align-items: center;
@@ -324,6 +327,13 @@ button:disabled {
   font-size: 1.02rem;
   line-height: 1.25;
   font-weight: 650;
+  min-width: 0;
+}
+.note-item .note-title-text {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  min-width: 0;
 }
 
 .note-title-icon {
