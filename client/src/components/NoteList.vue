@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { FileText, Plus, Search, Star, X } from 'lucide-vue-next'
 import type { NoteMeta } from '../types'
 
 interface Props {
@@ -111,17 +112,22 @@ function onKeydown(event: KeyboardEvent) {
   <aside class="sidebar">
     <div class="sidebar-header">
       <h1>Noteapp</h1>
-      <button class="create-fab" @click="emit('create')" aria-label="Opret ny note">+</button>
+      <button class="create-fab" @click="emit('create')" aria-label="Opret ny note">
+        <Plus :size="20" />
+      </button>
     </div>
 
     <div class="search-wrap">
+      <Search class="search-icon" :size="18" />
       <input
         v-model="query"
         class="search-input"
         type="search"
         placeholder="Søg i noter..."
         @keydown="onKeydown" />
-      <button v-if="query" class="search-clear" aria-label="Ryd søgning" @click="clearQuery">✕</button>
+      <button v-if="query" class="search-clear" aria-label="Ryd søgning" @click="clearQuery">
+        <X :size="18" />
+      </button>
     </div>
 
     <div class="list">
@@ -132,14 +138,19 @@ function onKeydown(event: KeyboardEvent) {
         :class="{ active: item.note.title === selectedTitle }"
         @click="emit('select', item.note.title)">
         <div>
-          <strong>{{ item.note.title }}</strong>
+          <strong>
+            <FileText :size="16" class="note-title-icon" />
+            {{ item.note.title }}
+          </strong>
           <small>{{ formatUpdatedAt(item.note.updatedAt) }}</small>
           <small v-if="item.snippet" class="snippet">{{ item.snippet }}</small>
         </div>
         <span
           class="pin"
           :aria-label="pinned.has(item.note.title) ? 'Fjern stjerne' : 'Stjernemarkér note'"
-          @click.stop="emit('toggle-pin', item.note.title)">{{ pinned.has(item.note.title) ? '★' : '☆' }}</span>
+          @click.stop="emit('toggle-pin', item.note.title)">
+          <Star :size="18" :fill="pinned.has(item.note.title) ? 'currentColor' : 'none'" />
+        </span>
       </button>
     </div>
   </aside>

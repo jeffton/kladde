@@ -9,6 +9,16 @@ import CodeBlock from '@tiptap/extension-code-block'
 import Placeholder from '@tiptap/extension-placeholder'
 import Strike from '@tiptap/extension-strike'
 import { Markdown } from 'tiptap-markdown'
+import {
+  AlertTriangle,
+  ChevronLeft,
+  Circle,
+  CloudCheck,
+  CloudOff,
+  MoreVertical,
+  RefreshCw,
+  Trash2
+} from 'lucide-vue-next'
 import EditorToolbar from './EditorToolbar.vue'
 import type { NotesStore } from '../stores/notes'
 
@@ -352,7 +362,7 @@ onUnmounted(() => {
   <main class="editor-area">
     <div class="note-title-wrap" v-if="store.selectedTitle">
       <button v-if="showBack" class="mobile-title-back" @click="emit('back')" aria-label="Tilbage">
-        <span aria-hidden="true">&lt;</span>
+        <ChevronLeft :size="20" />
       </button>
       <input
         v-model="editableTitle"
@@ -372,32 +382,11 @@ onUnmounted(() => {
           @focus="showTooltip = true"
           @blur="closeTooltip"
           @click="handleStatusClick">
-          <svg v-if="statusMeta.state === 'synced'" viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M20 17.6a4.5 4.5 0 0 0-1.8-8.62 6 6 0 0 0-11.74 1.2A4 4 0 0 0 7 18h12a1 1 0 0 0 1-1v.6Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
-            <path d="m9.2 13 2.1 2.1 4-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-          </svg>
-
-          <svg v-else-if="statusMeta.state === 'syncing'" class="spin" viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M20 12a8 8 0 0 0-13.66-5.66" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
-            <path d="M6.2 3.8v3.7h3.7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
-            <path d="M4 12a8 8 0 0 0 13.66 5.66" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
-            <path d="M17.8 20.2v-3.7h-3.7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
-          </svg>
-
-          <svg v-else-if="statusMeta.state === 'dirty'" viewBox="0 0 24 24" aria-hidden="true">
-            <circle cx="12" cy="12" r="5" fill="currentColor" />
-          </svg>
-
-          <svg v-else-if="statusMeta.state === 'offline'" viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M20 17.6a4.5 4.5 0 0 0-1.8-8.62 6 6 0 0 0-11.74 1.2A4 4 0 0 0 7 18h12a1 1 0 0 0 1-1v.6Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
-            <path d="m8 8 8 8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
-          </svg>
-
-          <svg v-else viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M12 4 3.8 18.2c-.34.6.1 1.3.8 1.3h14.8c.7 0 1.14-.7.8-1.3L12 4Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" />
-            <path d="M12 9v5" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
-            <circle cx="12" cy="16.8" r="1" fill="currentColor" />
-          </svg>
+          <CloudCheck v-if="statusMeta.state === 'synced'" :size="18" />
+          <RefreshCw v-else-if="statusMeta.state === 'syncing'" :size="18" class="spin" />
+          <Circle v-else-if="statusMeta.state === 'dirty'" :size="18" />
+          <CloudOff v-else-if="statusMeta.state === 'offline'" :size="18" />
+          <AlertTriangle v-else :size="18" />
         </button>
 
         <div v-if="showTooltip" class="status-tooltip" role="status">
@@ -407,9 +396,14 @@ onUnmounted(() => {
       </div>
 
       <div ref="noteMenuWrap" class="note-menu-wrap">
-        <button class="note-menu-button" aria-label="Mere" :aria-expanded="showNoteMenu" @click="toggleNoteMenu">⋮</button>
+        <button class="note-menu-button" aria-label="Mere" :aria-expanded="showNoteMenu" @click="toggleNoteMenu">
+          <MoreVertical :size="20" />
+        </button>
         <div v-if="showNoteMenu" class="note-menu-dropdown" role="menu">
-          <button class="note-menu-delete" role="menuitem" @click="deleteCurrentNote">Slet note</button>
+          <button class="note-menu-delete" role="menuitem" @click="deleteCurrentNote">
+            <Trash2 :size="18" />
+            <span>Slet note</span>
+          </button>
         </div>
       </div>
     </div>

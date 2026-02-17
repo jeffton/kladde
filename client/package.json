@@ -19,6 +19,7 @@
     "@tiptap/starter-kit": "^2.11.7",
     "@tiptap/vue-3": "^2.11.7",
     "idb": "^8.0.3",
+    "lucide-vue-next": "^0.566.0",
     "pinia": "^3.0.4",
     "tiptap-markdown": "^0.8.10",
     "vue": "^3.5.25",

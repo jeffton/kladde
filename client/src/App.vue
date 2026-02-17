@@ -14,6 +14,10 @@ const error = ref('')
 const sortedNotes = computed(() => store.sortedNotes)
 const isMobile = ref(window.matchMedia('(max-width: 900px)').matches)
 const isListRoute = computed(() => route.name === 'list')
+const mobileTransitionName = ref('slide-from-right')
+const currentMobileView = computed<'list' | 'editor'>(() => (isListRoute.value ? 'list' : 'editor'))
+let previousMobileView: 'list' | 'editor' = currentMobileView.value
+
 const appShellClass = computed(() => ({
   'mobile-list-view': isMobile.value && isListRoute.value,
   'mobile-editor-view': isMobile.value && !isListRoute.value
@@ -76,6 +80,21 @@ watch(
   }
 )
 
+watch(currentMobileView, (nextView) => {
+  if (!isMobile.value) {
+    previousMobileView = nextView
+    return
+  }
+
+  if (previousMobileView === 'list' && nextView === 'editor') {
+    mobileTransitionName.value = 'slide-from-right'
+  } else if (previousMobileView === 'editor' && nextView === 'list') {
+    mobileTransitionName.value = 'slide-from-left'
+  }
+
+  previousMobileView = nextView
+})
+
 let media: MediaQueryList | null = null
 let mediaListener: ((event: MediaQueryListEvent) => void) | null = null
 
@@ -112,21 +131,47 @@ onUnmounted(() => {
 
 <template>
   <div class="app-shell" :class="appShellClass">
-    <NoteList
-      :notes="sortedNotes"
-      :selected-title="store.selectedTitle"
-      :pinned="store.pinned"
-      :note-contents="store.noteContents"
-      @create="createNote"
-      @select="selectNote"
-      @toggle-pin="togglePin" />
+    <template v-if="isMobile">
+      <Transition :name="mobileTransitionName" mode="out-in">
+        <NoteList
+          v-if="isListRoute"
+          key="mobile-list"
+          :notes="sortedNotes"
+          :selected-title="store.selectedTitle"
+          :pinned="store.pinned"
+          :note-contents="store.noteContents"
+          @create="createNote"
+          @select="selectNote"
+          @toggle-pin="togglePin" />
 
-    <EditorView
-      :store="store"
-      :show-back="isMobile && !isListRoute"
-      @rename="onRename"
-      @back="goBackToList"
-      @deleted="onDeleted" />
+        <EditorView
+          v-else
+          key="mobile-editor"
+          :store="store"
+          :show-back="true"
+          @rename="onRename"
+          @back="goBackToList"
+          @deleted="onDeleted" />
+      </Transition>
+    </template>
+
+    <template v-else>
+      <NoteList
+        :notes="sortedNotes"
+        :selected-title="store.selectedTitle"
+        :pinned="store.pinned"
+        :note-contents="store.noteContents"
+        @create="createNote"
+        @select="selectNote"
+        @toggle-pin="togglePin" />
+
+      <EditorView
+        :store="store"
+        :show-back="false"
+        @rename="onRename"
+        @back="goBackToList"
+        @deleted="onDeleted" />
+    </template>
   </div>
   <p v-if="error" class="error">{{ error }}</p>
 </template>

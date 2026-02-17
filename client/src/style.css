@@ -107,7 +107,7 @@ button:disabled {
   border-radius: .7rem;
   background: var(--surface-soft);
   color: var(--text);
-  padding: .7rem 2.2rem .7rem .8rem;
+  padding: .7rem 2.2rem .7rem 2.3rem;
   outline: none;
   font-size: 16px;
   line-height: 1.35;
@@ -119,6 +119,15 @@ button:disabled {
 
 .search-input:focus {
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
+.search-icon {
+  position: absolute;
+  left: .7rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--muted);
+  pointer-events: none;
 }
 
 .search-clear {
@@ -142,10 +151,17 @@ button:disabled {
   min-height: 3rem;
 }
 .note-item strong {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: .35rem;
   font-size: 1.02rem;
   line-height: 1.25;
   font-weight: 650;
+}
+
+.note-title-icon {
+  color: var(--muted);
+  flex-shrink: 0;
 }
 .note-item:hover {
   background: var(--surface-soft);
@@ -167,7 +183,6 @@ button:disabled {
   opacity: .9;
 }
 .pin {
-  font-size: 1.2rem;
   opacity: .72;
   transition: opacity .15s ease;
   margin-left: .6rem;
@@ -412,9 +427,20 @@ button:disabled {
 
 .note-menu-delete {
   width: 100%;
+  min-height: 44px;
   text-align: left;
-  color: #ef4444;
+  color: #dc2626;
   border-radius: .4rem;
+  display: inline-flex;
+  align-items: center;
+  gap: .55rem;
+  padding: .62rem .72rem;
+  font-size: 1rem;
+  font-weight: 650;
+}
+
+.note-menu-delete:hover {
+  background: color-mix(in srgb, #ef4444 18%, transparent);
 }
 
 .plain-wrap,
@@ -598,6 +624,38 @@ button:disabled {
 }
 
 @media (max-width: 900px) {
+  .app-shell {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .slide-from-right-enter-active,
+  .slide-from-right-leave-active,
+  .slide-from-left-enter-active,
+  .slide-from-left-leave-active {
+    transition: transform .23s ease-out, opacity .23s ease-out;
+  }
+
+  .slide-from-right-enter-from,
+  .slide-from-left-leave-to {
+    transform: translateX(100%);
+    opacity: .98;
+  }
+
+  .slide-from-right-leave-to,
+  .slide-from-left-enter-from {
+    transform: translateX(-100%);
+    opacity: .98;
+  }
+
+  .slide-from-right-enter-to,
+  .slide-from-right-leave-from,
+  .slide-from-left-enter-to,
+  .slide-from-left-leave-from {
+    transform: translateX(0);
+    opacity: 1;
+  }
+
   .app-shell {
     grid-template-columns: minmax(0, 1fr);
   }
