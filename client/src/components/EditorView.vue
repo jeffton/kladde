@@ -47,6 +47,7 @@ const saveLabel = computed(() => (props.store.dirty ? 'Ikke gemt' : 'Gemt'))
 const showTooltip = ref(false)
 const isTouchLike = ref(false)
 const showNoteMenu = ref(false)
+const lastSyncTime = ref('')
 const noteMenuWrap = ref<HTMLElement | null>(null)
 
 const statusMeta = computed(() => {
@@ -54,10 +55,13 @@ const statusMeta = computed(() => {
   const dirty = saveLabel.value.toLowerCase().includes('ikke gemt')
 
   if (!props.store.online) {
+    const lastLine = lastSyncTime.value
+      ? `Sidst synkroniseret ${lastSyncTime.value}`
+      : 'Ændringer gemmes lokalt'
     return {
       state: 'offline',
-      label: 'Offline',
-      detail: 'Offline\nÆndringer gemmes lokalt'
+      label: '',
+      detail: `Offline\n${lastLine}`
     }
   }
 
@@ -88,6 +92,7 @@ const statusMeta = computed(() => {
   const noteCount = props.store.notes?.length ?? 0
   const now = new Date()
   const timeStr = now.toLocaleTimeString(navigator.language, { hour: '2-digit', minute: '2-digit' })
+  lastSyncTime.value = timeStr
 
   return {
     state: 'synced',
