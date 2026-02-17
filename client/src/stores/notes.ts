@@ -92,6 +92,10 @@ export const useNotesStore = defineStore('notes', () => {
   let syncInFlight: Promise<void> | null = null
   let pushInFlight: Promise<void> | null = null
   let saveInFlight: Promise<void> | null = null
+  const wsConnected = ref(false)
+  let ws: WebSocket | null = null
+  let wsReconnectTimer: number | null = null
+  let wsReconnectAttempt = 0
 
   const sortedNotes = computed(() => {
     return [...notes.value].sort((a, b) => {
@@ -166,9 +170,16 @@ export const useNotesStore = defineStore('notes', () => {
     if (value) {
       clearSyncRetry()
       void syncWithServer().catch(() => undefined)
+      void connectWebSocket()
       return
     }
     clearSyncRetry()
+    wsConnected.value = false
+    if (ws) {
+      ws.close()
+      ws = null
+    }
+    clearWsReconnect()
   }
 
   const togglePin = async (title: string) => {
@@ -209,12 +220,111 @@ export const useNotesStore = defineStore('notes', () => {
     }
   }
 
+  const handleRemoteNoteChange = async (title: string, action: string) => {
+    const local = await getCachedNote(title)
+    const isCurrentDirty = selectedTitle.value === title && dirty.value
+
+    if (action === 'deleted') {
+      if (isCurrentDirty) return
+      if (local && !local.dirty) {
+        await deleteCachedNote(title)
+      }
+      if (selectedTitle.value === title) {
+        selectedTitle.value = ''
+        currentContent.value = ''
+        currentUpdatedAt.value = null
+        dirty.value = false
+      }
+      await refreshStateFromCache()
+      return
+    }
+
+    if (action === 'updated' || action === 'created') {
+      if (isCurrentDirty) return
+      try {
+        const res = await apiFetch(`/api/notes/${encodeURIComponent(title)}`)
+        const serverNote = (await res.json()) as NoteResponse
+        await putCachedNote({
+          title: serverNote.title,
+          content: serverNote.content,
+          updatedAt: normalizeTs(serverNote.updatedAt),
+          dirty: false,
+          starred: Boolean(serverNote.starred)
+        })
+        await refreshStateFromCache()
+      } catch {
+        // ignore transient fetch failures from push updates
+      }
+    }
+  }
+
+  const clearWsReconnect = () => {
+    if (wsReconnectTimer !== null) {
+      window.clearTimeout(wsReconnectTimer)
+      wsReconnectTimer = null
+    }
+  }
+
+  const scheduleWsReconnect = () => {
+    if (wsReconnectTimer !== null) return
+    const delay = Math.min(30000, 1000 * 2 ** wsReconnectAttempt)
+    wsReconnectTimer = window.setTimeout(() => {
+      wsReconnectTimer = null
+      void connectWebSocket()
+    }, delay)
+    wsReconnectAttempt = Math.min(wsReconnectAttempt + 1, 5)
+  }
+
+  const connectWebSocket = async () => {
+    if (!online.value) return
+    if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return
+
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+    const wsUrl = `${protocol}//${window.location.host}/api/ws`
+
+    try {
+      ws = new WebSocket(wsUrl)
+    } catch {
+      scheduleWsReconnect()
+      return
+    }
+
+    ws.onopen = () => {
+      wsConnected.value = true
+      wsReconnectAttempt = 0
+      clearWsReconnect()
+      void syncWithServer().catch(() => undefined)
+    }
+
+    ws.onmessage = (event) => {
+      try {
+        const payload = JSON.parse(String(event.data)) as { type?: string; title?: string; action?: string }
+        if (payload.type === 'note_changed' && payload.title && payload.action) {
+          void handleRemoteNoteChange(payload.title, payload.action)
+        }
+      } catch {
+        // ignore malformed payloads
+      }
+    }
+
+    ws.onclose = () => {
+      wsConnected.value = false
+      ws = null
+      scheduleWsReconnect()
+    }
+
+    ws.onerror = () => {
+      wsConnected.value = false
+    }
+  }
+
   const initialize = async () => {
     await refreshStateFromCache()
     updateSyncStatus()
     if (online.value) {
       void syncWithServer().catch(() => undefined)
     }
+    void connectWebSocket()
   }
 
   const selectNote = async (title: string) => {
@@ -554,6 +664,7 @@ export const useNotesStore = defineStore('notes', () => {
     syncStatus,
     syncing,
     syncError,
+    wsConnected,
     noteContents,
     updateSyncStatus,
     setSyncError,

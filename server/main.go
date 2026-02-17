@@ -21,6 +21,8 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/fsnotify/fsnotify"
+	"github.com/gorilla/websocket"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -58,13 +60,33 @@ type Session struct {
 	ExpiresAt time.Time
 }
 
+type NoteChangeEvent struct {
+	Type   string `json:"type"`
+	Title  string `json:"title"`
+	Action string `json:"action"`
+}
+
+type Hub struct {
+	mu         sync.RWMutex
+	clients    map[string]map[*websocket.Conn]struct{}
+	writeLocks map[*websocket.Conn]*sync.Mutex
+}
+
+type FileEventDebouncer struct {
+	mu     sync.Mutex
+	timers map[string]*time.Timer
+}
+
 type Server struct {
-	notesBaseDir string
-	distDir      string
-	usersFile    string
-	sessions     map[string]Session
-	sessionsMu   sync.RWMutex
-	usersMu      sync.Mutex
+	notesBaseDir    string
+	distDir         string
+	usersFile       string
+	sessions        map[string]Session
+	sessionsMu      sync.RWMutex
+	usersMu         sync.Mutex
+	hub             *Hub
+	recentApiMu     sync.Mutex
+	recentAPIWrites map[string]time.Time
 }
 
 func main() {
@@ -89,10 +111,16 @@ func main() {
 	}
 
 	s := &Server{
-		notesBaseDir: *notesDir,
-		distDir:      *distDir,
-		usersFile:    *usersFile,
-		sessions:     make(map[string]Session),
+		notesBaseDir:    *notesDir,
+		distDir:         *distDir,
+		usersFile:       *usersFile,
+		sessions:        make(map[string]Session),
+		hub:             NewHub(),
+		recentAPIWrites: make(map[string]time.Time),
+	}
+
+	if err := s.startFileWatcher(); err != nil {
+		log.Fatalf("failed to start file watcher: %v", err)
 	}
 
 	mux := http.NewServeMux()
@@ -102,6 +130,7 @@ func main() {
 	mux.HandleFunc("/api/me/password", s.handleChangePassword)
 	mux.HandleFunc("/api/notes", s.handleNotes)
 	mux.HandleFunc("/api/notes/", s.handleNoteByTitle)
+	mux.HandleFunc("/api/ws", s.handleWebSocket)
 	mux.HandleFunc("/api/health", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 	})
@@ -437,11 +466,12 @@ func (s *Server) handleNotes(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, err)
 			return
 		}
-		note, err := s.saveNote(userDir, title, payload.Content)
+		note, _, err := s.saveNote(userDir, title, payload.Content)
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, err)
 			return
 		}
+		s.markRecentAPIWrite(session.User.Username, filepath.Join(userDir, title+".md"))
 		writeJSON(w, http.StatusCreated, note)
 	default:
 		w.WriteHeader(http.StatusMethodNotAllowed)
@@ -488,7 +518,7 @@ func (s *Server) handleNoteByTitle(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		note, err := s.renameNote(userDir, oldTitle, strings.TrimSpace(payload.NewTitle))
+		note, finalTitle, err := s.renameNote(userDir, oldTitle, strings.TrimSpace(payload.NewTitle))
 		if err != nil {
 			switch {
 			case errors.Is(err, fs.ErrNotExist):
@@ -503,6 +533,8 @@ func (s *Server) handleNoteByTitle(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		s.markRecentAPIWrite(session.User.Username, filepath.Join(userDir, oldTitle+".md"))
+		s.markRecentAPIWrite(session.User.Username, filepath.Join(userDir, finalTitle+".md"))
 		writeJSON(w, http.StatusOK, note)
 		return
 	}
@@ -584,11 +616,12 @@ func (s *Server) handleNoteByTitle(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, err)
 			return
 		}
-		note, err := s.saveNote(userDir, title, payload.Content)
+		note, _, err := s.saveNote(userDir, title, payload.Content)
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, err)
 			return
 		}
+		s.markRecentAPIWrite(session.User.Username, filepath.Join(userDir, title+".md"))
 		writeJSON(w, http.StatusOK, note)
 	case http.MethodDelete:
 		if err := s.deleteNote(userDir, title); err != nil {
@@ -599,6 +632,7 @@ func (s *Server) handleNoteByTitle(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusInternalServerError, err)
 			return
 		}
+		s.markRecentAPIWrite(session.User.Username, filepath.Join(userDir, title+".md"))
 		writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
 	default:
 		w.WriteHeader(http.StatusMethodNotAllowed)
@@ -750,20 +784,24 @@ func writeFileAtomic(path string, data []byte, perm os.FileMode) error {
 	return nil
 }
 
-func (s *Server) saveNote(notesDir, title, content string) (*Note, error) {
+func (s *Server) saveNote(notesDir, title, content string) (*Note, string, error) {
 	path, err := s.notePath(notesDir, title)
 	if err != nil {
-		return nil, err
+		return nil, "", err
+	}
+	action := "created"
+	if _, err := os.Stat(path); err == nil {
+		action = "updated"
 	}
 	if err := writeFileAtomic(path, []byte(content), 0o644); err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	info, err := os.Stat(path)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	stars := loadStars(notesDir)
-	return &Note{Title: title, Content: content, UpdatedAt: info.ModTime(), Starred: stars[title]}, nil
+	return &Note{Title: title, Content: content, UpdatedAt: info.ModTime(), Starred: stars[title]}, action, nil
 }
 
 func (s *Server) deleteNote(notesDir, title string) error {
@@ -795,22 +833,22 @@ func (s *Server) deleteNote(notesDir, title string) error {
 	return nil
 }
 
-func (s *Server) renameNote(notesDir, oldTitle, newTitle string) (*Note, error) {
+func (s *Server) renameNote(notesDir, oldTitle, newTitle string) (*Note, string, error) {
 	if err := validateTitle(newTitle); err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
 	oldPath, err := s.notePath(notesDir, oldTitle)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
 	if err := rejectSymlink(oldPath); err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
 	if _, err := os.Stat(oldPath); err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
 	if oldTitle != newTitle {
@@ -818,27 +856,27 @@ func (s *Server) renameNote(notesDir, oldTitle, newTitle string) (*Note, error) 
 		for n := 2; ; n++ {
 			newPath, err := s.notePath(notesDir, newTitle)
 			if err != nil {
-				return nil, err
+				return nil, "", err
 			}
 
 			err = os.Link(oldPath, newPath)
 			if err == nil {
 				if err := os.Remove(oldPath); err != nil {
 					_ = os.Remove(newPath)
-					return nil, err
+					return nil, "", err
 				}
 				break
 			}
 
 			if errors.Is(err, fs.ErrExist) {
 				if info, lerr := os.Lstat(newPath); lerr == nil && info.Mode()&os.ModeSymlink != 0 {
-					return nil, errors.New("symlink notes are not allowed")
+					return nil, "", errors.New("symlink notes are not allowed")
 				}
 				newTitle = fmt.Sprintf("%s (%d)", baseTitle, n)
 				continue
 			}
 
-			return nil, err
+			return nil, "", err
 		}
 	}
 
@@ -847,11 +885,15 @@ func (s *Server) renameNote(notesDir, oldTitle, newTitle string) (*Note, error) 
 		delete(stars, oldTitle)
 		stars[newTitle] = true
 		if err := saveStars(notesDir, stars); err != nil {
-			return nil, err
+			return nil, "", err
 		}
 	}
 
-	return s.getNote(notesDir, newTitle)
+	note, err := s.getNote(notesDir, newTitle)
+	if err != nil {
+		return nil, "", err
+	}
+	return note, newTitle, nil
 }
 
 func (s *Server) notePath(notesDir, title string) (string, error) {
@@ -974,6 +1016,264 @@ func (s *Server) handleSPA(w http.ResponseWriter, r *http.Request) {
 	}
 
 	http.ServeFile(w, r, filepath.Join(absDist, "index.html"))
+}
+
+func NewHub() *Hub {
+	return &Hub{
+		clients:    make(map[string]map[*websocket.Conn]struct{}),
+		writeLocks: make(map[*websocket.Conn]*sync.Mutex),
+	}
+}
+
+func (h *Hub) Add(username string, conn *websocket.Conn) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.clients[username] == nil {
+		h.clients[username] = make(map[*websocket.Conn]struct{})
+	}
+	h.clients[username][conn] = struct{}{}
+	h.writeLocks[conn] = &sync.Mutex{}
+}
+
+func (h *Hub) Remove(username string, conn *websocket.Conn) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.clients[username] == nil {
+		return
+	}
+	delete(h.clients[username], conn)
+	delete(h.writeLocks, conn)
+	if len(h.clients[username]) == 0 {
+		delete(h.clients, username)
+	}
+}
+
+func (h *Hub) connWriteLock(conn *websocket.Conn) *sync.Mutex {
+	h.mu.RLock()
+	lock := h.writeLocks[conn]
+	h.mu.RUnlock()
+	return lock
+}
+
+func (h *Hub) Broadcast(username string, event NoteChangeEvent) {
+	h.mu.RLock()
+	conns := make([]*websocket.Conn, 0, len(h.clients[username]))
+	for conn := range h.clients[username] {
+		conns = append(conns, conn)
+	}
+	h.mu.RUnlock()
+
+	for _, conn := range conns {
+		lock := h.connWriteLock(conn)
+		if lock == nil {
+			continue
+		}
+		lock.Lock()
+		_ = conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+		err := conn.WriteJSON(event)
+		lock.Unlock()
+		if err != nil {
+			h.Remove(username, conn)
+			_ = conn.Close()
+		}
+	}
+}
+
+func NewFileEventDebouncer() *FileEventDebouncer {
+	return &FileEventDebouncer{timers: make(map[string]*time.Timer)}
+}
+
+func (d *FileEventDebouncer) Trigger(key string, delay time.Duration, fn func()) {
+	d.mu.Lock()
+	if t, ok := d.timers[key]; ok {
+		t.Stop()
+	}
+	d.timers[key] = time.AfterFunc(delay, func() {
+		d.mu.Lock()
+		delete(d.timers, key)
+		d.mu.Unlock()
+		fn()
+	})
+	d.mu.Unlock()
+}
+
+func (s *Server) markRecentAPIWrite(username, notePath string) {
+	key := username + ":" + notePath
+	s.recentApiMu.Lock()
+	s.recentAPIWrites[key] = time.Now().Add(1 * time.Second)
+	s.recentApiMu.Unlock()
+}
+
+func (s *Server) shouldIgnoreRecentAPIWrite(username, notePath string) bool {
+	key := username + ":" + notePath
+	now := time.Now()
+	s.recentApiMu.Lock()
+	defer s.recentApiMu.Unlock()
+	for k, expiry := range s.recentAPIWrites {
+		if now.After(expiry) {
+			delete(s.recentAPIWrites, k)
+		}
+	}
+	expiry, ok := s.recentAPIWrites[key]
+	return ok && now.Before(expiry)
+}
+
+func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	session, ok := s.requireAuth(w, r)
+	if !ok {
+		return
+	}
+
+	upgrader := websocket.Upgrader{
+		CheckOrigin: func(r *http.Request) bool { return true },
+	}
+
+	conn, err := upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		return
+	}
+
+	username := session.User.Username
+	s.hub.Add(username, conn)
+
+	conn.SetReadLimit(1024)
+	_ = conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+	conn.SetPongHandler(func(string) error {
+		_ = conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+		return nil
+	})
+
+	pingTicker := time.NewTicker(30 * time.Second)
+	defer func() {
+		pingTicker.Stop()
+		s.hub.Remove(username, conn)
+		_ = conn.Close()
+	}()
+
+	go func() {
+		for range pingTicker.C {
+			lock := s.hub.connWriteLock(conn)
+			if lock == nil {
+				return
+			}
+			lock.Lock()
+			_ = conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+			err := conn.WriteMessage(websocket.PingMessage, nil)
+			lock.Unlock()
+			if err != nil {
+				_ = conn.Close()
+				return
+			}
+		}
+	}()
+
+	for {
+		if _, _, err := conn.ReadMessage(); err != nil {
+			return
+		}
+	}
+}
+
+func (s *Server) startFileWatcher() error {
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		return err
+	}
+
+	addDirRecursive := func(root string) error {
+		return filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+			if err != nil {
+				return nil
+			}
+			if !d.IsDir() {
+				return nil
+			}
+			if strings.HasPrefix(d.Name(), ".") && path != s.notesBaseDir {
+				return filepath.SkipDir
+			}
+			if err := watcher.Add(path); err != nil {
+				log.Printf("watch add failed for %s: %v", path, err)
+			}
+			return nil
+		})
+	}
+
+	if err := addDirRecursive(s.notesBaseDir); err != nil {
+		_ = watcher.Close()
+		return err
+	}
+
+	debouncer := NewFileEventDebouncer()
+
+	go func() {
+		defer watcher.Close()
+		for {
+			select {
+			case event, ok := <-watcher.Events:
+				if !ok {
+					return
+				}
+
+				if event.Op&fsnotify.Create != 0 {
+					if info, err := os.Stat(event.Name); err == nil && info.IsDir() {
+						if err := addDirRecursive(event.Name); err != nil {
+							log.Printf("watch recurse failed for %s: %v", event.Name, err)
+						}
+						continue
+					}
+				}
+
+				notePath := event.Name
+				base := filepath.Base(notePath)
+				if strings.HasPrefix(base, ".") || filepath.Ext(base) != ".md" {
+					continue
+				}
+
+				if event.Op&(fsnotify.Create|fsnotify.Write|fsnotify.Remove|fsnotify.Rename) == 0 {
+					continue
+				}
+
+				rel, err := filepath.Rel(s.notesBaseDir, notePath)
+				if err != nil {
+					continue
+				}
+				parts := strings.Split(rel, string(os.PathSeparator))
+				if len(parts) < 2 {
+					continue
+				}
+				username := parts[0]
+				title := strings.TrimSuffix(base, ".md")
+
+				action := "updated"
+				switch {
+				case event.Op&fsnotify.Remove != 0 || event.Op&fsnotify.Rename != 0:
+					action = "deleted"
+				case event.Op&fsnotify.Create != 0:
+					action = "created"
+				}
+
+				debounceKey := username + ":" + notePath + ":" + action
+				debouncer.Trigger(debounceKey, 200*time.Millisecond, func() {
+					if s.shouldIgnoreRecentAPIWrite(username, notePath) {
+						return
+					}
+					s.hub.Broadcast(username, NoteChangeEvent{Type: "note_changed", Title: title, Action: action})
+				})
+			case err, ok := <-watcher.Errors:
+				if !ok {
+					return
+				}
+				log.Printf("file watcher error: %v", err)
+			}
+		}
+	}()
+
+	return nil
 }
 
 func writeError(w http.ResponseWriter, status int, err error) {
