@@ -92,7 +92,7 @@ const statusMeta = computed(() => {
   return {
     state: 'synced',
     label: '',
-    detail: `Synkroniseret ${timeStr} · ${noteCount} noter`
+    detail: `Synkroniseret ${timeStr}\n${noteCount} noter`
   }
 })
 
@@ -399,7 +399,7 @@ onUnmounted(() => {
 
         <div v-if="showTooltip" class="status-tooltip" role="status">
           <strong v-if="statusMeta.label">{{ statusMeta.label }}</strong>
-          <span>{{ statusMeta.detail }}</span>
+          <span style="white-space: pre-line">{{ statusMeta.detail }}</span>
         </div>
       </div>
 
