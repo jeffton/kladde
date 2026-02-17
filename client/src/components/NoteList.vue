@@ -120,7 +120,7 @@ function onSelect(title: string) {
       <input
         v-model="query"
         class="search-input"
-        type="search"
+        type="text"
         placeholder="Søg"
         @keydown="onKeydown" />
       <button v-if="query" class="search-clear" aria-label="Ryd søgning" @click="clearQuery">
