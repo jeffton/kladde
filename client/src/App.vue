@@ -1,52 +1,55 @@
-<script setup>
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+<script setup lang="ts">
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useNotesStore } from './stores/notes'
 import NoteList from './components/NoteList.vue'
 import EditorView from './components/EditorView.vue'
-import { useRouting } from './composables/useRouting'
 import { useAutosave } from './composables/useAutosave'
 
 const store = useNotesStore()
+const route = useRoute()
+const router = useRouter()
 const error = ref('')
 
 const sortedNotes = computed(() => store.sortedNotes)
+const isMobile = ref(window.matchMedia('(max-width: 900px)').matches)
+const isListRoute = computed(() => route.name === 'list')
+const appShellClass = computed(() => ({
+  'mobile-list-view': isMobile.value && isListRoute.value,
+  'mobile-editor-view': isMobile.value && !isListRoute.value
+}))
 
-async function selectNote(title, fromRoute = false) {
+async function selectNote(title: string, replace = false) {
   try {
     await store.selectNote(title)
-    if (isMobile.value) mobileView.value = 'editor'
     error.value = ''
-    if (!fromRoute) pushCurrentHistory()
+    const target = { name: 'note', params: { title } }
+    if (replace) await router.replace(target)
+    else await router.push(target)
   } catch (e) {
-    error.value = e.message
+    error.value = (e as Error).message
   }
-}
-
-const {
-  isMobile,
-  mobileView,
-  pushCurrentHistory,
-  applyRouteFromLocation,
-  replaceWithTitle,
-  goBackToList
-} = useRouting({ store, selectNote })
-
-function onRename(renamedTitle) {
-  replaceWithTitle(renamedTitle)
 }
 
 async function createNote() {
   try {
-    await store.createNote()
-    if (isMobile.value) mobileView.value = 'editor'
+    const title = await store.createNote()
     error.value = ''
-    pushCurrentHistory()
+    await router.push({ name: 'note', params: { title } })
   } catch (e) {
-    error.value = e.message
+    error.value = (e as Error).message
   }
 }
 
-function togglePin(title) {
+function onRename(renamedTitle: string) {
+  void router.replace({ name: 'note', params: { title: renamedTitle } })
+}
+
+function goBackToList() {
+  void router.push({ name: 'list' })
+}
+
+function togglePin(title: string) {
   store.togglePin(title)
 }
 
@@ -56,62 +59,67 @@ const offline = () => store.setOnline(false)
 useAutosave({
   store,
   onError: (err) => {
-    error.value = err?.message || 'En fejl opstod'
+    error.value = (err as Error)?.message || 'En fejl opstod'
   }
 })
 
-let media = null
-let mediaListener = null
-let popStateHandler = null
+watch(
+  () => route.params.title,
+  async (value) => {
+    const title = typeof value === 'string' ? value : ''
+    if (!title) return
+    if (title !== store.selectedTitle) await selectNote(title, true)
+  }
+)
+
+let media: MediaQueryList | null = null
+let mediaListener: ((event: MediaQueryListEvent) => void) | null = null
 
 onMounted(async () => {
   try {
     await store.initialize()
-    await applyRouteFromLocation(true)
+
+    const title = typeof route.params.title === 'string' ? route.params.title : ''
+    if (title) {
+      await selectNote(title, true)
+    } else if (!isMobile.value && store.selectedTitle) {
+      await router.replace({ name: 'note', params: { title: store.selectedTitle } })
+    }
   } catch (e) {
-    error.value = e.message
+    error.value = (e as Error).message
   }
 
   media = window.matchMedia('(max-width: 900px)')
-  mediaListener = (event) => {
+  mediaListener = (event: MediaQueryListEvent) => {
     isMobile.value = event.matches
-    if (event.matches && !store.selectedTitle) mobileView.value = 'list'
-    if (!event.matches) mobileView.value = 'editor'
   }
 
   media.addEventListener('change', mediaListener)
-
-  popStateHandler = async () => {
-    await applyRouteFromLocation()
-  }
-
-  window.addEventListener('popstate', popStateHandler)
   window.addEventListener('online', online)
   window.addEventListener('offline', offline)
 })
 
 onUnmounted(() => {
   if (media && mediaListener) media.removeEventListener('change', mediaListener)
-  if (popStateHandler) window.removeEventListener('popstate', popStateHandler)
   window.removeEventListener('online', online)
   window.removeEventListener('offline', offline)
 })
 </script>
 
 <template>
-  <div class="app-shell" :class="{ 'mobile-list-view': isMobile && mobileView === 'list', 'mobile-editor-view': isMobile && mobileView === 'editor' }">
+  <div class="app-shell" :class="appShellClass">
     <NoteList
       :notes="sortedNotes"
       :selected-title="store.selectedTitle"
       :pinned="store.pinned"
+      :note-contents="store.noteContents"
       @create="createNote"
       @select="selectNote"
       @toggle-pin="togglePin" />
 
     <EditorView
       :store="store"
-      :is-mobile="isMobile"
-      :mobile-view="mobileView"
+      :show-back="isMobile && !isListRoute"
       @rename="onRename"
       @back="goBackToList" />
   </div>

@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { computed, nextTick, onUnmounted, ref, watch } from 'vue'
 import { EditorContent, useEditor } from '@tiptap/vue-3'
 import StarterKit from '@tiptap/starter-kit'
@@ -10,21 +10,28 @@ import Placeholder from '@tiptap/extension-placeholder'
 import Strike from '@tiptap/extension-strike'
 import { Markdown } from 'tiptap-markdown'
 import EditorToolbar from './EditorToolbar.vue'
+import type { NotesStore } from '../stores/notes'
 
-const props = defineProps({
-  store: { type: Object, required: true },
-  isMobile: { type: Boolean, default: false },
-  mobileView: { type: String, default: 'editor' }
+interface Props {
+  store: NotesStore
+  showBack?: boolean
+}
+
+const props = withDefaults(defineProps<Props>(), {
+  showBack: false
 })
 
-const emit = defineEmits(['rename', 'back'])
+const emit = defineEmits<{
+  (e: 'rename', title: string): void
+  (e: 'back'): void
+}>()
 
 const editableTitle = ref('')
 const error = ref('')
 const showPlain = ref(false)
-const plainTextarea = ref(null)
+const plainTextarea = ref<HTMLTextAreaElement | null>(null)
 let ignoreEditorChanges = false
-let updateDebounce = null
+let updateDebounce: number | null = null
 
 const saveLabel = computed(() => (props.store.dirty ? 'Ikke gemt' : 'Gemt'))
 
@@ -39,29 +46,21 @@ const editor = useEditor({
       autolink: true,
       openOnClick: true,
       linkOnPaste: true,
-      HTMLAttributes: {
-        rel: 'noopener noreferrer nofollow',
-        target: '_blank'
-      }
+      HTMLAttributes: { rel: 'noopener noreferrer nofollow', target: '_blank' }
     }),
     Placeholder.configure({ placeholder: 'Skriv din note her…' }),
-    Markdown.configure({
-      html: false,
-      transformCopiedText: true,
-      transformPastedText: true
-    })
+    Markdown.configure({ html: false, transformCopiedText: true, transformPastedText: true })
   ],
   content: props.store.currentContent || '',
-  contentType: 'markdown',
   onUpdate: ({ editor: tiptapEditor }) => {
     if (ignoreEditorChanges) return
     const markdown = tiptapEditor.storage.markdown.getMarkdown()
 
-    clearTimeout(updateDebounce)
-    updateDebounce = setTimeout(() => {
+    if (updateDebounce) window.clearTimeout(updateDebounce)
+    updateDebounce = window.setTimeout(() => {
       if (markdown !== props.store.currentContent) {
-        props.store.setCurrentContent(markdown).catch((err) => {
-          error.value = err?.message || 'Kunne ikke gemme lokalt'
+        void props.store.setCurrentContent(markdown).catch((err: unknown) => {
+          error.value = (err as Error)?.message || 'Kunne ikke gemme lokalt'
         })
       }
     }, 300)
@@ -71,7 +70,7 @@ const editor = useEditor({
 function setEditorMarkdown(markdown = '') {
   if (!editor.value) return
   ignoreEditorChanges = true
-  editor.value.commands.setContent(markdown || '', false, { contentType: 'markdown' })
+  editor.value.commands.setContent(markdown || '', false)
   ignoreEditorChanges = false
 }
 
@@ -86,17 +85,15 @@ function applyLink() {
   if (!editor.value) return
   const previousUrl = editor.value.getAttributes('link').href
   const href = window.prompt('Indsæt link (https://...)', previousUrl || '')
-
   if (href === null) return
   if (href === '') {
     editor.value.chain().focus().unsetLink().run()
     return
   }
-
   editor.value.chain().focus().setLink({ href }).run()
 }
 
-async function updatePlainText(nextValue, selectionStart, selectionEnd) {
+async function updatePlainText(nextValue: string, selectionStart: number, selectionEnd: number) {
   const textarea = plainTextarea.value
   if (!textarea) return
 
@@ -110,7 +107,7 @@ async function updatePlainText(nextValue, selectionStart, selectionEnd) {
   }
 }
 
-function wrapSelection(prefix, suffix = prefix, placeholder = '') {
+function wrapSelection(prefix: string, suffix = prefix, placeholder = '') {
   const textarea = plainTextarea.value
   if (!textarea) return
 
@@ -124,10 +121,10 @@ function wrapSelection(prefix, suffix = prefix, placeholder = '') {
 
   const selectFrom = start + prefix.length
   const selectTo = start + prefix.length + middle.length
-  updatePlainText(nextValue, selectFrom, selectTo)
+  void updatePlainText(nextValue, selectFrom, selectTo)
 }
 
-function prefixLines(prefix) {
+function prefixLines(prefix: string) {
   const textarea = plainTextarea.value
   if (!textarea) return
 
@@ -145,13 +142,9 @@ function prefixLines(prefix) {
   const nextValue = value.slice(0, blockStart) + prefixed + value.slice(blockEnd)
 
   const shiftAtStart = start - blockStart >= 0 ? prefix.length : 0
-  const lineCount = lines.length
-  const addedChars = prefix.length * lineCount
+  const addedChars = prefix.length * lines.length
 
-  const nextStart = start + shiftAtStart
-  const nextEnd = end + addedChars
-
-  updatePlainText(nextValue, nextStart, nextEnd)
+  void updatePlainText(nextValue, start + shiftAtStart, end + addedChars)
 }
 
 function insertHr() {
@@ -170,7 +163,7 @@ function insertHr() {
 
   const nextValue = before + insert + after
   const cursor = before.length + insert.length
-  updatePlainText(nextValue, cursor, cursor)
+  void updatePlainText(nextValue, cursor, cursor)
 }
 
 function applyPlainLink() {
@@ -183,61 +176,29 @@ function applyPlainLink() {
   const href = window.prompt('Indsæt link (https://...)', 'https://')
   if (href === null) return
 
-  const safeHref = href || 'url'
-  const replacement = `[${selected}](${safeHref})`
+  const replacement = `[${selected}](${href || 'url'})`
   const nextValue = textarea.value.slice(0, start) + replacement + textarea.value.slice(end)
-
   const textStart = start + 1
   const textEnd = textStart + selected.length
-  updatePlainText(nextValue, textStart, textEnd)
+  void updatePlainText(nextValue, textStart, textEnd)
 }
 
-function applyPlainAction(action) {
+function applyPlainAction(action: string) {
   switch (action) {
-    case 'bold':
-      wrapSelection('**')
-      break
-    case 'italic':
-      wrapSelection('*')
-      break
-    case 'strike':
-      wrapSelection('~~')
-      break
-    case 'h1':
-      prefixLines('# ')
-      break
-    case 'h2':
-      prefixLines('## ')
-      break
-    case 'h3':
-      prefixLines('### ')
-      break
-    case 'bullet':
-      prefixLines('- ')
-      break
-    case 'ordered':
-      prefixLines('1. ')
-      break
-    case 'task':
-      prefixLines('- [ ] ')
-      break
-    case 'link':
-      applyPlainLink()
-      break
-    case 'code':
-      wrapSelection('`')
-      break
-    case 'codeBlock':
-      wrapSelection('```\n', '\n```')
-      break
-    case 'blockquote':
-      prefixLines('> ')
-      break
-    case 'hr':
-      insertHr()
-      break
-    default:
-      break
+    case 'bold': wrapSelection('**'); break
+    case 'italic': wrapSelection('*'); break
+    case 'strike': wrapSelection('~~'); break
+    case 'h1': prefixLines('# '); break
+    case 'h2': prefixLines('## '); break
+    case 'h3': prefixLines('### '); break
+    case 'bullet': prefixLines('- '); break
+    case 'ordered': prefixLines('1. '); break
+    case 'task': prefixLines('- [ ] '); break
+    case 'link': applyPlainLink(); break
+    case 'code': wrapSelection('`'); break
+    case 'codeBlock': wrapSelection('```\n', '\n```'); break
+    case 'blockquote': prefixLines('> '); break
+    case 'hr': insertHr(); break
   }
 }
 
@@ -256,7 +217,7 @@ async function commitTitleChange() {
     error.value = ''
     emit('rename', renamedTitle)
   } catch (e) {
-    error.value = e.message
+    error.value = (e as Error).message
     editableTitle.value = props.store.selectedTitle
   }
 }
@@ -269,24 +230,14 @@ watch(showPlain, (isPlain) => {
   syncEditorFromStore()
 })
 
-watch(
-  () => props.store.currentContent,
-  () => {
-    syncEditorFromStore()
-  }
-)
-
-watch(
-  () => props.store.selectedTitle,
-  (title) => {
-    editableTitle.value = title || ''
-  },
-  { immediate: true }
-)
+watch(() => props.store.currentContent, () => syncEditorFromStore())
+watch(() => props.store.selectedTitle, (title) => {
+  editableTitle.value = title || ''
+}, { immediate: true })
 
 onUnmounted(() => {
-  if (updateDebounce) clearTimeout(updateDebounce)
-  if (editor.value) editor.value.destroy()
+  if (updateDebounce) window.clearTimeout(updateDebounce)
+  editor.value?.destroy()
 })
 </script>
 
@@ -299,17 +250,16 @@ onUnmounted(() => {
         type="text"
         spellcheck="false"
         @blur="commitTitleChange"
-        @keydown.enter.prevent="$event.target.blur()" />
+        @keydown.enter.prevent="($event.target as HTMLInputElement).blur()" />
     </div>
 
     <EditorToolbar
-      :editor="editor"
-      :is-plain="showPlain"
-      :is-mobile="isMobile"
-      :mobile-view="mobileView"
+      :editor="editor || null"
+      :show-back="showBack"
       :online="store.online"
       :save-label="saveLabel"
       :sync-status="store.syncStatus"
+      :is-plain="showPlain"
       @toggle-plain="showPlain = !showPlain"
       @plain-action="applyPlainAction"
       @apply-link="applyLink"
@@ -320,10 +270,10 @@ onUnmounted(() => {
       <textarea
         ref="plainTextarea"
         :value="store.currentContent"
-        @input="store.setCurrentContent($event.target.value)"></textarea>
+        @input="store.setCurrentContent(($event.target as HTMLTextAreaElement).value)"></textarea>
     </section>
     <section v-else class="wysiwyg-wrap">
-      <EditorContent v-if="editor" :editor="editor" class="tiptap-root" />
+      <EditorContent v-if="editor" :editor="editor || null" class="tiptap-root" />
     </section>
   </main>
 </template>

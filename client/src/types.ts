@@ -1,0 +1,35 @@
+export interface NoteMeta {
+  title: string
+  updatedAt: string
+  dirty: boolean
+}
+
+export interface CachedNote extends NoteMeta {
+  content: string
+  version?: number
+}
+
+export interface NoteResponse {
+  title: string
+  content: string
+  updatedAt: string
+}
+
+export interface RenameResponse extends NoteResponse {
+  error?: string
+}
+
+export interface NotesState {
+  notes: NoteMeta[]
+  selectedTitle: string
+  currentContent: string
+  currentUpdatedAt: string | null
+  pinned: Set<string>
+  dirty: boolean
+  online: boolean
+  syncStatus: string
+  syncing: boolean
+  syncError: string
+  contentVersion: number
+  noteContents: Record<string, string>
+}

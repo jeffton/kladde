@@ -78,6 +78,37 @@ button:disabled {
   opacity: .45;
 }
 
+.search-wrap {
+  margin-top: .75rem;
+  position: relative;
+}
+
+.search-input {
+  width: 100%;
+  border: 0;
+  border-radius: .6rem;
+  background: var(--surface-soft);
+  color: var(--text);
+  padding: .55rem 2rem .55rem .7rem;
+  outline: none;
+}
+
+.search-input::placeholder {
+  color: var(--muted);
+}
+
+.search-input:focus {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
+.search-clear {
+  position: absolute;
+  right: .25rem;
+  top: 50%;
+  transform: translateY(-50%);
+  padding: .2rem .45rem;
+}
+
 .list { margin-top: 1rem; display: flex; flex-direction: column; gap: .2rem; }
 .note-item {
   display: flex;
@@ -95,6 +126,12 @@ button:disabled {
   background: var(--surface-active);
 }
 .note-item small { display: block; color: var(--muted); }
+.note-item .snippet {
+  margin-top: .2rem;
+  font-size: .78rem;
+  line-height: 1.35;
+  opacity: .9;
+}
 .pin {
   font-size: 1.05rem;
   opacity: .7;

@@ -1,17 +1,31 @@
-<script setup>
-const props = defineProps({
-  editor: { type: Object, default: null },
-  isMobile: { type: Boolean, default: false },
-  mobileView: { type: String, default: 'editor' },
-  online: { type: Boolean, default: true },
-  saveLabel: { type: String, required: true },
-  syncStatus: { type: String, default: '' },
-  isPlain: { type: Boolean, default: false }
+<script setup lang="ts">
+import type { Editor } from '@tiptap/vue-3'
+
+interface Props {
+  editor: Editor | null
+  showBack?: boolean
+  online?: boolean
+  saveLabel: string
+  syncStatus?: string
+  isPlain?: boolean
+}
+
+const props = withDefaults(defineProps<Props>(), {
+  editor: null,
+  showBack: false,
+  online: true,
+  syncStatus: '',
+  isPlain: false
 })
 
-const emit = defineEmits(['toggle-plain', 'back', 'apply-link', 'plain-action'])
+const emit = defineEmits<{
+  (e: 'toggle-plain'): void
+  (e: 'back'): void
+  (e: 'apply-link'): void
+  (e: 'plain-action', action: string): void
+}>()
 
-function run(action, richAction) {
+function run(action: string, richAction?: () => void) {
   if (props.isPlain) {
     emit('plain-action', action)
     return
@@ -27,7 +41,7 @@ function isDisabled() {
 <template>
   <header class="toolbar">
     <div class="toolbar-left">
-      <button v-if="isMobile && mobileView === 'editor'" class="back-button" @click="emit('back')">← Tilbage</button>
+      <button v-if="showBack" class="back-button" @click="emit('back')">← Tilbage</button>
       <div class="status">
         <span :class="online ? 'online' : 'offline'">{{ online ? 'Online' : 'Offline' }}</span>
         <span>{{ saveLabel }}</span>
