@@ -108,7 +108,11 @@ func (s *Server) handleNoteByTitle(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		oldTitle, _ := url.PathUnescape(parts[0])
+		oldTitle, err := url.PathUnescape(parts[0])
+		if err != nil {
+			writeError(w, http.StatusBadRequest, errors.New("invalid note path encoding"))
+			return
+		}
 		oldTitle = strings.TrimSpace(oldTitle)
 		if err := validateTitle(oldTitle); err != nil {
 			writeError(w, http.StatusBadRequest, err)
@@ -147,7 +151,11 @@ func (s *Server) handleNoteByTitle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	title, _ := url.PathUnescape(parts[0])
+	title, err := url.PathUnescape(parts[0])
+	if err != nil {
+		writeError(w, http.StatusBadRequest, errors.New("invalid note path encoding"))
+		return
+	}
 	title = strings.TrimSpace(title)
 	if err := validateTitle(title); err != nil {
 		writeError(w, http.StatusBadRequest, err)
@@ -222,7 +230,13 @@ func (s *Server) listNotes() ([]NoteMeta, error) {
 }
 
 func (s *Server) getNote(title string) (*Note, error) {
-	path := filepath.Join(s.notesDir, title+".md")
+	path, err := s.notePath(title)
+	if err != nil {
+		return nil, err
+	}
+	if err := rejectSymlink(path); err != nil {
+		return nil, err
+	}
 	content, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
@@ -283,7 +297,10 @@ func writeFileAtomic(path string, data []byte, perm os.FileMode) error {
 }
 
 func (s *Server) saveNote(title, content string) (*Note, error) {
-	path := filepath.Join(s.notesDir, title+".md")
+	path, err := s.notePath(title)
+	if err != nil {
+		return nil, err
+	}
 	if err := writeFileAtomic(path, []byte(content), 0o644); err != nil {
 		return nil, err
 	}
@@ -295,7 +312,13 @@ func (s *Server) saveNote(title, content string) (*Note, error) {
 }
 
 func (s *Server) deleteNote(title string) error {
-	path := filepath.Join(s.notesDir, title+".md")
+	path, err := s.notePath(title)
+	if err != nil {
+		return err
+	}
+	if err := rejectSymlink(path); err != nil {
+		return err
+	}
 	if err := os.Remove(path); err != nil {
 		return err
 	}
@@ -314,32 +337,85 @@ func (s *Server) renameNote(oldTitle, newTitle string) (*Note, error) {
 		return nil, err
 	}
 
-	oldPath := filepath.Join(s.notesDir, oldTitle+".md")
-	newPath := filepath.Join(s.notesDir, newTitle+".md")
+	oldPath, err := s.notePath(oldTitle)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := rejectSymlink(oldPath); err != nil {
+		return nil, err
+	}
 
 	if _, err := os.Stat(oldPath); err != nil {
 		return nil, err
 	}
 
 	if oldTitle != newTitle {
-		// Auto-deduplicate: append (n) if title exists
+		// Auto-deduplicate atomically without clobbering existing files.
 		baseTitle := newTitle
 		for n := 2; ; n++ {
-			if _, err := os.Stat(newPath); errors.Is(err, fs.ErrNotExist) {
-				break
-			} else if err != nil {
+			newPath, err := s.notePath(newTitle)
+			if err != nil {
 				return nil, err
 			}
-			newTitle = fmt.Sprintf("%s (%d)", baseTitle, n)
-			newPath = filepath.Join(s.notesDir, newTitle+".md")
-		}
 
-		if err := os.Rename(oldPath, newPath); err != nil {
+			err = os.Link(oldPath, newPath)
+			if err == nil {
+				if err := os.Remove(oldPath); err != nil {
+					_ = os.Remove(newPath)
+					return nil, err
+				}
+				break
+			}
+
+			if errors.Is(err, fs.ErrExist) {
+				if info, lerr := os.Lstat(newPath); lerr == nil && info.Mode()&os.ModeSymlink != 0 {
+					return nil, errors.New("symlink notes are not allowed")
+				}
+				newTitle = fmt.Sprintf("%s (%d)", baseTitle, n)
+				continue
+			}
+
 			return nil, err
 		}
 	}
 
 	return s.getNote(newTitle)
+}
+
+func (s *Server) notePath(title string) (string, error) {
+	if err := validateTitle(title); err != nil {
+		return "", err
+	}
+
+	base, err := filepath.Abs(s.notesDir)
+	if err != nil {
+		return "", err
+	}
+
+	path := filepath.Join(base, title+".md")
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return "", err
+	}
+
+	prefix := base + string(os.PathSeparator)
+	if abs != base && !strings.HasPrefix(abs, prefix) {
+		return "", errors.New("invalid note path")
+	}
+
+	return abs, nil
+}
+
+func rejectSymlink(path string) error {
+	info, err := os.Lstat(path)
+	if err != nil {
+		return err
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		return errors.New("symlink notes are not allowed")
+	}
+	return nil
 }
 
 func validateTitle(title string) error {
