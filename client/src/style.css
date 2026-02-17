@@ -625,6 +625,11 @@ button:disabled {
     background: var(--surface-hover);
   }
 
+  .note-item:hover,
+  .note-item.active:hover {
+    background: transparent;
+  }
+
   .note-item:hover {
     border-left-color: var(--muted);
   }
