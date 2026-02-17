@@ -73,9 +73,6 @@ h1 { margin-top: 0; margin-bottom: 0; }
   background: var(--surface-hover, rgba(128,128,128,.12));
   flex-shrink: 0;
 }
-.create-fab:hover {
-  background: var(--surface-active, rgba(128,128,128,.22));
-}
 button {
   border: 0;
   border-radius: .5rem;
@@ -84,9 +81,6 @@ button {
   padding: .45rem .75rem;
   cursor: pointer;
   transition: background-color .15s ease, opacity .15s ease;
-}
-button:hover {
-  background: var(--surface-hover);
 }
 button:focus-visible {
   outline: none;
@@ -140,6 +134,9 @@ button:disabled {
 }
 
 .list { margin-top: 1rem; display: flex; flex-direction: column; gap: .35rem; }
+.note-list-move {
+  transition: transform .3s ease;
+}
 .note-item {
   display: flex;
   justify-content: space-between;
@@ -163,9 +160,6 @@ button:disabled {
 .note-title-icon {
   color: var(--muted);
   flex-shrink: 0;
-}
-.note-item:hover {
-  background: var(--surface-soft);
 }
 .note-item.active {
   background: var(--surface-active);
@@ -193,7 +187,6 @@ button:disabled {
   align-items: center;
   justify-content: center;
 }
-.note-item:hover .pin,
 .note-item.active .pin {
   opacity: 1;
 }
@@ -227,9 +220,6 @@ button:disabled {
   line-height: 1;
 }
 
-.mobile-title-back:hover {
-  background: var(--surface-active, rgba(128,128,128,.22));
-}
 
 .note-title-input {
   flex: 1;
@@ -440,9 +430,6 @@ button:disabled {
   font-weight: 650;
 }
 
-.note-menu-delete:hover {
-  background: color-mix(in srgb, #ef4444 18%, transparent);
-}
 
 .plain-wrap,
 .wysiwyg-wrap {
@@ -483,14 +470,6 @@ button:disabled {
 
 .wysiwyg-wrap {
   overflow-y: auto;
-}
-
-.tiptap-root .ProseMirror p.is-editor-empty:first-child::before {
-  content: attr(data-placeholder);
-  color: var(--muted);
-  pointer-events: none;
-  float: left;
-  height: 0;
 }
 
 .tiptap-root .ProseMirror {
@@ -615,6 +594,32 @@ button:disabled {
 @media (prefers-color-scheme: dark) {
   .tiptap-root .ProseMirror a {
     color: #60a5fa;
+  }
+}
+
+@media (hover: hover) {
+  .create-fab:hover {
+    background: var(--surface-active, rgba(128,128,128,.22));
+  }
+
+  button:hover {
+    background: var(--surface-hover);
+  }
+
+  .note-item:hover {
+    background: var(--surface-soft);
+  }
+
+  .note-item:hover .pin {
+    opacity: 1;
+  }
+
+  .mobile-title-back:hover {
+    background: var(--surface-active, rgba(128,128,128,.22));
+  }
+
+  .note-menu-delete:hover {
+    background: color-mix(in srgb, #ef4444 18%, transparent);
   }
 }
 

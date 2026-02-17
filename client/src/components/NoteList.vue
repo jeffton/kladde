@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { TransitionGroup, computed, ref } from 'vue'
 import { FileText, Plus, Search, Star, X } from 'lucide-vue-next'
 import type { NoteMeta } from '../types'
 
@@ -123,7 +123,7 @@ function onKeydown(event: KeyboardEvent) {
       </button>
     </div>
 
-    <div class="list">
+    <TransitionGroup name="note-list" tag="div" class="list">
       <button
         v-for="item in filteredNotes"
         :key="item.note.title"
@@ -145,6 +145,6 @@ function onKeydown(event: KeyboardEvent) {
           <Star :size="18" :fill="pinned.has(item.note.title) ? 'currentColor' : 'none'" />
         </span>
       </button>
-    </div>
+    </TransitionGroup>
   </aside>
 </template>

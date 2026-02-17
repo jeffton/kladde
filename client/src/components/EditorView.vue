@@ -6,7 +6,6 @@ import TaskList from '@tiptap/extension-task-list'
 import TaskItem from '@tiptap/extension-task-item'
 import Link from '@tiptap/extension-link'
 import CodeBlock from '@tiptap/extension-code-block'
-import Placeholder from '@tiptap/extension-placeholder'
 import Strike from '@tiptap/extension-strike'
 import { Markdown } from 'tiptap-markdown'
 import {
@@ -110,7 +109,6 @@ const editor = useEditor({
       linkOnPaste: true,
       HTMLAttributes: { rel: 'noopener noreferrer nofollow', target: '_blank' }
     }),
-    Placeholder.configure({ placeholder: 'Skriv din note her…' }),
     Markdown.configure({ html: false, transformCopiedText: true, transformPastedText: true })
   ],
   content: props.store.currentContent || '',
