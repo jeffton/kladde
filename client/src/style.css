@@ -705,6 +705,10 @@ button:disabled {
   margin: .45rem 0;
 }
 
+.tiptap-root .ProseMirror ul[data-type='taskList'] ul[data-type='taskList'] {
+  margin: 0;
+}
+
 .tiptap-root .ProseMirror ul[data-type='taskList'] li {
   display: flex;
   gap: .4rem;
