@@ -63,6 +63,7 @@ export const useNotesStore = defineStore('notes', () => {
   let syncRetryAttempt = 0
   let syncInFlight: Promise<void> | null = null
   let pushInFlight: Promise<void> | null = null
+  let saveInFlight: Promise<void> | null = null
 
   const sortedNotes = computed(() => {
     return [...notes.value].sort((a, b) => {
@@ -268,33 +269,44 @@ export const useNotesStore = defineStore('notes', () => {
 
   const saveCurrent = async () => {
     if (!selectedTitle.value) return
+    if (saveInFlight) return saveInFlight
 
-    await flushPendingWrites()
-    await putCachedNote({
-      title: selectedTitle.value,
-      content: currentContent.value,
-      updatedAt: currentUpdatedAt.value || new Date().toISOString(),
-      dirty: true
-    })
-    await refreshStateFromCache()
+    const titleAtStart = selectedTitle.value
 
-    if (!online.value) {
-      updateSyncStatus()
-      return
-    }
-
-    syncing.value = true
-    updateSyncStatus()
-    try {
-      await runPushDirtyNote(selectedTitle.value)
+    saveInFlight = (async () => {
+      await flushPendingWrites()
+      await putCachedNote({
+        title: titleAtStart,
+        content: currentContent.value,
+        updatedAt: currentUpdatedAt.value || new Date().toISOString(),
+        dirty: true
+      })
       await refreshStateFromCache()
-      clearSyncError()
-    } catch (err: unknown) {
-      handleSyncFailure(err, 'Kunne ikke gemme note')
-      throw err
-    } finally {
-      syncing.value = false
+
+      if (!online.value) {
+        updateSyncStatus()
+        return
+      }
+
+      syncing.value = true
       updateSyncStatus()
+      try {
+        await runPushDirtyNote(titleAtStart)
+        await refreshStateFromCache()
+        clearSyncError()
+      } catch (err: unknown) {
+        handleSyncFailure(err, 'Kunne ikke gemme note')
+        throw err
+      } finally {
+        syncing.value = false
+        updateSyncStatus()
+      }
+    })()
+
+    try {
+      await saveInFlight
+    } finally {
+      saveInFlight = null
     }
   }
 
