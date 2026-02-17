@@ -413,18 +413,28 @@ export const useNotesStore = defineStore('notes', () => {
 
     if (!selectedTitle.value) return
 
+    const selectedMeta = notes.value.find((n) => n.title === selectedTitle.value)
+    if (selectedMeta) {
+      selectedMeta.dirty = true
+    }
+    noteContents.value = {
+      ...noteContents.value,
+      [selectedTitle.value]: currentContent.value
+    }
+
     const snapshot: CachedNote = {
       title: selectedTitle.value,
       content: currentContent.value,
-      updatedAt: currentUpdatedAt.value,
+      // Keep note-list ordering stable while user edits; server timestamp wins after sync.
+      updatedAt: selectedMeta?.updatedAt || currentUpdatedAt.value,
       dirty: true,
-      version: contentVersion.value
+      version: contentVersion.value,
+      starred: selectedMeta?.starred
     }
 
     await queueWrite(async () => {
       await putCachedNote(snapshot)
       if (selectedTitle.value === snapshot.title && contentVersion.value === snapshot.version) {
-        await refreshStateFromCache()
         updateSyncStatus()
       }
     })

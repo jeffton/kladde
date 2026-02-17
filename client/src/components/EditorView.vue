@@ -43,6 +43,44 @@ const plainTextarea = ref<HTMLTextAreaElement | null>(null)
 let ignoreEditorChanges = false
 let updateDebounce: number | null = null
 
+function preserveConsecutiveLineBreaks(previous: string, next: string): string {
+  const collapse = (value: string) => value.replace(/\n{3,}/g, '\n\n')
+  if (collapse(previous) !== collapse(next)) return next
+
+  const splitWithRuns = (value: string) => {
+    const parts: string[] = []
+    const runs: string[] = []
+    let lastIndex = 0
+    const re = /\n+/g
+    let match: RegExpExecArray | null
+
+    while ((match = re.exec(value)) !== null) {
+      parts.push(value.slice(lastIndex, match.index))
+      runs.push(match[0])
+      lastIndex = match.index + match[0].length
+    }
+    parts.push(value.slice(lastIndex))
+
+    return { parts, runs }
+  }
+
+  const prev = splitWithRuns(previous)
+  const cur = splitWithRuns(next)
+
+  if (prev.parts.length !== cur.parts.length || prev.runs.length !== cur.runs.length) return next
+  for (let i = 0; i < prev.parts.length; i += 1) {
+    if (prev.parts[i] !== cur.parts[i]) return next
+  }
+
+  let merged = cur.parts[0] || ''
+  for (let i = 0; i < cur.runs.length; i += 1) {
+    const run = prev.runs[i].length > cur.runs[i].length ? prev.runs[i] : cur.runs[i]
+    merged += run + (cur.parts[i + 1] || '')
+  }
+
+  return merged
+}
+
 const saveLabel = computed(() => (props.store.dirty ? 'Ikke gemt' : 'Gemt'))
 const showTooltip = ref(false)
 const isTouchLike = ref(false)
@@ -125,11 +163,12 @@ const editor = useEditor({
   onUpdate: ({ editor: tiptapEditor }) => {
     if (ignoreEditorChanges) return
     const markdown = tiptapEditor.storage.markdown.getMarkdown()
+    const nextMarkdown = preserveConsecutiveLineBreaks(props.store.currentContent || '', markdown)
 
     if (updateDebounce) window.clearTimeout(updateDebounce)
     updateDebounce = window.setTimeout(() => {
-      if (markdown !== props.store.currentContent) {
-        void props.store.setCurrentContent(markdown).catch((err: unknown) => {
+      if (nextMarkdown !== props.store.currentContent) {
+        void props.store.setCurrentContent(nextMarkdown).catch((err: unknown) => {
           error.value = (err as Error)?.message || 'Kunne ikke gemme lokalt'
         })
       }
