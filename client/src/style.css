@@ -298,9 +298,8 @@ button:disabled {
 
 .status-tooltip {
   position: absolute;
-  left: calc(100% + .45rem);
-  top: 50%;
-  transform: translateY(-50%);
+  right: 0;
+  top: calc(100% + .35rem);
   min-width: 170px;
   max-width: min(240px, 70vw);
   display: flex;
@@ -518,9 +517,9 @@ button:disabled {
   }
 
   .status-tooltip {
-    left: 0;
+    right: 0;
+    left: auto;
     top: calc(100% + .4rem);
-    transform: none;
     max-width: min(260px, 82vw);
     pointer-events: auto;
   }
