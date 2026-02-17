@@ -195,7 +195,8 @@ button:disabled {
 }
 
 .note-title-input {
-  width: 100%;
+  flex: 1;
+  min-width: 0;
   border: 0;
   outline: none;
   background: transparent;
@@ -265,6 +266,7 @@ button:disabled {
 
 .status-indicator-wrap {
   position: relative;
+  flex-shrink: 0;
 }
 
 .status-indicator {
@@ -313,6 +315,7 @@ button:disabled {
   line-height: 1.3;
   box-shadow: 0 8px 20px color-mix(in srgb, #000 16%, transparent);
   pointer-events: none;
+  z-index: 9999;
 }
 
 .status-tooltip strong {

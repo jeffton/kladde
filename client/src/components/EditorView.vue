@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { EditorContent, useEditor } from '@tiptap/vue-3'
 import StarterKit from '@tiptap/starter-kit'
 import TaskList from '@tiptap/extension-task-list'
@@ -34,6 +34,51 @@ let ignoreEditorChanges = false
 let updateDebounce: number | null = null
 
 const saveLabel = computed(() => (props.store.dirty ? 'Ikke gemt' : 'Gemt'))
+const showTooltip = ref(false)
+const isTouchLike = ref(false)
+
+const statusMeta = computed(() => {
+  const sync = (props.store.syncStatus || '').toLowerCase()
+  const dirty = saveLabel.value.toLowerCase().includes('ikke gemt')
+
+  if (!props.store.online) {
+    return {
+      state: 'offline',
+      label: 'Offline',
+      detail: props.store.syncStatus || 'Offline — ændringer gemmes lokalt'
+    }
+  }
+
+  if (sync.includes('synkroniserer')) {
+    return {
+      state: 'syncing',
+      label: 'Synkroniserer',
+      detail: props.store.syncStatus || 'Synkroniserer ændringer…'
+    }
+  }
+
+  if (sync.includes('sync-fejl')) {
+    return {
+      state: 'error',
+      label: 'Sync-fejl',
+      detail: props.store.syncStatus || 'Der opstod en synkroniseringsfejl'
+    }
+  }
+
+  if (dirty) {
+    return {
+      state: 'dirty',
+      label: 'Ikke gemt',
+      detail: 'Lokale ændringer venter på synk'
+    }
+  }
+
+  return {
+    state: 'synced',
+    label: 'Synkroniseret',
+    detail: props.store.syncStatus || 'Alle ændringer er synkroniseret'
+  }
+})
 
 const editor = useEditor({
   extensions: [
@@ -222,6 +267,28 @@ async function commitTitleChange() {
   }
 }
 
+function handleStatusClick() {
+  if (!isTouchLike.value) return
+  showTooltip.value = !showTooltip.value
+}
+
+function closeTooltip() {
+  if (isTouchLike.value) return
+  showTooltip.value = false
+}
+
+function updateInputMode() {
+  isTouchLike.value = window.matchMedia('(hover: none), (pointer: coarse)').matches
+  if (!isTouchLike.value) showTooltip.value = false
+}
+
+function onGlobalPointerDown(event: Event) {
+  if (!isTouchLike.value) return
+  const target = event.target as HTMLElement | null
+  if (target?.closest('.status-indicator-wrap')) return
+  showTooltip.value = false
+}
+
 watch(showPlain, (isPlain) => {
   if (isPlain) {
     nextTick(() => plainTextarea.value?.focus())
@@ -235,8 +302,16 @@ watch(() => props.store.selectedTitle, (title) => {
   editableTitle.value = title || ''
 }, { immediate: true })
 
+onMounted(() => {
+  updateInputMode()
+  window.addEventListener('resize', updateInputMode)
+  window.addEventListener('pointerdown', onGlobalPointerDown)
+})
+
 onUnmounted(() => {
   if (updateDebounce) window.clearTimeout(updateDebounce)
+  window.removeEventListener('resize', updateInputMode)
+  window.removeEventListener('pointerdown', onGlobalPointerDown)
   editor.value?.destroy()
 })
 </script>
@@ -256,19 +331,58 @@ onUnmounted(() => {
         spellcheck="false"
         @blur="commitTitleChange"
         @keydown.enter.prevent="($event.target as HTMLInputElement).blur()" />
+
+      <div class="status-indicator-wrap">
+        <button
+          class="status-indicator"
+          :class="`state-${statusMeta.state}`"
+          :aria-label="`${statusMeta.label}: ${statusMeta.detail}`"
+          @mouseenter="showTooltip = true"
+          @mouseleave="closeTooltip"
+          @focus="showTooltip = true"
+          @blur="closeTooltip"
+          @click="handleStatusClick">
+          <svg v-if="statusMeta.state === 'synced'" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M20 17.6a4.5 4.5 0 0 0-1.8-8.62 6 6 0 0 0-11.74 1.2A4 4 0 0 0 7 18h12a1 1 0 0 0 1-1v.6Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+            <path d="m9.2 13 2.1 2.1 4-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+
+          <svg v-else-if="statusMeta.state === 'syncing'" class="spin" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M20 12a8 8 0 0 0-13.66-5.66" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+            <path d="M6.2 3.8v3.7h3.7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+            <path d="M4 12a8 8 0 0 0 13.66 5.66" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+            <path d="M17.8 20.2v-3.7h-3.7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+
+          <svg v-else-if="statusMeta.state === 'dirty'" viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="12" r="5" fill="currentColor" />
+          </svg>
+
+          <svg v-else-if="statusMeta.state === 'offline'" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M20 17.6a4.5 4.5 0 0 0-1.8-8.62 6 6 0 0 0-11.74 1.2A4 4 0 0 0 7 18h12a1 1 0 0 0 1-1v.6Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+            <path d="m8 8 8 8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+          </svg>
+
+          <svg v-else viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 4 3.8 18.2c-.34.6.1 1.3.8 1.3h14.8c.7 0 1.14-.7.8-1.3L12 4Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" />
+            <path d="M12 9v5" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+            <circle cx="12" cy="16.8" r="1" fill="currentColor" />
+          </svg>
+        </button>
+
+        <div v-if="showTooltip" class="status-tooltip" role="status">
+          <strong>{{ statusMeta.label }}</strong>
+          <span>{{ statusMeta.detail }}</span>
+        </div>
+      </div>
     </div>
 
     <EditorToolbar
       :editor="editor || null"
-      :show-back="false"
-      :online="store.online"
-      :save-label="saveLabel"
-      :sync-status="store.syncStatus"
       :is-plain="showPlain"
       @toggle-plain="showPlain = !showPlain"
       @plain-action="applyPlainAction"
-      @apply-link="applyLink"
-      @back="emit('back')" />
+      @apply-link="applyLink" />
 
     <p v-if="error" class="error">{{ error }}</p>
     <section v-if="showPlain" class="plain-wrap">
