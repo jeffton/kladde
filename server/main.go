@@ -73,18 +73,23 @@ type Hub struct {
 }
 
 type FileEventDebouncer struct {
-	mu     sync.Mutex
-	timers map[string]*time.Timer
+	mu      sync.Mutex
+	entries map[string]*debouncedEntry
+}
+
+type debouncedEntry struct {
+	timer *time.Timer
+	gen   uint64
 }
 
 type Server struct {
-	notesBaseDir    string
-	distDir         string
-	usersFile       string
-	sessions        map[string]Session
-	sessionsMu      sync.RWMutex
-	usersMu         sync.Mutex
-	hub             *Hub
+	notesBaseDir string
+	distDir      string
+	usersFile    string
+	sessions     map[string]Session
+	sessionsMu   sync.RWMutex
+	usersMu      sync.Mutex
+	hub          *Hub
 }
 
 func main() {
@@ -109,11 +114,11 @@ func main() {
 	}
 
 	s := &Server{
-		notesBaseDir:    *notesDir,
-		distDir:         *distDir,
-		usersFile:       *usersFile,
-		sessions:        make(map[string]Session),
-		hub:             NewHub(),
+		notesBaseDir: *notesDir,
+		distDir:      *distDir,
+		usersFile:    *usersFile,
+		sessions:     make(map[string]Session),
+		hub:          NewHub(),
 	}
 
 	if err := s.startFileWatcher(); err != nil {
@@ -1072,21 +1077,36 @@ func (h *Hub) Broadcast(username string, event NoteChangeEvent) {
 }
 
 func NewFileEventDebouncer() *FileEventDebouncer {
-	return &FileEventDebouncer{timers: make(map[string]*time.Timer)}
+	return &FileEventDebouncer{entries: make(map[string]*debouncedEntry)}
 }
 
 func (d *FileEventDebouncer) Trigger(key string, delay time.Duration, fn func()) {
 	d.mu.Lock()
-	if t, ok := d.timers[key]; ok {
-		t.Stop()
+	defer d.mu.Unlock()
+
+	entry, ok := d.entries[key]
+	if ok {
+		entry.timer.Stop()
+		entry.gen++
+	} else {
+		entry = &debouncedEntry{}
+		d.entries[key] = entry
 	}
-	d.timers[key] = time.AfterFunc(delay, func() {
+
+	capturedGen := entry.gen
+	entry.timer = time.AfterFunc(delay, func() {
 		d.mu.Lock()
-		delete(d.timers, key)
+		current, exists := d.entries[key]
+		shouldRun := exists && current.gen == capturedGen
+		if shouldRun {
+			delete(d.entries, key)
+		}
 		d.mu.Unlock()
-		fn()
+
+		if shouldRun {
+			fn()
+		}
 	})
-	d.mu.Unlock()
 }
 
 func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
@@ -1101,7 +1121,17 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	}
 
 	upgrader := websocket.Upgrader{
-		CheckOrigin: func(r *http.Request) bool { return true },
+		CheckOrigin: func(r *http.Request) bool {
+			origin := r.Header.Get("Origin")
+			if origin == "" {
+				return false
+			}
+			u, err := url.Parse(origin)
+			if err != nil {
+				return false
+			}
+			return strings.EqualFold(u.Host, r.Host)
+		},
 	}
 
 	conn, err := upgrader.Upgrade(w, r, nil)
@@ -1120,24 +1150,31 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	})
 
 	pingTicker := time.NewTicker(30 * time.Second)
+	done := make(chan struct{})
 	defer func() {
+		close(done)
 		pingTicker.Stop()
 		s.hub.Remove(username, conn)
 		_ = conn.Close()
 	}()
 
 	go func() {
-		for range pingTicker.C {
-			lock := s.hub.connWriteLock(conn)
-			if lock == nil {
-				return
-			}
-			lock.Lock()
-			_ = conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
-			err := conn.WriteMessage(websocket.PingMessage, nil)
-			lock.Unlock()
-			if err != nil {
-				_ = conn.Close()
+		for {
+			select {
+			case <-pingTicker.C:
+				lock := s.hub.connWriteLock(conn)
+				if lock == nil {
+					return
+				}
+				lock.Lock()
+				_ = conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+				err := conn.WriteMessage(websocket.PingMessage, nil)
+				lock.Unlock()
+				if err != nil {
+					_ = conn.Close()
+					return
+				}
+			case <-done:
 				return
 			}
 		}
@@ -1180,6 +1217,35 @@ func (s *Server) startFileWatcher() error {
 	}
 
 	debouncer := NewFileEventDebouncer()
+	knownMu := &sync.Mutex{}
+	knownNotes := make(map[string]struct{})
+
+	_ = filepath.WalkDir(s.notesBaseDir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return nil
+		}
+		if strings.HasPrefix(d.Name(), ".") || filepath.Ext(d.Name()) != ".md" {
+			return nil
+		}
+		rel, relErr := filepath.Rel(s.notesBaseDir, path)
+		if relErr != nil {
+			return nil
+		}
+		knownMu.Lock()
+		knownNotes[rel] = struct{}{}
+		knownMu.Unlock()
+		return nil
+	})
+
+	go func() {
+		ticker := time.NewTicker(60 * time.Second)
+		defer ticker.Stop()
+		for range ticker.C {
+			if err := addDirRecursive(s.notesBaseDir); err != nil {
+				log.Printf("watch reconcile failed: %v", err)
+			}
+		}
+	}()
 
 	go func() {
 		defer watcher.Close()
@@ -1228,9 +1294,32 @@ func (s *Server) startFileWatcher() error {
 					action = "created"
 				}
 
-				debounceKey := username + ":" + notePath + ":" + action
+				debounceKey := username + ":" + notePath
 				debouncer.Trigger(debounceKey, 200*time.Millisecond, func() {
-					s.hub.Broadcast(username, NoteChangeEvent{Type: "note_changed", Title: title, Action: action})
+					relPath, relErr := filepath.Rel(s.notesBaseDir, notePath)
+					if relErr != nil {
+						return
+					}
+
+					knownMu.Lock()
+					_, wasKnown := knownNotes[relPath]
+					_, statErr := os.Stat(notePath)
+					finalAction := action
+
+					if statErr != nil && os.IsNotExist(statErr) {
+						finalAction = "deleted"
+						delete(knownNotes, relPath)
+					} else if statErr == nil {
+						if !wasKnown {
+							finalAction = "created"
+						} else {
+							finalAction = "updated"
+						}
+						knownNotes[relPath] = struct{}{}
+					}
+					knownMu.Unlock()
+
+					s.hub.Broadcast(username, NoteChangeEvent{Type: "note_changed", Title: title, Action: finalAction})
 				})
 			case err, ok := <-watcher.Errors:
 				if !ok {

@@ -96,6 +96,11 @@ export const useNotesStore = defineStore('notes', () => {
   let ws: WebSocket | null = null
   let wsReconnectTimer: number | null = null
   let wsReconnectAttempt = 0
+  let wsConsecutiveFailures = 0
+  let wsReconnectDisabled = false
+  let lastMeUnauthorized = false
+  let pendingRemoteChanges: Map<string, string> = new Map()
+  let remoteChangeTimer: number | null = null
 
   const sortedNotes = computed(() => {
     return [...notes.value].sort((a, b) => {
@@ -192,6 +197,7 @@ export const useNotesStore = defineStore('notes', () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ starred: nextStarred })
     })
+    resetWsFailuresAndReconnect()
 
     note.starred = nextStarred
 
@@ -220,42 +226,36 @@ export const useNotesStore = defineStore('notes', () => {
     }
   }
 
-  const handleRemoteNoteChange = async (title: string, action: string) => {
+  const handleRemoteDelete = async (title: string) => {
     const local = await getCachedNote(title)
     const isCurrentDirty = selectedTitle.value === title && dirty.value
+    if (isCurrentDirty) return
 
+    if (local && !local.dirty) {
+      await deleteCachedNote(title)
+    }
+    if (selectedTitle.value === title) {
+      selectedTitle.value = ''
+      currentContent.value = ''
+      currentUpdatedAt.value = null
+      dirty.value = false
+    }
+    await refreshStateFromCache()
+  }
+
+  const queueRemoteChange = (title: string, action: string) => {
     if (action === 'deleted') {
-      if (isCurrentDirty) return
-      if (local && !local.dirty) {
-        await deleteCachedNote(title)
-      }
-      if (selectedTitle.value === title) {
-        selectedTitle.value = ''
-        currentContent.value = ''
-        currentUpdatedAt.value = null
-        dirty.value = false
-      }
-      await refreshStateFromCache()
+      void handleRemoteDelete(title)
       return
     }
 
-    if (action === 'updated' || action === 'created') {
-      if (isCurrentDirty) return
-      try {
-        const res = await apiFetch(`/api/notes/${encodeURIComponent(title)}`)
-        const serverNote = (await res.json()) as NoteResponse
-        await putCachedNote({
-          title: serverNote.title,
-          content: serverNote.content,
-          updatedAt: normalizeTs(serverNote.updatedAt),
-          dirty: false,
-          starred: Boolean(serverNote.starred)
-        })
-        await refreshStateFromCache()
-      } catch {
-        // ignore transient fetch failures from push updates
-      }
-    }
+    pendingRemoteChanges.set(title, action)
+    if (remoteChangeTimer !== null) window.clearTimeout(remoteChangeTimer)
+    remoteChangeTimer = window.setTimeout(() => {
+      remoteChangeTimer = null
+      pendingRemoteChanges.clear()
+      void syncWithServer().catch(() => undefined)
+    }, 200)
   }
 
   const clearWsReconnect = () => {
@@ -265,8 +265,19 @@ export const useNotesStore = defineStore('notes', () => {
     }
   }
 
+  const resetWsFailuresAndReconnect = () => {
+    wsConsecutiveFailures = 0
+    wsReconnectDisabled = false
+    lastMeUnauthorized = false
+    wsReconnectAttempt = 0
+    clearWsReconnect()
+    if (online.value && !wsConnected.value) {
+      void connectWebSocket()
+    }
+  }
+
   const scheduleWsReconnect = () => {
-    if (wsReconnectTimer !== null) return
+    if (wsReconnectDisabled || wsReconnectTimer !== null) return
     const delay = Math.min(30000, 1000 * 2 ** wsReconnectAttempt)
     wsReconnectTimer = window.setTimeout(() => {
       wsReconnectTimer = null
@@ -276,22 +287,32 @@ export const useNotesStore = defineStore('notes', () => {
   }
 
   const connectWebSocket = async () => {
-    if (!online.value) return
+    if (!online.value || wsReconnectDisabled) return
     if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
     const wsUrl = `${protocol}//${window.location.host}/api/ws`
+    let opened = false
 
     try {
       ws = new WebSocket(wsUrl)
     } catch {
+      wsConsecutiveFailures += 1
+      if (wsConsecutiveFailures >= 5) {
+        wsReconnectDisabled = true
+        return
+      }
       scheduleWsReconnect()
       return
     }
 
     ws.onopen = () => {
+      opened = true
       wsConnected.value = true
       wsReconnectAttempt = 0
+      wsConsecutiveFailures = 0
+      wsReconnectDisabled = false
+      lastMeUnauthorized = false
       clearWsReconnect()
       void syncWithServer().catch(() => undefined)
     }
@@ -300,17 +321,46 @@ export const useNotesStore = defineStore('notes', () => {
       try {
         const payload = JSON.parse(String(event.data)) as { type?: string; title?: string; action?: string }
         if (payload.type === 'note_changed' && payload.title && payload.action) {
-          void handleRemoteNoteChange(payload.title, payload.action)
+          queueRemoteChange(payload.title, payload.action)
         }
       } catch {
         // ignore malformed payloads
       }
     }
 
-    ws.onclose = () => {
+    ws.onclose = (event) => {
       wsConnected.value = false
       ws = null
-      scheduleWsReconnect()
+
+      if (!opened) {
+        wsConsecutiveFailures += 1
+      }
+
+      if (event.code === 1008) {
+        wsReconnectDisabled = true
+        return
+      }
+
+      void (async () => {
+        try {
+          await apiFetch('/api/me')
+          lastMeUnauthorized = false
+        } catch (err: unknown) {
+          lastMeUnauthorized = (err as Error)?.message === 'UNAUTHORIZED'
+        }
+
+        if (lastMeUnauthorized) {
+          wsReconnectDisabled = true
+          return
+        }
+
+        if (wsConsecutiveFailures >= 5) {
+          wsReconnectDisabled = true
+          return
+        }
+
+        scheduleWsReconnect()
+      })()
     }
 
     ws.onerror = () => {
@@ -403,6 +453,7 @@ export const useNotesStore = defineStore('notes', () => {
     }
 
     const saved = (await res.json()) as NoteResponse
+    resetWsFailuresAndReconnect()
     await putCachedNote({
       title: saved.title,
       content: saved.content,
@@ -608,6 +659,7 @@ export const useNotesStore = defineStore('notes', () => {
     })
 
     const payload = (await res.json()) as RenameResponse
+    resetWsFailuresAndReconnect()
 
     const serverTitle = payload?.title?.trim()
     if (!serverTitle) throw new Error('Server returnerede ugyldig titel')
@@ -638,6 +690,7 @@ export const useNotesStore = defineStore('notes', () => {
       await apiFetch(`/api/notes/${encodeURIComponent(titleToDelete)}`, {
         method: 'DELETE'
       })
+      resetWsFailuresAndReconnect()
     } catch (err: unknown) {
       if (!isNotFoundError(err)) throw err
     }
