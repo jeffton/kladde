@@ -43,6 +43,28 @@ const plainTextarea = ref<HTMLTextAreaElement | null>(null)
 let ignoreEditorChanges = false
 let updateDebounce: number | null = null
 
+// Preserve multiple consecutive blank lines through markdown round-trip.
+// markdown-it collapses \n\n\n into a single paragraph break.
+// We use \u00A0 (nbsp) as empty paragraph placeholder.
+const BLANK_LINE_PLACEHOLDER = '\u00A0'
+
+function mdToEditor(md: string): string {
+  // Replace runs of 3+ newlines: each extra \n\n becomes a nbsp paragraph
+  return md.replace(/\n{3,}/g, (match) => {
+    const breaks = Math.floor(match.length / 2) // number of paragraph breaks
+    const parts: string[] = []
+    for (let i = 0; i < breaks; i++) {
+      parts.push(i === 0 || i === breaks - 1 ? '' : BLANK_LINE_PLACEHOLDER)
+    }
+    return parts.join('\n\n')
+  })
+}
+
+function editorToMd(md: string): string {
+  // Replace nbsp-only paragraphs back to empty lines
+  return md.replace(new RegExp(`^${BLANK_LINE_PLACEHOLDER}$`, 'gm'), '')
+}
+
 const saveLabel = computed(() => (props.store.dirty ? 'Ikke gemt' : 'Gemt'))
 const showTooltip = ref(false)
 const isTouchLike = ref(false)
@@ -121,10 +143,10 @@ const editor = useEditor({
     }),
     Markdown.configure({ html: false, transformCopiedText: true, transformPastedText: true })
   ],
-  content: props.store.currentContent || '',
+  content: mdToEditor(props.store.currentContent || ''),
   onUpdate: ({ editor: tiptapEditor }) => {
     if (ignoreEditorChanges) return
-    const nextMarkdown = tiptapEditor.storage.markdown.getMarkdown()
+    const nextMarkdown = editorToMd(tiptapEditor.storage.markdown.getMarkdown())
 
     if (updateDebounce) window.clearTimeout(updateDebounce)
     updateDebounce = window.setTimeout(() => {
@@ -140,7 +162,7 @@ const editor = useEditor({
 function setEditorMarkdown(markdown = '') {
   if (!editor.value) return
   ignoreEditorChanges = true
-  editor.value.commands.setContent(markdown || '', false)
+  editor.value.commands.setContent(mdToEditor(markdown || ''), false)
   ignoreEditorChanges = false
 }
 
