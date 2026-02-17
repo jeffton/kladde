@@ -576,7 +576,7 @@ button:disabled {
 
 .tiptap-root .ProseMirror pre {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
-  background: color-mix(in srgb, var(--panel) 82%, #000 18%);
+  background: color-mix(in srgb, var(--panel) 78%, #6b7280 22%);
   padding: .75rem;
   border-radius: .45rem;
   overflow-x: auto;
