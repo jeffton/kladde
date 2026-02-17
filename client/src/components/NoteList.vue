@@ -109,9 +109,9 @@ function onKeydown(event: KeyboardEvent) {
 
 <template>
   <aside class="sidebar">
-    <h1>Noteapp</h1>
-    <div class="create-row">
-      <button class="create-button" @click="emit('create')" aria-label="Opret ny note">+</button>
+    <div class="sidebar-header">
+      <h1>Noteapp</h1>
+      <button class="create-fab" @click="emit('create')" aria-label="Opret ny note">+</button>
     </div>
 
     <div class="search-wrap">

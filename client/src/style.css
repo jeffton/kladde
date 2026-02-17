@@ -52,16 +52,27 @@ select {
   overflow: auto;
 }
 
-h1 { margin-top: 0; }
-.create-row { display: flex; gap: .5rem; }
-.create-button {
-  width: 2.25rem;
-  height: 2.25rem;
-  font-size: 1.25rem;
+h1 { margin-top: 0; margin-bottom: 0; }
+.sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: .75rem;
+}
+.create-fab {
+  width: 2rem;
+  height: 2rem;
+  font-size: 1.2rem;
   line-height: 1;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  border-radius: 50%;
+  background: var(--surface-hover, rgba(128,128,128,.12));
+  flex-shrink: 0;
+}
+.create-fab:hover {
+  background: var(--surface-active, rgba(128,128,128,.22));
 }
 button {
   border: 0;
