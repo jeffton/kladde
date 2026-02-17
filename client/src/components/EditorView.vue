@@ -244,6 +244,11 @@ onUnmounted(() => {
 <template>
   <main class="editor-area">
     <div class="note-title-wrap" v-if="store.selectedTitle">
+      <button v-if="showBack" class="mobile-title-back" @click="emit('back')" aria-label="Tilbage">
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <path d="M14.7 5.3a1 1 0 0 1 0 1.4L10.41 11H20a1 1 0 1 1 0 2h-9.59l4.3 4.3a1 1 0 0 1-1.42 1.4l-6-6a1 1 0 0 1 0-1.4l6-6a1 1 0 0 1 1.41 0Z" fill="currentColor" />
+        </svg>
+      </button>
       <input
         v-model="editableTitle"
         class="note-title-input"
@@ -255,7 +260,7 @@ onUnmounted(() => {
 
     <EditorToolbar
       :editor="editor || null"
-      :show-back="showBack"
+      :show-back="false"
       :online="store.online"
       :save-label="saveLabel"
       :sync-status="store.syncStatus"

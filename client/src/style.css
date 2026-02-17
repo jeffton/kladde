@@ -34,6 +34,12 @@ body {
   color: var(--text);
 }
 
+input,
+textarea,
+select {
+  font-size: 16px;
+}
+
 .app-shell {
   display: grid;
   grid-template-columns: 320px minmax(0, 1fr);
@@ -86,11 +92,13 @@ button:disabled {
 .search-input {
   width: 100%;
   border: 0;
-  border-radius: .6rem;
+  border-radius: .7rem;
   background: var(--surface-soft);
   color: var(--text);
-  padding: .55rem 2rem .55rem .7rem;
+  padding: .7rem 2.2rem .7rem .8rem;
   outline: none;
+  font-size: 16px;
+  line-height: 1.35;
 }
 
 .search-input::placeholder {
@@ -109,15 +117,22 @@ button:disabled {
   padding: .2rem .45rem;
 }
 
-.list { margin-top: 1rem; display: flex; flex-direction: column; gap: .2rem; }
+.list { margin-top: 1rem; display: flex; flex-direction: column; gap: .35rem; }
 .note-item {
   display: flex;
   justify-content: space-between;
   align-items: center;
   width: 100%;
   text-align: left;
-  padding: .55rem .6rem;
+  padding: .78rem .72rem;
   background: transparent;
+  border-radius: .7rem;
+}
+.note-item strong {
+  display: block;
+  font-size: 1.02rem;
+  line-height: 1.25;
+  font-weight: 650;
 }
 .note-item:hover {
   background: var(--surface-soft);
@@ -125,17 +140,24 @@ button:disabled {
 .note-item.active {
   background: var(--surface-active);
 }
-.note-item small { display: block; color: var(--muted); }
-.note-item .snippet {
+.note-item small {
+  display: block;
+  color: var(--muted);
   margin-top: .2rem;
-  font-size: .78rem;
-  line-height: 1.35;
+  font-size: .84rem;
+  line-height: 1.3;
+}
+.note-item .snippet {
+  margin-top: .24rem;
+  font-size: .84rem;
+  line-height: 1.4;
   opacity: .9;
 }
 .pin {
-  font-size: 1.05rem;
-  opacity: .7;
+  font-size: 1.12rem;
+  opacity: .72;
   transition: opacity .15s ease;
+  margin-left: .6rem;
 }
 .note-item:hover .pin,
 .note-item.active .pin {
@@ -151,6 +173,25 @@ button:disabled {
 }
 .note-title-wrap {
   margin-bottom: .35rem;
+  display: flex;
+  align-items: center;
+  gap: .45rem;
+}
+
+.mobile-title-back {
+  width: 2.1rem;
+  height: 2.1rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: .55rem;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.mobile-title-back svg {
+  width: 1.15rem;
+  height: 1.15rem;
 }
 
 .note-title-input {
@@ -204,12 +245,80 @@ button:disabled {
   margin-left: auto;
 }
 
-.toolbar-left { display: flex; align-items: center; gap: .6rem; }
-.status { display: flex; gap: .7rem; color: var(--muted); }
-.online { color: #22c55e; }
-.offline { color: #f59e0b; }
+.toolbar-left { display: flex; align-items: center; gap: .55rem; }
 .error { color: #ef4444; }
-.back-button { font-weight: 600; }
+
+.back-button {
+  width: 2.05rem;
+  height: 2.05rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: .55rem;
+  padding: 0;
+}
+
+.back-button svg {
+  width: 1.15rem;
+  height: 1.15rem;
+}
+
+.status-indicator-wrap {
+  position: relative;
+}
+
+.status-indicator {
+  width: 2.05rem;
+  height: 2.05rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: .55rem;
+  padding: 0;
+  color: var(--muted);
+}
+
+.status-indicator svg {
+  width: 1.15rem;
+  height: 1.15rem;
+}
+
+.status-indicator.state-synced { color: #22c55e; }
+.status-indicator.state-syncing { color: #60a5fa; }
+.status-indicator.state-dirty { color: #f59e0b; }
+.status-indicator.state-offline { color: #fb923c; }
+.status-indicator.state-error { color: #ef4444; }
+
+.status-indicator .spin {
+  animation: status-spin .95s linear infinite;
+  transform-origin: center;
+}
+
+.status-tooltip {
+  position: absolute;
+  left: calc(100% + .45rem);
+  top: 50%;
+  transform: translateY(-50%);
+  min-width: 170px;
+  max-width: min(240px, 70vw);
+  display: flex;
+  flex-direction: column;
+  gap: .12rem;
+  padding: .46rem .58rem;
+  border-radius: .5rem;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--panel) 94%, var(--bg));
+  color: var(--text);
+  font-size: .78rem;
+  line-height: 1.3;
+  box-shadow: 0 8px 20px color-mix(in srgb, #000 16%, transparent);
+  pointer-events: none;
+}
+
+.status-tooltip strong {
+  font-size: .76rem;
+  font-weight: 650;
+}
 
 .plain-wrap,
 .wysiwyg-wrap {
@@ -378,6 +487,12 @@ button:disabled {
   }
 }
 
+@keyframes status-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 @media (max-width: 900px) {
   .app-shell {
     grid-template-columns: minmax(0, 1fr);
@@ -397,6 +512,14 @@ button:disabled {
 
   .app-shell.mobile-editor-view .sidebar {
     display: none;
+  }
+
+  .status-tooltip {
+    left: 0;
+    top: calc(100% + .4rem);
+    transform: none;
+    max-width: min(260px, 82vw);
+    pointer-events: auto;
   }
 
   .plain-wrap textarea,

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import type { Editor } from '@tiptap/vue-3'
 
 interface Props {
@@ -25,6 +26,52 @@ const emit = defineEmits<{
   (e: 'plain-action', action: string): void
 }>()
 
+const showTooltip = ref(false)
+const isTouchLike = ref(false)
+
+const statusMeta = computed(() => {
+  const sync = (props.syncStatus || '').toLowerCase()
+  const dirty = (props.saveLabel || '').toLowerCase().includes('ikke gemt')
+
+  if (!props.online) {
+    return {
+      state: 'offline',
+      label: 'Offline',
+      detail: props.syncStatus || 'Offline — ændringer gemmes lokalt'
+    }
+  }
+
+  if (sync.includes('synkroniserer')) {
+    return {
+      state: 'syncing',
+      label: 'Synkroniserer',
+      detail: props.syncStatus || 'Synkroniserer ændringer…'
+    }
+  }
+
+  if (sync.includes('sync-fejl')) {
+    return {
+      state: 'error',
+      label: 'Sync-fejl',
+      detail: props.syncStatus || 'Der opstod en synkroniseringsfejl'
+    }
+  }
+
+  if (dirty) {
+    return {
+      state: 'dirty',
+      label: 'Ikke gemt',
+      detail: 'Lokale ændringer venter på synk'
+    }
+  }
+
+  return {
+    state: 'synced',
+    label: 'Synkroniseret',
+    detail: props.syncStatus || 'Alle ændringer er synkroniseret'
+  }
+})
+
 function run(action: string, richAction?: () => void) {
   if (props.isPlain) {
     emit('plain-action', action)
@@ -36,16 +83,92 @@ function run(action: string, richAction?: () => void) {
 function isDisabled() {
   return !props.editor && !props.isPlain
 }
+
+function handleStatusClick() {
+  if (!isTouchLike.value) return
+  showTooltip.value = !showTooltip.value
+}
+
+function closeTooltip() {
+  if (isTouchLike.value) return
+  showTooltip.value = false
+}
+
+function updateInputMode() {
+  isTouchLike.value = window.matchMedia('(hover: none), (pointer: coarse)').matches
+  if (!isTouchLike.value) showTooltip.value = false
+}
+
+function onGlobalPointerDown(event: Event) {
+  if (!isTouchLike.value) return
+  const target = event.target as HTMLElement | null
+  if (target?.closest('.status-indicator-wrap')) return
+  showTooltip.value = false
+}
+
+onMounted(() => {
+  updateInputMode()
+  window.addEventListener('resize', updateInputMode)
+  window.addEventListener('pointerdown', onGlobalPointerDown)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('resize', updateInputMode)
+  window.removeEventListener('pointerdown', onGlobalPointerDown)
+})
 </script>
 
 <template>
   <header class="toolbar">
     <div class="toolbar-left">
-      <button v-if="showBack" class="back-button" @click="emit('back')">← Tilbage</button>
-      <div class="status">
-        <span :class="online ? 'online' : 'offline'">{{ online ? 'Online' : 'Offline' }}</span>
-        <span>{{ saveLabel }}</span>
-        <span>{{ syncStatus }}</span>
+      <button v-if="showBack" class="back-button" @click="emit('back')" aria-label="Tilbage">
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <path d="M14.7 5.3a1 1 0 0 1 0 1.4L10.41 11H20a1 1 0 1 1 0 2h-9.59l4.3 4.3a1 1 0 0 1-1.42 1.4l-6-6a1 1 0 0 1 0-1.4l6-6a1 1 0 0 1 1.41 0Z" fill="currentColor" />
+        </svg>
+      </button>
+
+      <div class="status-indicator-wrap">
+        <button
+          class="status-indicator"
+          :class="`state-${statusMeta.state}`"
+          :aria-label="`${statusMeta.label}: ${statusMeta.detail}`"
+          @mouseenter="showTooltip = true"
+          @mouseleave="closeTooltip"
+          @focus="showTooltip = true"
+          @blur="closeTooltip"
+          @click="handleStatusClick">
+          <svg v-if="statusMeta.state === 'synced'" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M20 17.6a4.5 4.5 0 0 0-1.8-8.62 6 6 0 0 0-11.74 1.2A4 4 0 0 0 7 18h12a1 1 0 0 0 1-1v.6Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+            <path d="m9.2 13 2.1 2.1 4-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+
+          <svg v-else-if="statusMeta.state === 'syncing'" class="spin" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M20 12a8 8 0 0 0-13.66-5.66" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+            <path d="M6.2 3.8v3.7h3.7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+            <path d="M4 12a8 8 0 0 0 13.66 5.66" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+            <path d="M17.8 20.2v-3.7h-3.7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
+
+          <svg v-else-if="statusMeta.state === 'dirty'" viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="12" r="5" fill="currentColor" />
+          </svg>
+
+          <svg v-else-if="statusMeta.state === 'offline'" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M20 17.6a4.5 4.5 0 0 0-1.8-8.62 6 6 0 0 0-11.74 1.2A4 4 0 0 0 7 18h12a1 1 0 0 0 1-1v.6Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+            <path d="m8 8 8 8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+          </svg>
+
+          <svg v-else viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 4 3.8 18.2c-.34.6.1 1.3.8 1.3h14.8c.7 0 1.14-.7.8-1.3L12 4Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" />
+            <path d="M12 9v5" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+            <circle cx="12" cy="16.8" r="1" fill="currentColor" />
+          </svg>
+        </button>
+
+        <div v-if="showTooltip" class="status-tooltip" role="status">
+          <strong>{{ statusMeta.label }}</strong>
+          <span>{{ statusMeta.detail }}</span>
+        </div>
       </div>
     </div>
   </header>
