@@ -132,7 +132,7 @@ onUnmounted(() => {
 <template>
   <div class="app-shell" :class="appShellClass">
     <template v-if="isMobile">
-      <Transition :name="mobileTransitionName" mode="out-in">
+      <Transition :name="mobileTransitionName">
         <NoteList
           v-if="isListRoute"
           key="mobile-list"

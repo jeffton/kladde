@@ -633,19 +633,28 @@ button:disabled {
   .slide-from-right-leave-active,
   .slide-from-left-enter-active,
   .slide-from-left-leave-active {
-    transition: transform .23s ease-out, opacity .23s ease-out;
+    transition: transform .25s ease-out;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
   }
 
-  .slide-from-right-enter-from,
+  .slide-from-right-enter-from {
+    transform: translateX(100%);
+  }
+
+  .slide-from-right-leave-to {
+    transform: translateX(-30%);
+  }
+
+  .slide-from-left-enter-from {
+    transform: translateX(-30%);
+  }
+
   .slide-from-left-leave-to {
     transform: translateX(100%);
-    opacity: .98;
-  }
-
-  .slide-from-right-leave-to,
-  .slide-from-left-enter-from {
-    transform: translateX(-100%);
-    opacity: .98;
   }
 
   .slide-from-right-enter-to,
@@ -653,11 +662,12 @@ button:disabled {
   .slide-from-left-enter-to,
   .slide-from-left-leave-from {
     transform: translateX(0);
-    opacity: 1;
   }
 
   .app-shell {
     grid-template-columns: minmax(0, 1fr);
+    position: relative;
+    overflow: hidden;
   }
 
   .sidebar,
