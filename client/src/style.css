@@ -148,11 +148,9 @@ button:disabled {
 
 .sidebar-footer {
   margin-top: .85rem;
-  padding: 0 .8rem .35rem;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: .6rem;
+  padding: 0 .8rem .2rem;
+  display: grid;
+  gap: .45rem;
 }
 
 .sidebar-user {
@@ -163,11 +161,63 @@ button:disabled {
   white-space: nowrap;
 }
 
+.sidebar-user-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .45rem;
+}
+
+.sidebar-link,
 .sidebar-logout {
   color: var(--muted);
   padding: .35rem .5rem;
   font-size: .8rem;
+  display: inline-flex;
+  align-items: center;
+  gap: .35rem;
 }
+
+.password-form {
+  margin: .2rem .8rem .35rem;
+  padding: .55rem;
+  border-radius: .7rem;
+  background: var(--surface-soft);
+  display: grid;
+  gap: .45rem;
+}
+
+.password-input {
+  width: 100%;
+  border: 0;
+  border-radius: .55rem;
+  background: color-mix(in srgb, var(--panel) 88%, var(--bg));
+  color: var(--text);
+  padding: .68rem .75rem;
+  outline: none;
+}
+
+.password-input:focus {
+  background: var(--surface-active);
+}
+
+.password-submit {
+  min-height: 2.3rem;
+  border-radius: 9999px;
+  background: var(--accent);
+  color: var(--panel);
+  font-size: .82rem;
+  font-weight: 600;
+}
+
+.password-error,
+.password-success {
+  margin: 0;
+  font-size: .78rem;
+}
+
+.password-error { color: #ef4444; }
+.password-success { color: #16a34a; }
 
 .login-shell {
   height: 100vh;

@@ -62,6 +62,7 @@ type Server struct {
 	usersFile    string
 	sessions     map[string]Session
 	sessionsMu   sync.RWMutex
+	usersMu      sync.Mutex
 }
 
 func main() {
@@ -96,6 +97,7 @@ func main() {
 	mux.HandleFunc("/auth/login", s.handleAuthLogin)
 	mux.HandleFunc("/auth/logout", s.handleLogout)
 	mux.HandleFunc("/api/me", s.handleMe)
+	mux.HandleFunc("/api/me/password", s.handleChangePassword)
 	mux.HandleFunc("/api/notes", s.handleNotes)
 	mux.HandleFunc("/api/notes/", s.handleNoteByTitle)
 	mux.HandleFunc("/api/health", func(w http.ResponseWriter, r *http.Request) {
@@ -270,6 +272,74 @@ func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, session.User)
+}
+
+func (s *Server) handleChangePassword(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	session, ok := s.requireAuth(w, r)
+	if !ok {
+		return
+	}
+
+	var payload struct {
+		CurrentPassword string `json:"currentPassword"`
+		NewPassword     string `json:"newPassword"`
+	}
+	if err := decodeJSONBody(w, r, &payload); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	currentPassword := strings.TrimSpace(payload.CurrentPassword)
+	newPassword := strings.TrimSpace(payload.NewPassword)
+	if currentPassword == "" || newPassword == "" {
+		writeError(w, http.StatusBadRequest, errors.New("currentPassword and newPassword are required"))
+		return
+	}
+
+	s.usersMu.Lock()
+	defer s.usersMu.Unlock()
+
+	users, err := loadUsers(s.usersFile)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, errors.New("failed loading users"))
+		return
+	}
+
+	matchedIndex := -1
+	for i := range users {
+		if users[i].Username == session.User.Username {
+			matchedIndex = i
+			break
+		}
+	}
+	if matchedIndex < 0 {
+		writeError(w, http.StatusUnauthorized, errors.New("unauthorized"))
+		return
+	}
+
+	if bcrypt.CompareHashAndPassword([]byte(users[matchedIndex].PasswordHash), []byte(currentPassword)) != nil {
+		writeError(w, http.StatusUnauthorized, errors.New("current password is incorrect"))
+		return
+	}
+
+	hash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, errors.New("failed hashing password"))
+		return
+	}
+
+	users[matchedIndex].PasswordHash = string(hash)
+	if err := saveUsers(s.usersFile, users); err != nil {
+		writeError(w, http.StatusBadRequest, errors.New("failed saving password"))
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
 func loadUsers(path string) ([]UserRecord, error) {

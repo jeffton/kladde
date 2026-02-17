@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { TransitionGroup, computed, ref } from 'vue'
-import { FileText, Plus, Search, Star, X } from 'lucide-vue-next'
+import { FileText, KeyRound, Plus, Search, Star, X } from 'lucide-vue-next'
 import type { NoteMeta } from '../types'
 
 interface Props {
@@ -24,6 +24,13 @@ const emit = defineEmits<{
 
 const query = ref('')
 const sidebarRef = ref<HTMLElement | null>(null)
+const showPasswordForm = ref(false)
+const currentPassword = ref('')
+const newPassword = ref('')
+const confirmPassword = ref('')
+const passwordError = ref('')
+const passwordSuccess = ref('')
+const changingPassword = ref(false)
 
 function capitalize(text = '') {
   return text ? text.charAt(0).toUpperCase() + text.slice(1) : text
@@ -106,6 +113,58 @@ function onKeydown(event: KeyboardEvent) {
 function onSelect(title: string) {
   emit('select', title)
 }
+
+function togglePasswordForm() {
+  showPasswordForm.value = !showPasswordForm.value
+  passwordError.value = ''
+  passwordSuccess.value = ''
+  if (!showPasswordForm.value) {
+    currentPassword.value = ''
+    newPassword.value = ''
+    confirmPassword.value = ''
+  }
+}
+
+async function submitPasswordChange() {
+  passwordError.value = ''
+  passwordSuccess.value = ''
+
+  if (!currentPassword.value || !newPassword.value || !confirmPassword.value) {
+    passwordError.value = 'Udfyld alle felter'
+    return
+  }
+
+  if (newPassword.value !== confirmPassword.value) {
+    passwordError.value = 'Ny adgangskode og bekræftelse matcher ikke'
+    return
+  }
+
+  changingPassword.value = true
+  try {
+    const res = await fetch('/api/me/password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        currentPassword: currentPassword.value,
+        newPassword: newPassword.value
+      })
+    })
+
+    if (!res.ok) {
+      const data = (await res.json().catch(() => null)) as { error?: string } | null
+      throw new Error(data?.error || 'Kunne ikke skifte adgangskode')
+    }
+
+    passwordSuccess.value = 'Adgangskoden er opdateret'
+    currentPassword.value = ''
+    newPassword.value = ''
+    confirmPassword.value = ''
+  } catch (err) {
+    passwordError.value = (err as Error)?.message || 'Kunne ikke skifte adgangskode'
+  } finally {
+    changingPassword.value = false
+  }
+}
 </script>
 
 <template>
@@ -156,7 +215,22 @@ function onSelect(title: string) {
 
     <div class="sidebar-footer" v-if="userLabel">
       <div class="sidebar-user">{{ userLabel }}</div>
-      <button class="sidebar-logout" @click="emit('logout')">Log ud</button>
+      <div class="sidebar-user-actions">
+        <button class="sidebar-link" @click="togglePasswordForm">
+          <KeyRound :size="14" />
+          Skift password
+        </button>
+        <button class="sidebar-logout" @click="emit('logout')">Log ud</button>
+      </div>
     </div>
+
+    <form v-if="showPasswordForm" class="password-form" @submit.prevent="submitPasswordChange">
+      <input v-model="currentPassword" class="password-input" type="password" autocomplete="current-password" placeholder="Nuværende password" required />
+      <input v-model="newPassword" class="password-input" type="password" autocomplete="new-password" placeholder="Nyt password" required />
+      <input v-model="confirmPassword" class="password-input" type="password" autocomplete="new-password" placeholder="Bekræft nyt password" required />
+      <p v-if="passwordError" class="password-error">{{ passwordError }}</p>
+      <p v-if="passwordSuccess" class="password-success">{{ passwordSuccess }}</p>
+      <button class="password-submit" type="submit" :disabled="changingPassword">Opdater password</button>
+    </form>
   </aside>
 </template>
