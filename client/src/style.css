@@ -154,9 +154,10 @@ button:disabled {
   text-align: left;
   padding: .85rem .8rem;
   background: transparent;
-  border-radius: .7rem;
+  border-radius: 0;
   min-height: 3rem;
   -webkit-tap-highlight-color: transparent;
+  border-left: 3px solid transparent;
 }
 .note-item strong {
   display: flex;
@@ -172,7 +173,8 @@ button:disabled {
   flex-shrink: 0;
 }
 .note-item.active {
-  background: var(--surface-active);
+  background: transparent;
+  border-left-color: var(--text);
 }
 .note-item small {
   display: block;
@@ -624,11 +626,11 @@ button:disabled {
   }
 
   .note-item:hover {
-    background: var(--surface-hover);
+    border-left-color: var(--muted);
   }
 
   .note-item.active:hover {
-    background: var(--surface-active);
+    border-left-color: var(--text);
   }
 
   .note-item:hover .pin {
