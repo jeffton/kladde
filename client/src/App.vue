@@ -13,9 +13,17 @@ const error = ref('')
 
 function isNetworkError(err: unknown): boolean {
   if (!err) return false
-  if (typeof navigator !== 'undefined' && !navigator.onLine) return true
-  const message = (err as Error)?.message?.toLowerCase?.() || ''
-  return message.includes('failed to fetch') || message.includes('network') || message.includes('load failed') || message.includes('fetch')
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) return true
+
+  const message = (err as Error)?.message || ''
+  const normalized = message.toLowerCase()
+
+  return (
+    normalized.includes('failed to fetch') ||
+    normalized.includes('networkerror') ||
+    normalized.includes('network request failed') ||
+    normalized.includes('load failed')
+  )
 }
 
 function setUiError(err: unknown) {
@@ -146,6 +154,8 @@ onUnmounted(() => {
 
 <template>
   <div class="app-shell" :class="appShellClass">
+    <p v-if="error" class="error">{{ error }}</p>
+
     <template v-if="isMobile">
       <Transition :name="mobileTransitionName">
         <NoteList

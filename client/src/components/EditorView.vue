@@ -90,15 +90,18 @@ const statusMeta = computed(() => {
   }
 
   const noteCount = props.store.notes?.length ?? 0
-  const now = new Date()
-  const timeStr = now.toLocaleTimeString(navigator.language, { hour: '2-digit', minute: '2-digit' })
-  lastSyncTime.value = timeStr
+  const syncedAt = lastSyncTime.value ? ` ${lastSyncTime.value}` : ''
 
   return {
     state: 'synced',
     label: '',
-    detail: `Synkroniseret ${timeStr}\n${noteCount} noter`
+    detail: `Synkroniseret${syncedAt}\n${noteCount} noter`
   }
+})
+
+const statusAriaLabel = computed(() => {
+  if (!statusMeta.value.label) return statusMeta.value.detail
+  return `${statusMeta.value.label}: ${statusMeta.value.detail}`
 })
 
 const editor = useEditor({
@@ -351,6 +354,23 @@ watch(showPlain, (isPlain) => {
   syncEditorFromStore()
 })
 
+watch(
+  () => [props.store.online, props.store.syncStatus] as const,
+  ([isOnline, syncStatus], previous) => {
+    const [wasOnline, prevSyncStatus] = previous ?? [false, '']
+    const sync = (syncStatus || '').toLowerCase()
+    const prevSync = (prevSyncStatus || '').toLowerCase()
+    const enteredSynced = isOnline && sync.includes('synkroniseret') && (!wasOnline || !prevSync.includes('synkroniseret'))
+    if (!enteredSynced) return
+
+    lastSyncTime.value = new Date().toLocaleTimeString(navigator.language, {
+      hour: '2-digit',
+      minute: '2-digit'
+    })
+  },
+  { immediate: true }
+)
+
 watch(() => props.store.currentContent, () => syncEditorFromStore())
 watch(() => props.store.selectedTitle, (title) => {
   editableTitle.value = title || ''
@@ -389,7 +409,7 @@ onUnmounted(() => {
         <button
           class="status-indicator"
           :class="`state-${statusMeta.state}`"
-          :aria-label="`${statusMeta.label}: ${statusMeta.detail}`"
+          :aria-label="statusAriaLabel"
           @mouseenter="handleStatusHover"
           @mouseleave="closeTooltip"
           @focus="handleStatusFocus"

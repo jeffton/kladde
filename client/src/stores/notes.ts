@@ -27,9 +27,17 @@ function toMeta(note: CachedNote): NoteMeta {
 
 function isNetworkError(err: unknown): boolean {
   if (!err) return false
-  if (typeof navigator !== 'undefined' && !navigator.onLine) return true
-  const message = (err as Error)?.message?.toLowerCase?.() || ''
-  return message.includes('failed to fetch') || message.includes('network') || message.includes('load failed') || message.includes('fetch')
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) return true
+
+  const message = (err as Error)?.message || ''
+  const normalized = message.toLowerCase()
+
+  return (
+    normalized.includes('failed to fetch') ||
+    normalized.includes('networkerror') ||
+    normalized.includes('network request failed') ||
+    normalized.includes('load failed')
+  )
 }
 
 function toUserSyncError(err: unknown, fallback: string): string {
@@ -54,6 +62,7 @@ export const useNotesStore = defineStore('notes', () => {
   let syncRetryTimer: number | null = null
   let syncRetryAttempt = 0
   let syncInFlight: Promise<void> | null = null
+  let pushInFlight: Promise<void> | null = null
 
   const sortedNotes = computed(() => {
     return [...notes.value].sort((a, b) => {
@@ -244,6 +253,19 @@ export const useNotesStore = defineStore('notes', () => {
     }
   }
 
+  const runPushDirtyNote = async (title: string) => {
+    if (pushInFlight) await pushInFlight
+
+    const task = pushDirtyNote(title)
+    pushInFlight = task
+
+    try {
+      await task
+    } finally {
+      if (pushInFlight === task) pushInFlight = null
+    }
+  }
+
   const saveCurrent = async () => {
     if (!selectedTitle.value) return
 
@@ -264,7 +286,7 @@ export const useNotesStore = defineStore('notes', () => {
     syncing.value = true
     updateSyncStatus()
     try {
-      await pushDirtyNote(selectedTitle.value)
+      await runPushDirtyNote(selectedTitle.value)
       await refreshStateFromCache()
       clearSyncError()
     } catch (err: unknown) {
@@ -293,7 +315,7 @@ export const useNotesStore = defineStore('notes', () => {
         const localNotes = await getAllCachedNotes()
         for (const local of localNotes) {
           if (!local.dirty) continue
-          await pushDirtyNote(local.title)
+          await runPushDirtyNote(local.title)
         }
 
         const metaRes = await fetch('/api/notes')
