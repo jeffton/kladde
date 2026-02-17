@@ -245,7 +245,8 @@ button:disabled {
   z-index: 10;
   display: flex;
   flex-wrap: wrap;
-  gap: .3rem;
+  align-items: center;
+  gap: .32rem;
   margin-bottom: .7rem;
   padding: .45rem;
   border-radius: .6rem;
@@ -253,14 +254,38 @@ button:disabled {
 }
 
 .editor-toolbar button {
-  padding: .5rem .65rem;
-  font-size: .9rem;
-  min-height: 2.75rem;
+  width: 2.75rem;
+  height: 2.75rem;
   min-width: 2.75rem;
+  min-height: 2.75rem;
+  padding: .35rem;
+  border-radius: .55rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.editor-toolbar button svg {
+  width: 1.2rem;
+  height: 1.2rem;
+}
+
+.editor-toolbar .text-icon {
+  font-size: .8rem;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: .02em;
 }
 
 .editor-toolbar button.active {
   background: var(--surface-active);
+}
+
+.editor-toolbar .toolbar-divider {
+  width: 1px;
+  height: 1.6rem;
+  margin: 0 .1rem;
+  background: color-mix(in srgb, var(--muted) 35%, transparent);
 }
 
 .editor-toolbar .mode-toggle {
