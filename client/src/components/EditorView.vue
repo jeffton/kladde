@@ -92,7 +92,7 @@ const statusMeta = computed(() => {
   return {
     state: 'synced',
     label: 'Synkroniseret',
-    detail: `${noteCount} noter · sidst synket ${timeStr}`
+    detail: `${noteCount} noter · synkroniseret ${timeStr}`
   }
 })
 
