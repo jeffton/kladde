@@ -60,9 +60,9 @@ h1 { margin-top: 0; margin-bottom: 0; }
   margin-bottom: .75rem;
 }
 .create-fab {
-  width: 2rem;
-  height: 2rem;
-  font-size: 1.2rem;
+  width: 2.75rem;
+  height: 2.75rem;
+  font-size: 1.4rem;
   line-height: 1;
   display: inline-flex;
   align-items: center;
@@ -135,9 +135,10 @@ button:disabled {
   align-items: center;
   width: 100%;
   text-align: left;
-  padding: .78rem .72rem;
+  padding: .85rem .8rem;
   background: transparent;
   border-radius: .7rem;
+  min-height: 3rem;
 }
 .note-item strong {
   display: block;
@@ -165,10 +166,15 @@ button:disabled {
   opacity: .9;
 }
 .pin {
-  font-size: 1.12rem;
+  font-size: 1.2rem;
   opacity: .72;
   transition: opacity .15s ease;
   margin-left: .6rem;
+  min-width: 2.75rem;
+  min-height: 2.75rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 .note-item:hover .pin,
 .note-item.active .pin {
@@ -190,8 +196,8 @@ button:disabled {
 }
 
 .mobile-title-back {
-  width: 2.1rem;
-  height: 2.1rem;
+  width: 2.75rem;
+  height: 2.75rem;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -245,8 +251,10 @@ button:disabled {
 }
 
 .editor-toolbar button {
-  padding: .35rem .55rem;
+  padding: .5rem .65rem;
   font-size: .9rem;
+  min-height: 2.75rem;
+  min-width: 2.75rem;
 }
 
 .editor-toolbar button.active {
@@ -281,8 +289,8 @@ button:disabled {
 }
 
 .status-indicator {
-  width: 2.05rem;
-  height: 2.05rem;
+  width: 2.75rem;
+  height: 2.75rem;
   display: inline-flex;
   align-items: center;
   justify-content: center;
