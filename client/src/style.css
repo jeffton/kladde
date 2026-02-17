@@ -617,7 +617,11 @@ button:disabled {
   }
 
   .note-item:hover {
-    background: var(--surface-soft);
+    background: var(--surface-hover);
+  }
+
+  .note-item.active:hover {
+    background: var(--surface-active);
   }
 
   .note-item:hover .pin {
