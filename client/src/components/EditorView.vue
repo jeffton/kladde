@@ -73,10 +73,14 @@ const statusMeta = computed(() => {
     }
   }
 
+  const noteCount = props.store.notes?.length ?? 0
+  const now = new Date()
+  const timeStr = now.toLocaleTimeString(navigator.language, { hour: '2-digit', minute: '2-digit' })
+
   return {
     state: 'synced',
     label: 'Synkroniseret',
-    detail: props.store.syncStatus || 'Alle ændringer er synkroniseret'
+    detail: `${noteCount} noter · sidst synket ${timeStr}`
   }
 })
 
