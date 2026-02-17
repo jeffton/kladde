@@ -57,7 +57,7 @@ const statusMeta = computed(() => {
     return {
       state: 'offline',
       label: 'Offline',
-      detail: props.store.syncStatus || 'Offline — ændringer gemmes lokalt'
+      detail: 'Offline\nÆndringer gemmes lokalt'
     }
   }
 

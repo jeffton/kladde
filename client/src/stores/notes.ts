@@ -81,6 +81,18 @@ export const useNotesStore = defineStore('notes', () => {
     updateSyncStatus()
   }
 
+  const handleSyncFailure = (err: unknown, fallback: string) => {
+    if (isNetworkError(err) && (typeof navigator !== 'undefined' && !navigator.onLine)) {
+      online.value = false
+      clearSyncError()
+      updateSyncStatus()
+      return
+    }
+
+    setSyncError(toUserSyncError(err, fallback))
+    if (isNetworkError(err)) scheduleSyncRetry()
+  }
+
   const clearSyncError = () => {
     syncError.value = ''
     updateSyncStatus()
@@ -256,8 +268,7 @@ export const useNotesStore = defineStore('notes', () => {
       await refreshStateFromCache()
       clearSyncError()
     } catch (err: unknown) {
-      setSyncError(toUserSyncError(err, 'Kunne ikke gemme note'))
-      if (isNetworkError(err)) scheduleSyncRetry()
+      handleSyncFailure(err, 'Kunne ikke gemme note')
       throw err
     } finally {
       syncing.value = false
@@ -312,8 +323,7 @@ export const useNotesStore = defineStore('notes', () => {
         clearSyncRetry()
         clearSyncError()
       } catch (err: unknown) {
-        setSyncError(toUserSyncError(err, 'Kunne ikke synkronisere'))
-        if (isNetworkError(err)) scheduleSyncRetry()
+        handleSyncFailure(err, 'Kunne ikke synkronisere')
         throw err
       } finally {
         syncing.value = false

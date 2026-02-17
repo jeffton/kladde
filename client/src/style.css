@@ -371,7 +371,7 @@ button:disabled {
 .status-indicator.state-synced { color: #22c55e; }
 .status-indicator.state-syncing { color: #60a5fa; }
 .status-indicator.state-dirty { color: #f59e0b; }
-.status-indicator.state-offline { color: #fb923c; }
+.status-indicator.state-offline { color: var(--muted); }
 .status-indicator.state-error { color: #ef4444; }
 
 .status-indicator .spin {
