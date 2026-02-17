@@ -699,6 +699,14 @@ button:disabled {
     padding: .75rem;
   }
 
+  .note-item.active {
+    background: transparent;
+  }
+
+  .note-item.active .pin {
+    opacity: .72;
+  }
+
   .app-shell.mobile-list-view .editor-area {
     display: none;
   }

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { TransitionGroup, computed, ref } from 'vue'
+import { TransitionGroup, computed, nextTick, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref } from 'vue'
 import { FileText, Plus, Search, Star, X } from 'lucide-vue-next'
 import type { NoteMeta } from '../types'
 
@@ -21,6 +21,20 @@ const emit = defineEmits<{
 }>()
 
 const query = ref('')
+const sidebarRef = ref<HTMLElement | null>(null)
+let savedListScrollTop = 0
+
+function saveScrollPosition() {
+  if (!sidebarRef.value) return
+  savedListScrollTop = sidebarRef.value.scrollTop
+}
+
+function restoreScrollPosition() {
+  void nextTick(() => {
+    if (!sidebarRef.value) return
+    sidebarRef.value.scrollTop = savedListScrollTop
+  })
+}
 
 function capitalize(text = '') {
   return text ? text.charAt(0).toUpperCase() + text.slice(1) : text
@@ -99,10 +113,20 @@ function clearQuery() {
 function onKeydown(event: KeyboardEvent) {
   if (event.key === 'Escape') clearQuery()
 }
+
+function onSelect(title: string) {
+  saveScrollPosition()
+  emit('select', title)
+}
+
+onMounted(restoreScrollPosition)
+onActivated(restoreScrollPosition)
+onBeforeUnmount(saveScrollPosition)
+onDeactivated(saveScrollPosition)
 </script>
 
 <template>
-  <aside class="sidebar">
+  <aside ref="sidebarRef" class="sidebar">
     <div class="sidebar-header">
       <h1>Noteapp</h1>
       <button class="create-fab" @click="emit('create')" aria-label="Opret ny note">
@@ -129,7 +153,7 @@ function onKeydown(event: KeyboardEvent) {
         :key="item.note.title"
         class="note-item"
         :class="{ active: item.note.title === selectedTitle }"
-        @click="emit('select', item.note.title)">
+        @click="onSelect(item.note.title)">
         <div>
           <strong>
             <FileText :size="16" class="note-title-icon" />
