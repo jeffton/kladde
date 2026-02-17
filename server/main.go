@@ -180,6 +180,16 @@ func (s *Server) handleNoteByTitle(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		writeJSON(w, http.StatusOK, note)
+	case http.MethodDelete:
+		if err := s.deleteNote(title); err != nil {
+			if errors.Is(err, fs.ErrNotExist) {
+				writeError(w, http.StatusNotFound, errors.New("note not found"))
+				return
+			}
+			writeError(w, http.StatusInternalServerError, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
 	default:
 		w.WriteHeader(http.StatusMethodNotAllowed)
 	}
@@ -282,6 +292,21 @@ func (s *Server) saveNote(title, content string) (*Note, error) {
 		return nil, err
 	}
 	return &Note{Title: title, Content: content, UpdatedAt: info.ModTime()}, nil
+}
+
+func (s *Server) deleteNote(title string) error {
+	path := filepath.Join(s.notesDir, title+".md")
+	if err := os.Remove(path); err != nil {
+		return err
+	}
+
+	d, err := os.Open(s.notesDir)
+	if err == nil {
+		_ = d.Sync()
+		_ = d.Close()
+	}
+
+	return nil
 }
 
 func (s *Server) renameNote(oldTitle, newTitle string) (*Note, error) {

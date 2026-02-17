@@ -49,6 +49,10 @@ function goBackToList() {
   void router.push({ name: 'list' })
 }
 
+function onDeleted() {
+  void router.push({ name: 'list' })
+}
+
 function togglePin(title: string) {
   store.togglePin(title)
 }
@@ -121,7 +125,8 @@ onUnmounted(() => {
       :store="store"
       :show-back="isMobile && !isListRoute"
       @rename="onRename"
-      @back="goBackToList" />
+      @back="goBackToList"
+      @deleted="onDeleted" />
   </div>
   <p v-if="error" class="error">{{ error }}</p>
 </template>

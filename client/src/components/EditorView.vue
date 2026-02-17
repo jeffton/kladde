@@ -24,6 +24,7 @@ const props = withDefaults(defineProps<Props>(), {
 const emit = defineEmits<{
   (e: 'rename', title: string): void
   (e: 'back'): void
+  (e: 'deleted'): void
 }>()
 
 const editableTitle = ref('')
@@ -36,6 +37,8 @@ let updateDebounce: number | null = null
 const saveLabel = computed(() => (props.store.dirty ? 'Ikke gemt' : 'Gemt'))
 const showTooltip = ref(false)
 const isTouchLike = ref(false)
+const showNoteMenu = ref(false)
+const noteMenuWrap = ref<HTMLElement | null>(null)
 
 const statusMeta = computed(() => {
   const sync = (props.store.syncStatus || '').toLowerCase()
@@ -271,6 +274,25 @@ async function commitTitleChange() {
   }
 }
 
+function toggleNoteMenu() {
+  showNoteMenu.value = !showNoteMenu.value
+}
+
+async function deleteCurrentNote() {
+  if (!props.store.selectedTitle) return
+  const confirmed = window.confirm('Er du sikker?')
+  if (!confirmed) return
+
+  try {
+    await props.store.deleteCurrent()
+    showNoteMenu.value = false
+    error.value = ''
+    emit('deleted')
+  } catch (e) {
+    error.value = (e as Error).message
+  }
+}
+
 function handleStatusClick() {
   if (!isTouchLike.value) return
   showTooltip.value = !showTooltip.value
@@ -287,8 +309,13 @@ function updateInputMode() {
 }
 
 function onGlobalPointerDown(event: Event) {
-  if (!isTouchLike.value) return
   const target = event.target as HTMLElement | null
+
+  if (showNoteMenu.value && noteMenuWrap.value && target && !noteMenuWrap.value.contains(target)) {
+    showNoteMenu.value = false
+  }
+
+  if (!isTouchLike.value) return
   if (target?.closest('.status-indicator-wrap')) return
   showTooltip.value = false
 }
@@ -304,6 +331,7 @@ watch(showPlain, (isPlain) => {
 watch(() => props.store.currentContent, () => syncEditorFromStore())
 watch(() => props.store.selectedTitle, (title) => {
   editableTitle.value = title || ''
+  showNoteMenu.value = false
 }, { immediate: true })
 
 onMounted(() => {
@@ -324,9 +352,7 @@ onUnmounted(() => {
   <main class="editor-area">
     <div class="note-title-wrap" v-if="store.selectedTitle">
       <button v-if="showBack" class="mobile-title-back" @click="emit('back')" aria-label="Tilbage">
-        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-          <path d="M14.7 5.3a1 1 0 0 1 0 1.4L10.41 11H20a1 1 0 1 1 0 2h-9.59l4.3 4.3a1 1 0 0 1-1.42 1.4l-6-6a1 1 0 0 1 0-1.4l6-6a1 1 0 0 1 1.41 0Z" fill="currentColor" />
-        </svg>
+        <span aria-hidden="true">&lt;</span>
       </button>
       <input
         v-model="editableTitle"
@@ -377,6 +403,13 @@ onUnmounted(() => {
         <div v-if="showTooltip" class="status-tooltip" role="status">
           <strong>{{ statusMeta.label }}</strong>
           <span>{{ statusMeta.detail }}</span>
+        </div>
+      </div>
+
+      <div ref="noteMenuWrap" class="note-menu-wrap">
+        <button class="note-menu-button" aria-label="Mere" :aria-expanded="showNoteMenu" @click="toggleNoteMenu">⋮</button>
+        <div v-if="showNoteMenu" class="note-menu-dropdown" role="menu">
+          <button class="note-menu-delete" role="menuitem" @click="deleteCurrentNote">Slet note</button>
         </div>
       </div>
     </div>

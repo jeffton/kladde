@@ -203,14 +203,16 @@ button:disabled {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: .55rem;
+  border-radius: 50%;
+  background: var(--surface-hover, rgba(128,128,128,.12));
   padding: 0;
   flex-shrink: 0;
+  font-size: 1.4rem;
+  line-height: 1;
 }
 
-.mobile-title-back svg {
-  width: 1.15rem;
-  height: 1.15rem;
+.mobile-title-back:hover {
+  background: var(--surface-active, rgba(128,128,128,.22));
 }
 
 .note-title-input {
@@ -253,6 +255,10 @@ button:disabled {
   background: var(--surface-soft);
 }
 
+.editor-toolbar .toolbar-row {
+  display: contents;
+}
+
 .editor-toolbar button {
   width: 2.75rem;
   height: 2.75rem;
@@ -290,6 +296,12 @@ button:disabled {
 
 .editor-toolbar .mode-toggle {
   margin-left: auto;
+}
+
+.editor-toolbar .toolbar-more {
+  font-size: 1.25rem;
+  font-weight: 700;
+  line-height: 1;
 }
 
 .toolbar-left { display: flex; align-items: center; gap: .55rem; }
@@ -366,6 +378,43 @@ button:disabled {
 .status-tooltip strong {
   font-size: .76rem;
   font-weight: 650;
+}
+
+.note-menu-wrap {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.note-menu-button {
+  width: 2.75rem;
+  height: 2.75rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: .55rem;
+  padding: 0;
+  font-size: 1.2rem;
+  line-height: 1;
+}
+
+.note-menu-dropdown {
+  position: absolute;
+  right: 0;
+  top: calc(100% + .35rem);
+  min-width: 130px;
+  border: 1px solid var(--border);
+  border-radius: .5rem;
+  background: color-mix(in srgb, var(--panel) 95%, var(--bg));
+  box-shadow: 0 8px 20px color-mix(in srgb, #000 16%, transparent);
+  padding: .3rem;
+  z-index: 9999;
+}
+
+.note-menu-delete {
+  width: 100%;
+  text-align: left;
+  color: #ef4444;
+  border-radius: .4rem;
 }
 
 .plain-wrap,
@@ -575,6 +624,24 @@ button:disabled {
     top: calc(100% + .4rem);
     max-width: min(260px, 82vw);
     pointer-events: auto;
+  }
+
+  .editor-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .editor-toolbar .toolbar-row {
+    display: flex;
+    align-items: center;
+    gap: .32rem;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+  }
+
+  .editor-toolbar .toolbar-row-secondary {
+    flex-wrap: wrap;
+    overflow-x: visible;
   }
 
   .plain-wrap textarea,

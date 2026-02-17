@@ -354,6 +354,38 @@ export const useNotesStore = defineStore('notes', () => {
     return serverTitle
   }
 
+  const deleteCurrent = async () => {
+    if (!selectedTitle.value) throw new Error('Ingen note valgt')
+    const titleToDelete = selectedTitle.value
+
+    if (!online.value) throw new Error('Du skal være online for at slette noter')
+    if (dirty.value) await saveCurrent()
+
+    const res = await fetch(`/api/notes/${encodeURIComponent(titleToDelete)}`, {
+      method: 'DELETE'
+    })
+
+    let payload: { error?: string } | null = null
+    try {
+      payload = (await res.json()) as { error?: string }
+    } catch {
+      payload = null
+    }
+
+    if (!res.ok) throw new Error(payload?.error || 'Kunne ikke slette note')
+
+    await deleteCachedNote(titleToDelete)
+    pinned.value.delete(titleToDelete)
+    localStorage.setItem(PINNED_KEY, JSON.stringify([...pinned.value]))
+
+    selectedTitle.value = ''
+    currentContent.value = ''
+    currentUpdatedAt.value = null
+    dirty.value = false
+
+    await refreshStateFromCache()
+  }
+
   return {
     notes,
     sortedNotes,
@@ -383,7 +415,8 @@ export const useNotesStore = defineStore('notes', () => {
     syncWithServer,
     generateDefaultTitle,
     createNote,
-    renameCurrent
+    renameCurrent,
+    deleteCurrent
   }
 })
 
