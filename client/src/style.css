@@ -115,7 +115,8 @@ button:disabled {
 }
 
 .search-input:focus {
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transparent);
+  box-shadow: none;
+  background: var(--surface-active);
 }
 
 .search-icon {
