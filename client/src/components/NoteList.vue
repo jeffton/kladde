@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { TransitionGroup, computed, nextTick, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref } from 'vue'
+import { TransitionGroup, computed, ref } from 'vue'
 import { FileText, Plus, Search, Star, X } from 'lucide-vue-next'
 import type { NoteMeta } from '../types'
 
@@ -22,19 +22,6 @@ const emit = defineEmits<{
 
 const query = ref('')
 const sidebarRef = ref<HTMLElement | null>(null)
-let savedListScrollTop = 0
-
-function saveScrollPosition() {
-  if (!sidebarRef.value) return
-  savedListScrollTop = sidebarRef.value.scrollTop
-}
-
-function restoreScrollPosition() {
-  void nextTick(() => {
-    if (!sidebarRef.value) return
-    sidebarRef.value.scrollTop = savedListScrollTop
-  })
-}
 
 function capitalize(text = '') {
   return text ? text.charAt(0).toUpperCase() + text.slice(1) : text
@@ -115,14 +102,8 @@ function onKeydown(event: KeyboardEvent) {
 }
 
 function onSelect(title: string) {
-  saveScrollPosition()
   emit('select', title)
 }
-
-onMounted(restoreScrollPosition)
-onActivated(restoreScrollPosition)
-onBeforeUnmount(saveScrollPosition)
-onDeactivated(saveScrollPosition)
 </script>
 
 <template>

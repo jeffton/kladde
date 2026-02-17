@@ -134,8 +134,7 @@ onUnmounted(() => {
     <template v-if="isMobile">
       <Transition :name="mobileTransitionName">
         <NoteList
-          v-if="isListRoute"
-          key="mobile-list"
+          v-show="isListRoute"
           :notes="sortedNotes"
           :selected-title="store.selectedTitle"
           :pinned="store.pinned"
@@ -143,10 +142,11 @@ onUnmounted(() => {
           @create="createNote"
           @select="selectNote"
           @toggle-pin="togglePin" />
+      </Transition>
 
+      <Transition :name="mobileTransitionName">
         <EditorView
-          v-else
-          key="mobile-editor"
+          v-show="!isListRoute"
           :store="store"
           :show-back="true"
           @rename="onRename"
