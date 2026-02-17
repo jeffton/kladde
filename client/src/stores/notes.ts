@@ -46,6 +46,20 @@ function toUserSyncError(err: unknown, fallback: string): string {
   return (err as Error)?.message || fallback
 }
 
+class ApiError extends Error {
+  status: number
+
+  constructor(status: number, message: string) {
+    super(message)
+    this.name = 'ApiError'
+    this.status = status
+  }
+}
+
+function isNotFoundError(err: unknown): boolean {
+  return err instanceof ApiError && err.status === 404
+}
+
 async function apiFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
   const res = await fetch(input, init)
 
@@ -61,7 +75,7 @@ async function apiFetch(input: RequestInfo | URL, init?: RequestInit): Promise<R
     } catch {
       // no-op
     }
-    throw new Error(message)
+    throw new ApiError(res.status, message)
   }
 
   return res
@@ -255,11 +269,28 @@ export const useNotesStore = defineStore('notes', () => {
     const local = await getCachedNote(title)
     if (!local || !local.dirty) return
 
-    const res = await apiFetch(`/api/notes/${encodeURIComponent(title)}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ content: local.content })
-    })
+    let res: Response
+    try {
+      res = await apiFetch(`/api/notes/${encodeURIComponent(title)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: local.content })
+      })
+    } catch (err: unknown) {
+      if (!isNotFoundError(err)) throw err
+
+      await deleteCachedNote(title)
+      pinned.value.delete(title)
+      localStorage.setItem(PINNED_KEY, JSON.stringify([...pinned.value]))
+
+      if (selectedTitle.value === title) {
+        selectedTitle.value = ''
+        currentContent.value = ''
+        currentUpdatedAt.value = null
+        dirty.value = false
+      }
+      return
+    }
 
     const saved = (await res.json()) as NoteResponse
     await putCachedNote({
@@ -354,6 +385,22 @@ export const useNotesStore = defineStore('notes', () => {
         const metaRes = await apiFetch('/api/notes')
         const serverMetas = (await metaRes.json()) as NoteMeta[]
         const currentLocalMap = new Map((await getAllCachedNotes()).map((n) => [n.title, n]))
+        const serverTitles = new Set(serverMetas.map((n) => n.title))
+
+        for (const local of currentLocalMap.values()) {
+          if (local.dirty || serverTitles.has(local.title)) continue
+
+          await deleteCachedNote(local.title)
+          pinned.value.delete(local.title)
+
+          if (selectedTitle.value === local.title) {
+            selectedTitle.value = ''
+            currentContent.value = ''
+            currentUpdatedAt.value = null
+            dirty.value = false
+          }
+        }
+        localStorage.setItem(PINNED_KEY, JSON.stringify([...pinned.value]))
 
         for (const serverMeta of serverMetas) {
           const local = currentLocalMap.get(serverMeta.title)
@@ -478,9 +525,13 @@ export const useNotesStore = defineStore('notes', () => {
     if (!online.value) throw new Error('Du skal være online for at slette noter')
     if (dirty.value) await saveCurrent()
 
-    await apiFetch(`/api/notes/${encodeURIComponent(titleToDelete)}`, {
-      method: 'DELETE'
-    })
+    try {
+      await apiFetch(`/api/notes/${encodeURIComponent(titleToDelete)}`, {
+        method: 'DELETE'
+      })
+    } catch (err: unknown) {
+      if (!isNotFoundError(err)) throw err
+    }
 
     await deleteCachedNote(titleToDelete)
     pinned.value.delete(titleToDelete)
