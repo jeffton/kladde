@@ -59,6 +59,7 @@ h1 { margin-top: 0; margin-bottom: 0; }
   align-items: center;
   justify-content: space-between;
   margin-bottom: .75rem;
+  padding: 0 .8rem;
 }
 .create-fab {
   width: 2.75rem;

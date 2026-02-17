@@ -53,13 +53,6 @@ function formatUpdatedAt(value: string) {
   const time = fmtTime(date)
   if (isSameDay(date, now)) return time
 
-  const yesterday = new Date(now)
-  yesterday.setDate(now.getDate() - 1)
-  if (isSameDay(date, yesterday)) {
-    const label = rtf ? capitalize(rtf.format(-1, 'day')) : 'Yesterday'
-    return `${label}, ${time}`
-  }
-
   if (date >= startOfWeek(now)) {
     const weekday = capitalize(new Intl.DateTimeFormat(locale, { weekday: 'long' }).format(date))
     return `${weekday}, ${time}`
@@ -123,7 +116,7 @@ function onKeydown(event: KeyboardEvent) {
         v-model="query"
         class="search-input"
         type="search"
-        placeholder="Søg i noter..."
+        placeholder="Søg"
         @keydown="onKeydown" />
       <button v-if="query" class="search-clear" aria-label="Ryd søgning" @click="clearQuery">
         <X :size="18" />
