@@ -95,15 +95,16 @@ button:disabled {
 .search-wrap {
   margin-top: .75rem;
   position: relative;
+  padding: 0 .8rem;
 }
 
 .search-input {
   width: 100%;
   border: 0;
-  border-radius: .7rem;
+  border-radius: 9999px;
   background: var(--surface-soft);
   color: var(--text);
-  padding: .7rem 2.2rem .7rem 2.3rem;
+  padding: .7rem 2.75rem .7rem 2.3rem;
   outline: none;
   font-size: 16px;
   line-height: 1.35;
@@ -119,7 +120,7 @@ button:disabled {
 
 .search-icon {
   position: absolute;
-  left: .7rem;
+  left: 1.5rem;
   top: 50%;
   transform: translateY(-50%);
   color: var(--muted);
@@ -128,10 +129,16 @@ button:disabled {
 
 .search-clear {
   position: absolute;
-  right: .25rem;
+  right: .8rem;
   top: 50%;
   transform: translateY(-50%);
-  padding: .2rem .45rem;
+  width: 2.75rem;
+  height: 2.75rem;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
 }
 
 .list { margin-top: 1rem; display: flex; flex-direction: column; gap: .35rem; }
