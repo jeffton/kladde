@@ -311,7 +311,7 @@ button:disabled {
 }
 
 .editor-toolbar .mode-toggle {
-  margin-left: auto;
+  margin-left: 0;
 }
 
 .editor-toolbar .toolbar-more {
@@ -751,6 +751,14 @@ button:disabled {
   .editor-toolbar .toolbar-row-secondary {
     flex-wrap: wrap;
     overflow-x: visible;
+  }
+
+  .editor-toolbar .toolbar-more {
+    margin-left: auto;
+  }
+
+  .editor-toolbar .mode-toggle {
+    margin-left: auto;
   }
 
   .plain-wrap textarea,

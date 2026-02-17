@@ -85,13 +85,9 @@ onUnmounted(() => {
 
       <button title="Opgaveliste" :disabled="isDisabled()" :class="{ active: !isPlain && editor?.isActive('taskList') }" @click="run('task', () => editor?.chain().focus().toggleTaskList().run())"><ListTodo :size="18" /></button>
 
-      <span class="toolbar-divider" aria-hidden="true"></span>
+      <span v-if="!isMobile" class="toolbar-divider" aria-hidden="true"></span>
 
       <button v-if="isMobile" class="toolbar-more" :title="showMobileMore ? 'Skjul flere værktøjer' : 'Vis flere værktøjer'" :aria-expanded="showMobileMore" @click="toggleMore"><Ellipsis :size="20" /></button>
-
-      <button v-if="!isMobile" class="mode-toggle" title="Skift mellem markdown og WYSIWYG" :class="{ active: isPlain }" @click="emit('toggle-plain')">
-        <FileText :size="18" />
-      </button>
     </div>
 
     <div v-if="!isMobile || showMobileMore" class="toolbar-row toolbar-row-secondary">
@@ -109,7 +105,7 @@ onUnmounted(() => {
 
       <button title="Horisontal linje" :disabled="isDisabled()" @click="run('hr', () => editor?.chain().focus().setHorizontalRule().run())"><Minus :size="18" /></button>
 
-      <button v-if="isMobile" class="mode-toggle" title="Skift mellem markdown og WYSIWYG" :class="{ active: isPlain }" @click="emit('toggle-plain')">
+      <button class="mode-toggle" title="Skift mellem markdown og WYSIWYG" :class="{ active: isPlain }" @click="emit('toggle-plain')">
         <FileText :size="18" />
       </button>
     </div>
