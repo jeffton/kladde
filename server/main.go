@@ -85,8 +85,6 @@ type Server struct {
 	sessionsMu      sync.RWMutex
 	usersMu         sync.Mutex
 	hub             *Hub
-	recentApiMu     sync.Mutex
-	recentAPIWrites map[string]time.Time
 }
 
 func main() {
@@ -116,7 +114,6 @@ func main() {
 		usersFile:       *usersFile,
 		sessions:        make(map[string]Session),
 		hub:             NewHub(),
-		recentAPIWrites: make(map[string]time.Time),
 	}
 
 	if err := s.startFileWatcher(); err != nil {
@@ -471,7 +468,6 @@ func (s *Server) handleNotes(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusInternalServerError, err)
 			return
 		}
-		s.markRecentAPIWrite(session.User.Username, filepath.Join(userDir, title+".md"))
 		writeJSON(w, http.StatusCreated, note)
 	default:
 		w.WriteHeader(http.StatusMethodNotAllowed)
@@ -518,7 +514,7 @@ func (s *Server) handleNoteByTitle(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		note, finalTitle, err := s.renameNote(userDir, oldTitle, strings.TrimSpace(payload.NewTitle))
+		note, _, err := s.renameNote(userDir, oldTitle, strings.TrimSpace(payload.NewTitle))
 		if err != nil {
 			switch {
 			case errors.Is(err, fs.ErrNotExist):
@@ -533,8 +529,6 @@ func (s *Server) handleNoteByTitle(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		s.markRecentAPIWrite(session.User.Username, filepath.Join(userDir, oldTitle+".md"))
-		s.markRecentAPIWrite(session.User.Username, filepath.Join(userDir, finalTitle+".md"))
 		writeJSON(w, http.StatusOK, note)
 		return
 	}
@@ -621,7 +615,6 @@ func (s *Server) handleNoteByTitle(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusInternalServerError, err)
 			return
 		}
-		s.markRecentAPIWrite(session.User.Username, filepath.Join(userDir, title+".md"))
 		writeJSON(w, http.StatusOK, note)
 	case http.MethodDelete:
 		if err := s.deleteNote(userDir, title); err != nil {
@@ -632,7 +625,6 @@ func (s *Server) handleNoteByTitle(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusInternalServerError, err)
 			return
 		}
-		s.markRecentAPIWrite(session.User.Username, filepath.Join(userDir, title+".md"))
 		writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
 	default:
 		w.WriteHeader(http.StatusMethodNotAllowed)
@@ -1097,27 +1089,6 @@ func (d *FileEventDebouncer) Trigger(key string, delay time.Duration, fn func())
 	d.mu.Unlock()
 }
 
-func (s *Server) markRecentAPIWrite(username, notePath string) {
-	key := username + ":" + notePath
-	s.recentApiMu.Lock()
-	s.recentAPIWrites[key] = time.Now().Add(1 * time.Second)
-	s.recentApiMu.Unlock()
-}
-
-func (s *Server) shouldIgnoreRecentAPIWrite(username, notePath string) bool {
-	key := username + ":" + notePath
-	now := time.Now()
-	s.recentApiMu.Lock()
-	defer s.recentApiMu.Unlock()
-	for k, expiry := range s.recentAPIWrites {
-		if now.After(expiry) {
-			delete(s.recentAPIWrites, k)
-		}
-	}
-	expiry, ok := s.recentAPIWrites[key]
-	return ok && now.Before(expiry)
-}
-
 func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		w.WriteHeader(http.StatusMethodNotAllowed)
@@ -1259,9 +1230,6 @@ func (s *Server) startFileWatcher() error {
 
 				debounceKey := username + ":" + notePath + ":" + action
 				debouncer.Trigger(debounceKey, 200*time.Millisecond, func() {
-					if s.shouldIgnoreRecentAPIWrite(username, notePath) {
-						return
-					}
 					s.hub.Broadcast(username, NoteChangeEvent{Type: "note_changed", Title: title, Action: action})
 				})
 			case err, ok := <-watcher.Errors:
