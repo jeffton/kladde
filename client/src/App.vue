@@ -14,21 +14,23 @@ const error = ref('')
 const sortedNotes = computed(() => store.sortedNotes)
 const isMobile = ref(window.matchMedia('(max-width: 900px)').matches)
 const isListRoute = computed(() => route.name === 'list')
-const mobileTransitionName = ref<'slide-from-right' | 'slide-from-left' | 'no-transition'>('slide-from-right')
-const skipNextMobileTransition = ref(false)
-const currentMobileView = computed<'list' | 'editor'>(() => (isListRoute.value ? 'list' : 'editor'))
-let previousMobileView: 'list' | 'editor' = currentMobileView.value
+const mobileTransitionName = ref<'' | 'slide-from-right' | 'slide-from-left'>('')
 
 const appShellClass = computed(() => ({
   'mobile-list-view': isMobile.value && isListRoute.value,
   'mobile-editor-view': isMobile.value && !isListRoute.value
 }))
 
-async function selectNote(title: string, replace = false) {
+function setMobileTransition(name: '' | 'slide-from-right' | 'slide-from-left') {
+  mobileTransitionName.value = isMobile.value ? name : ''
+}
+
+async function selectNote(title: string, replace = false, withTransition = true) {
   try {
     await store.selectNote(title)
     error.value = ''
     const target = { name: 'note', params: { title } }
+    if (withTransition) setMobileTransition('slide-from-right')
     if (replace) await router.replace(target)
     else await router.push(target)
   } catch (e) {
@@ -40,6 +42,7 @@ async function createNote() {
   try {
     const title = await store.createNote()
     error.value = ''
+    setMobileTransition('slide-from-right')
     await router.push({ name: 'note', params: { title } })
   } catch (e) {
     error.value = (e as Error).message
@@ -51,10 +54,12 @@ function onRename(renamedTitle: string) {
 }
 
 function goBackToList() {
+  setMobileTransition('slide-from-left')
   void router.push({ name: 'list' })
 }
 
 function onDeleted() {
+  setMobileTransition('slide-from-left')
   void router.push({ name: 'list' })
 }
 
@@ -64,9 +69,6 @@ function togglePin(title: string) {
 
 const online = () => store.setOnline(true)
 const offline = () => store.setOnline(false)
-const onPopState = () => {
-  skipNextMobileTransition.value = true
-}
 
 useAutosave({
   store,
@@ -80,26 +82,12 @@ watch(
   async (value) => {
     const title = typeof value === 'string' ? value : ''
     if (!title) return
-    if (title !== store.selectedTitle) await selectNote(title, true)
+    if (title !== store.selectedTitle) await selectNote(title, true, false)
   }
 )
 
-watch(currentMobileView, (nextView) => {
-  if (!isMobile.value) {
-    previousMobileView = nextView
-    return
-  }
-
-  if (skipNextMobileTransition.value) {
-    mobileTransitionName.value = 'no-transition'
-    skipNextMobileTransition.value = false
-  } else if (previousMobileView === 'list' && nextView === 'editor') {
-    mobileTransitionName.value = 'slide-from-right'
-  } else if (previousMobileView === 'editor' && nextView === 'list') {
-    mobileTransitionName.value = 'slide-from-left'
-  }
-
-  previousMobileView = nextView
+const removeAfterEach = router.afterEach(() => {
+  mobileTransitionName.value = ''
 })
 
 let media: MediaQueryList | null = null
@@ -111,7 +99,7 @@ onMounted(async () => {
 
     const title = typeof route.params.title === 'string' ? route.params.title : ''
     if (title) {
-      await selectNote(title, true)
+      await selectNote(title, true, false)
     } else if (!isMobile.value && store.selectedTitle) {
       await router.replace({ name: 'note', params: { title: store.selectedTitle } })
     }
@@ -127,14 +115,13 @@ onMounted(async () => {
   media.addEventListener('change', mediaListener)
   window.addEventListener('online', online)
   window.addEventListener('offline', offline)
-  window.addEventListener('popstate', onPopState)
 })
 
 onUnmounted(() => {
   if (media && mediaListener) media.removeEventListener('change', mediaListener)
   window.removeEventListener('online', online)
   window.removeEventListener('offline', offline)
-  window.removeEventListener('popstate', onPopState)
+  removeAfterEach()
 })
 </script>
 
