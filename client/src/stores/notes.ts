@@ -25,6 +25,18 @@ function toMeta(note: CachedNote): NoteMeta {
   }
 }
 
+function isNetworkError(err: unknown): boolean {
+  if (!err) return false
+  if (typeof navigator !== 'undefined' && !navigator.onLine) return true
+  const message = (err as Error)?.message?.toLowerCase?.() || ''
+  return message.includes('failed to fetch') || message.includes('network') || message.includes('load failed') || message.includes('fetch')
+}
+
+function toUserSyncError(err: unknown, fallback: string): string {
+  if (isNetworkError(err)) return 'Midlertidig forbindelsesproblem'
+  return (err as Error)?.message || fallback
+}
+
 export const useNotesStore = defineStore('notes', () => {
   const notes = ref<NoteMeta[]>([])
   const selectedTitle = ref('')
@@ -39,6 +51,9 @@ export const useNotesStore = defineStore('notes', () => {
   const contentVersion = ref(0)
   const noteContents = ref<Record<string, string>>({})
   let writeQueue: Promise<unknown> = Promise.resolve()
+  let syncRetryTimer: number | null = null
+  let syncRetryAttempt = 0
+  let syncInFlight: Promise<void> | null = null
 
   const sortedNotes = computed(() => {
     return [...notes.value].sort((a, b) => {
@@ -71,12 +86,39 @@ export const useNotesStore = defineStore('notes', () => {
     updateSyncStatus()
   }
 
+  const clearSyncRetry = () => {
+    if (syncRetryTimer !== null) {
+      window.clearTimeout(syncRetryTimer)
+      syncRetryTimer = null
+    }
+    syncRetryAttempt = 0
+  }
+
+  const scheduleSyncRetry = () => {
+    if (!online.value || syncRetryTimer !== null) return
+    const baseDelay = 2000
+    const maxDelay = 60000
+    const expDelay = Math.min(maxDelay, baseDelay * 2 ** syncRetryAttempt)
+    const jitter = Math.floor(Math.random() * 500)
+    const delay = expDelay + jitter
+
+    syncRetryTimer = window.setTimeout(() => {
+      syncRetryTimer = null
+      void syncWithServer().catch(() => undefined)
+    }, delay)
+
+    syncRetryAttempt = Math.min(syncRetryAttempt + 1, 8)
+  }
+
   const setOnline = (value: boolean) => {
     online.value = value
     updateSyncStatus()
     if (value) {
-      void syncWithServer().catch((err: unknown) => setSyncError((err as Error)?.message || 'Kunne ikke synkronisere'))
+      clearSyncRetry()
+      void syncWithServer().catch(() => undefined)
+      return
     }
+    clearSyncRetry()
   }
 
   const togglePin = (title: string) => {
@@ -108,7 +150,7 @@ export const useNotesStore = defineStore('notes', () => {
     await refreshStateFromCache()
     updateSyncStatus()
     if (online.value) {
-      void syncWithServer().catch((err: unknown) => setSyncError((err as Error)?.message || 'Kunne ikke synkronisere'))
+      void syncWithServer().catch(() => undefined)
     }
   }
 
@@ -127,7 +169,7 @@ export const useNotesStore = defineStore('notes', () => {
     dirty.value = false
 
     if (online.value) {
-      void syncWithServer().catch((err: unknown) => setSyncError((err as Error)?.message || 'Kunne ikke synkronisere'))
+      void syncWithServer().catch(() => undefined)
     }
   }
 
@@ -214,7 +256,8 @@ export const useNotesStore = defineStore('notes', () => {
       await refreshStateFromCache()
       clearSyncError()
     } catch (err: unknown) {
-      setSyncError((err as Error)?.message || 'Kunne ikke gemme note')
+      setSyncError(toUserSyncError(err, 'Kunne ikke gemme note'))
+      if (isNetworkError(err)) scheduleSyncRetry()
       throw err
     } finally {
       syncing.value = false
@@ -223,53 +266,65 @@ export const useNotesStore = defineStore('notes', () => {
   }
 
   const syncWithServer = async () => {
-    if (!online.value) {
-      updateSyncStatus()
-      return
-    }
+    if (syncInFlight) return syncInFlight
 
-    await flushPendingWrites()
-    syncing.value = true
-    updateSyncStatus()
+    syncInFlight = (async () => {
+      if (!online.value) {
+        updateSyncStatus()
+        return
+      }
+
+      await flushPendingWrites()
+      syncing.value = true
+      updateSyncStatus()
+
+      try {
+        const localNotes = await getAllCachedNotes()
+        for (const local of localNotes) {
+          if (!local.dirty) continue
+          await pushDirtyNote(local.title)
+        }
+
+        const metaRes = await fetch('/api/notes')
+        if (!metaRes.ok) throw new Error('Kunne ikke hente noter')
+        const serverMetas = (await metaRes.json()) as NoteMeta[]
+        const currentLocalMap = new Map((await getAllCachedNotes()).map((n) => [n.title, n]))
+
+        for (const serverMeta of serverMetas) {
+          const local = currentLocalMap.get(serverMeta.title)
+          const serverTs = new Date(serverMeta.updatedAt).getTime()
+          const localTs = local ? new Date(local.updatedAt).getTime() : 0
+          const shouldPull = !local || (!local.dirty && serverTs > localTs)
+          if (!shouldPull) continue
+
+          const noteRes = await fetch(`/api/notes/${encodeURIComponent(serverMeta.title)}`)
+          if (!noteRes.ok) continue
+          const serverNote = (await noteRes.json()) as NoteResponse
+          await putCachedNote({
+            title: serverNote.title,
+            content: serverNote.content,
+            updatedAt: normalizeTs(serverNote.updatedAt),
+            dirty: false
+          })
+        }
+
+        await refreshStateFromCache()
+        clearSyncRetry()
+        clearSyncError()
+      } catch (err: unknown) {
+        setSyncError(toUserSyncError(err, 'Kunne ikke synkronisere'))
+        if (isNetworkError(err)) scheduleSyncRetry()
+        throw err
+      } finally {
+        syncing.value = false
+        updateSyncStatus()
+      }
+    })()
 
     try {
-      const localNotes = await getAllCachedNotes()
-      for (const local of localNotes) {
-        if (!local.dirty) continue
-        await pushDirtyNote(local.title)
-      }
-
-      const metaRes = await fetch('/api/notes')
-      if (!metaRes.ok) throw new Error('Kunne ikke hente noter')
-      const serverMetas = (await metaRes.json()) as NoteMeta[]
-      const currentLocalMap = new Map((await getAllCachedNotes()).map((n) => [n.title, n]))
-
-      for (const serverMeta of serverMetas) {
-        const local = currentLocalMap.get(serverMeta.title)
-        const serverTs = new Date(serverMeta.updatedAt).getTime()
-        const localTs = local ? new Date(local.updatedAt).getTime() : 0
-        const shouldPull = !local || (!local.dirty && serverTs > localTs)
-        if (!shouldPull) continue
-
-        const noteRes = await fetch(`/api/notes/${encodeURIComponent(serverMeta.title)}`)
-        if (!noteRes.ok) continue
-        const serverNote = (await noteRes.json()) as NoteResponse
-        await putCachedNote({
-          title: serverNote.title,
-          content: serverNote.content,
-          updatedAt: normalizeTs(serverNote.updatedAt),
-          dirty: false
-        })
-      }
-
-      await refreshStateFromCache()
-      clearSyncError()
-    } catch (err: unknown) {
-      setSyncError((err as Error)?.message || 'Kunne ikke synkronisere')
-      throw err
+      await syncInFlight
     } finally {
-      syncing.value = false
-      updateSyncStatus()
+      syncInFlight = null
     }
   }
 
@@ -300,7 +355,7 @@ export const useNotesStore = defineStore('notes', () => {
       return resolvedTitle
     }
 
-    void syncWithServer().catch((err: unknown) => setSyncError((err as Error)?.message || 'Kunne ikke synkronisere'))
+    void syncWithServer().catch(() => undefined)
     return resolvedTitle
   }
 

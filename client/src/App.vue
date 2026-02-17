@@ -11,6 +11,21 @@ const route = useRoute()
 const router = useRouter()
 const error = ref('')
 
+function isNetworkError(err: unknown): boolean {
+  if (!err) return false
+  if (typeof navigator !== 'undefined' && !navigator.onLine) return true
+  const message = (err as Error)?.message?.toLowerCase?.() || ''
+  return message.includes('failed to fetch') || message.includes('network') || message.includes('load failed') || message.includes('fetch')
+}
+
+function setUiError(err: unknown) {
+  if (isNetworkError(err)) {
+    error.value = ''
+    return
+  }
+  error.value = (err as Error)?.message || 'En fejl opstod'
+}
+
 const sortedNotes = computed(() => store.sortedNotes)
 const isMobile = ref(window.matchMedia('(max-width: 900px)').matches)
 const isListRoute = computed(() => route.name === 'list')
@@ -34,7 +49,7 @@ async function selectNote(title: string, replace = false, withTransition = true)
     if (replace) await router.replace(target)
     else await router.push(target)
   } catch (e) {
-    error.value = (e as Error).message
+    setUiError(e)
   }
 }
 
@@ -45,7 +60,7 @@ async function createNote() {
     setMobileTransition('slide-from-right')
     await router.push({ name: 'note', params: { title } })
   } catch (e) {
-    error.value = (e as Error).message
+    setUiError(e)
   }
 }
 
@@ -73,7 +88,7 @@ const offline = () => store.setOnline(false)
 useAutosave({
   store,
   onError: (err) => {
-    error.value = (err as Error)?.message || 'En fejl opstod'
+    setUiError(err)
   }
 })
 
@@ -108,7 +123,7 @@ onMounted(async () => {
       await router.replace({ name: 'note', params: { title: store.selectedTitle } })
     }
   } catch (e) {
-    error.value = (e as Error).message
+    setUiError(e)
   }
 
   media = window.matchMedia('(max-width: 900px)')
@@ -173,5 +188,4 @@ onUnmounted(() => {
         @deleted="onDeleted" />
     </template>
   </div>
-  <p v-if="error" class="error">{{ error }}</p>
 </template>
