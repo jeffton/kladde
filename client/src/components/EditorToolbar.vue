@@ -9,7 +9,7 @@ import {
   Heading2,
   Heading3,
   Italic,
-  Link,
+  // Link removed
   List,
   ListOrdered,
   ListTodo,
@@ -95,7 +95,7 @@ onUnmounted(() => {
 
       <button title="Kursiv" :disabled="isDisabled()" :class="{ active: !isPlain && editor?.isActive('italic') }" @click="run('italic', () => editor?.chain().focus().toggleItalic().run())"><Italic :size="18" /></button>
 
-      <button title="Link" :disabled="isDisabled()" :class="{ active: !isPlain && editor?.isActive('link') }" @click="run('link', () => emit('apply-link'))"><Link :size="18" /></button>
+      <!-- link button removed, autolink handles URLs -->
 
       <button title="Inline kode" :disabled="isDisabled()" :class="{ active: !isPlain && editor?.isActive('code') }" @click="run('code', () => editor?.chain().focus().toggleCode().run())"><Code :size="18" /></button>
 
