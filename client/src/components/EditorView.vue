@@ -306,6 +306,16 @@ function handleStatusClick() {
   showTooltip.value = !showTooltip.value
 }
 
+function handleStatusHover() {
+  if (isTouchLike.value) return
+  showTooltip.value = true
+}
+
+function handleStatusFocus() {
+  if (isTouchLike.value) return
+  showTooltip.value = true
+}
+
 function closeTooltip() {
   if (isTouchLike.value) return
   showTooltip.value = false
@@ -375,9 +385,9 @@ onUnmounted(() => {
           class="status-indicator"
           :class="`state-${statusMeta.state}`"
           :aria-label="`${statusMeta.label}: ${statusMeta.detail}`"
-          @mouseenter="showTooltip = true"
+          @mouseenter="handleStatusHover"
           @mouseleave="closeTooltip"
-          @focus="showTooltip = true"
+          @focus="handleStatusFocus"
           @blur="closeTooltip"
           @click="handleStatusClick">
           <CloudCheck v-if="statusMeta.state === 'synced'" :size="18" />
