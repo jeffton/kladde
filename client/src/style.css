@@ -81,6 +81,7 @@ button {
   padding: .45rem .75rem;
   cursor: pointer;
   transition: background-color .15s ease, opacity .15s ease;
+  -webkit-tap-highlight-color: transparent;
 }
 button:focus-visible {
   outline: none;
@@ -147,6 +148,7 @@ button:disabled {
   background: transparent;
   border-radius: .7rem;
   min-height: 3rem;
+  -webkit-tap-highlight-color: transparent;
 }
 .note-item strong {
   display: flex;
