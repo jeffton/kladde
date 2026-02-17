@@ -5,11 +5,17 @@ import { useNotesStore } from './stores/notes'
 import NoteList from './components/NoteList.vue'
 import EditorView from './components/EditorView.vue'
 import { useAutosave } from './composables/useAutosave'
+import type { AuthUser } from './types'
 
 const store = useNotesStore()
 const route = useRoute()
 const router = useRouter()
 const error = ref('')
+const authChecked = ref(false)
+const user = ref<AuthUser | null>(null)
+
+const isAuthenticated = computed(() => Boolean(user.value))
+const userLabel = computed(() => user.value?.name || user.value?.email || '')
 
 function isNetworkError(err: unknown): boolean {
   if (!err) return false
@@ -26,12 +32,45 @@ function isNetworkError(err: unknown): boolean {
   )
 }
 
+function isUnauthorized(err: unknown): boolean {
+  return (err as Error)?.message === 'UNAUTHORIZED'
+}
+
 function setUiError(err: unknown) {
+  if (isUnauthorized(err)) {
+    user.value = null
+    error.value = ''
+    return
+  }
+
   if (isNetworkError(err)) {
     error.value = ''
     return
   }
   error.value = (err as Error)?.message || 'En fejl opstod'
+}
+
+async function loadMe() {
+  try {
+    const res = await fetch('/api/me')
+    if (res.status === 401) {
+      user.value = null
+      return
+    }
+    if (!res.ok) throw new Error('Kunne ikke hente bruger')
+    user.value = (await res.json()) as AuthUser
+  } finally {
+    authChecked.value = true
+  }
+}
+
+async function logout() {
+  try {
+    await fetch('/auth/logout', { method: 'POST' })
+  } finally {
+    user.value = null
+    error.value = ''
+  }
 }
 
 const sortedNotes = computed(() => store.sortedNotes)
@@ -103,6 +142,8 @@ useAutosave({
 watch(
   () => route.params.title,
   async (value) => {
+    if (!isAuthenticated.value) return
+
     const title = typeof value === 'string' ? value : ''
     if (!title) return
     if (title !== store.selectedTitle) await selectNote(title, true, false)
@@ -121,17 +162,21 @@ let media: MediaQueryList | null = null
 let mediaListener: ((event: MediaQueryListEvent) => void) | null = null
 
 onMounted(async () => {
-  try {
-    await store.initialize()
+  await loadMe()
 
-    const title = typeof route.params.title === 'string' ? route.params.title : ''
-    if (title) {
-      await selectNote(title, true, false)
-    } else if (!isMobile.value && store.selectedTitle) {
-      await router.replace({ name: 'note', params: { title: store.selectedTitle } })
+  if (isAuthenticated.value) {
+    try {
+      await store.initialize()
+
+      const title = typeof route.params.title === 'string' ? route.params.title : ''
+      if (title) {
+        await selectNote(title, true, false)
+      } else if (!isMobile.value && store.selectedTitle) {
+        await router.replace({ name: 'note', params: { title: store.selectedTitle } })
+      }
+    } catch (e) {
+      setUiError(e)
     }
-  } catch (e) {
-    setUiError(e)
   }
 
   media = window.matchMedia('(max-width: 900px)')
@@ -153,7 +198,20 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="app-shell" :class="appShellClass">
+  <div v-if="!authChecked" class="login-shell">
+    <div class="login-card">
+      <h1>kladde</h1>
+    </div>
+  </div>
+
+  <div v-else-if="!isAuthenticated" class="login-shell">
+    <div class="login-card">
+      <h1>kladde</h1>
+      <a class="google-login-button" href="/auth/login">Sign in with Google</a>
+    </div>
+  </div>
+
+  <div v-else class="app-shell" :class="appShellClass">
     <p v-if="error" class="error">{{ error }}</p>
 
     <template v-if="isMobile">
@@ -164,9 +222,11 @@ onUnmounted(() => {
           :selected-title="store.selectedTitle"
           :pinned="store.pinned"
           :note-contents="store.noteContents"
+          :user-label="userLabel"
           @create="createNote"
           @select="selectNote"
-          @toggle-pin="togglePin" />
+          @toggle-pin="togglePin"
+          @logout="logout" />
       </Transition>
 
       <Transition :name="mobileTransitionName">
@@ -186,9 +246,11 @@ onUnmounted(() => {
         :selected-title="store.selectedTitle"
         :pinned="store.pinned"
         :note-contents="store.noteContents"
+        :user-label="userLabel"
         @create="createNote"
         @select="selectNote"
-        @toggle-pin="togglePin" />
+        @toggle-pin="togglePin"
+        @logout="logout" />
 
       <EditorView
         :store="store"

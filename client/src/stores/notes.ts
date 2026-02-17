@@ -41,8 +41,30 @@ function isNetworkError(err: unknown): boolean {
 }
 
 function toUserSyncError(err: unknown, fallback: string): string {
+  if ((err as Error)?.message === 'UNAUTHORIZED') return 'UNAUTHORIZED'
   if (isNetworkError(err)) return 'Midlertidig forbindelsesproblem'
   return (err as Error)?.message || fallback
+}
+
+async function apiFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+  const res = await fetch(input, init)
+
+  if (res.status === 401) {
+    throw new Error('UNAUTHORIZED')
+  }
+
+  if (!res.ok) {
+    let message = 'Request failed'
+    try {
+      const payload = (await res.json()) as { error?: string }
+      if (payload?.error) message = payload.error
+    } catch {
+      // no-op
+    }
+    throw new Error(message)
+  }
+
+  return res
 }
 
 export const useNotesStore = defineStore('notes', () => {
@@ -233,12 +255,11 @@ export const useNotesStore = defineStore('notes', () => {
     const local = await getCachedNote(title)
     if (!local || !local.dirty) return
 
-    const res = await fetch(`/api/notes/${encodeURIComponent(title)}`, {
+    const res = await apiFetch(`/api/notes/${encodeURIComponent(title)}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ content: local.content })
     })
-    if (!res.ok) throw new Error('Save failed')
 
     const saved = (await res.json()) as NoteResponse
     await putCachedNote({
@@ -330,8 +351,7 @@ export const useNotesStore = defineStore('notes', () => {
           await runPushDirtyNote(local.title)
         }
 
-        const metaRes = await fetch('/api/notes')
-        if (!metaRes.ok) throw new Error('Kunne ikke hente noter')
+        const metaRes = await apiFetch('/api/notes')
         const serverMetas = (await metaRes.json()) as NoteMeta[]
         const currentLocalMap = new Map((await getAllCachedNotes()).map((n) => [n.title, n]))
 
@@ -342,8 +362,12 @@ export const useNotesStore = defineStore('notes', () => {
           const shouldPull = !local || (!local.dirty && serverTs > localTs)
           if (!shouldPull) continue
 
-          const noteRes = await fetch(`/api/notes/${encodeURIComponent(serverMeta.title)}`)
-          if (!noteRes.ok) continue
+          let noteRes: Response
+          try {
+            noteRes = await apiFetch(`/api/notes/${encodeURIComponent(serverMeta.title)}`)
+          } catch {
+            continue
+          }
           const serverNote = (await noteRes.json()) as NoteResponse
           await putCachedNote({
             title: serverNote.title,
@@ -414,20 +438,13 @@ export const useNotesStore = defineStore('notes', () => {
 
     if (dirty.value) await saveCurrent()
 
-    const res = await fetch(`/api/notes/${encodeURIComponent(oldTitle)}/rename`, {
+    const res = await apiFetch(`/api/notes/${encodeURIComponent(oldTitle)}/rename`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ newTitle: requestedTitle })
     })
 
-    let payload: RenameResponse | null = null
-    try {
-      payload = (await res.json()) as RenameResponse
-    } catch {
-      payload = null
-    }
-
-    if (!res.ok) throw new Error(payload?.error || 'Kunne ikke omdøbe note')
+    const payload = (await res.json()) as RenameResponse
 
     const serverTitle = payload?.title?.trim()
     if (!serverTitle) throw new Error('Server returnerede ugyldig titel')
@@ -460,18 +477,9 @@ export const useNotesStore = defineStore('notes', () => {
     if (!online.value) throw new Error('Du skal være online for at slette noter')
     if (dirty.value) await saveCurrent()
 
-    const res = await fetch(`/api/notes/${encodeURIComponent(titleToDelete)}`, {
+    await apiFetch(`/api/notes/${encodeURIComponent(titleToDelete)}`, {
       method: 'DELETE'
     })
-
-    let payload: { error?: string } | null = null
-    try {
-      payload = (await res.json()) as { error?: string }
-    } catch {
-      payload = null
-    }
-
-    if (!res.ok) throw new Error(payload?.error || 'Kunne ikke slette note')
 
     await deleteCachedNote(titleToDelete)
     pinned.value.delete(titleToDelete)

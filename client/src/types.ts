@@ -19,6 +19,13 @@ export interface RenameResponse extends NoteResponse {
   error?: string
 }
 
+export interface AuthUser {
+  id: string
+  email: string
+  name: string
+  picture?: string
+}
+
 export interface NotesState {
   notes: NoteMeta[]
   selectedTitle: string

@@ -51,6 +51,8 @@ select {
   padding: 1rem;
   background: var(--panel);
   overflow: auto;
+  display: flex;
+  flex-direction: column;
 }
 
 h1 { margin-top: 0; margin-bottom: 0; }
@@ -142,7 +144,70 @@ button:disabled {
   border-radius: 50%;
 }
 
-.list { margin-top: 1rem; display: flex; flex-direction: column; gap: .35rem; }
+.list { margin-top: 1rem; display: flex; flex-direction: column; gap: .35rem; flex: 1; min-height: 0; overflow: auto; }
+
+.sidebar-footer {
+  margin-top: .85rem;
+  padding: 0 .8rem .35rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .6rem;
+}
+
+.sidebar-user {
+  font-size: .8rem;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sidebar-logout {
+  color: var(--muted);
+  padding: .35rem .5rem;
+  font-size: .8rem;
+}
+
+.login-shell {
+  height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+}
+
+.login-card {
+  background: var(--panel);
+  border-radius: .9rem;
+  padding: 2.2rem 1.8rem;
+  width: min(420px, 100%);
+  display: grid;
+  gap: 1rem;
+  justify-items: center;
+}
+
+.login-card h1 {
+  margin: 0;
+  font-size: 2rem;
+}
+
+.google-login-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.75rem;
+  padding: 0 1rem;
+  border-radius: 9999px;
+  text-decoration: none;
+  color: var(--text);
+  background: var(--surface-soft);
+  transition: background-color .15s ease;
+}
+
+.google-login-button:hover {
+  background: var(--surface-active);
+}
+
 .note-list-move {
   transition: transform .3s ease;
 }

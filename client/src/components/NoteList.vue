@@ -8,6 +8,7 @@ interface Props {
   selectedTitle?: string
   pinned: Set<string>
   noteContents: Record<string, string>
+  userLabel?: string
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -18,6 +19,7 @@ const emit = defineEmits<{
   (e: 'create'): void
   (e: 'select', title: string): void
   (e: 'toggle-pin', title: string): void
+  (e: 'logout'): void
 }>()
 
 const query = ref('')
@@ -151,5 +153,10 @@ function onSelect(title: string) {
         </span>
       </button>
     </TransitionGroup>
+
+    <div class="sidebar-footer" v-if="userLabel">
+      <div class="sidebar-user">{{ userLabel }}</div>
+      <button class="sidebar-logout" @click="emit('logout')">Log ud</button>
+    </div>
   </aside>
 </template>

@@ -1,6 +1,9 @@
 package main
 
 import (
+	"context"
+	"crypto/rand"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -15,12 +18,21 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 	"unicode"
+
+	"golang.org/x/oauth2"
+	"golang.org/x/oauth2/google"
 )
 
 const maxJSONBodySize = 1 << 20 // 1MB
 const maxTitleLength = 200
+
+const (
+	sessionCookieName = "kladde_session"
+	stateCookieName   = "kladde_oauth_state"
+)
 
 type NoteMeta struct {
 	Title     string    `json:"title"`
@@ -33,9 +45,24 @@ type Note struct {
 	UpdatedAt time.Time `json:"updatedAt"`
 }
 
+type SessionUser struct {
+	ID      string `json:"id"`
+	Email   string `json:"email"`
+	Name    string `json:"name"`
+	Picture string `json:"picture,omitempty"`
+}
+
+type Session struct {
+	User      SessionUser
+	ExpiresAt time.Time
+}
+
 type Server struct {
-	notesDir string
-	distDir  string
+	notesBaseDir string
+	distDir      string
+	oauthConfig  *oauth2.Config
+	sessions     map[string]Session
+	sessionsMu   sync.RWMutex
 }
 
 func main() {
@@ -48,8 +75,36 @@ func main() {
 		log.Fatalf("failed creating notes dir: %v", err)
 	}
 
-	s := &Server{notesDir: *notesDir, distDir: *distDir}
+	clientID := strings.TrimSpace(os.Getenv("GOOGLE_CLIENT_ID"))
+	clientSecret := strings.TrimSpace(os.Getenv("GOOGLE_CLIENT_SECRET"))
+	if clientID == "" || clientSecret == "" {
+		log.Fatal("GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET must be set")
+	}
+
+	oauthConfig := &oauth2.Config{
+		ClientID:     clientID,
+		ClientSecret: clientSecret,
+		RedirectURL:  "https://<redacted-domain>/auth/callback",
+		Scopes: []string{
+			"openid",
+			"email",
+			"profile",
+		},
+		Endpoint: google.Endpoint,
+	}
+
+	s := &Server{
+		notesBaseDir: *notesDir,
+		distDir:      *distDir,
+		oauthConfig:  oauthConfig,
+		sessions:     make(map[string]Session),
+	}
+
 	mux := http.NewServeMux()
+	mux.HandleFunc("/auth/login", s.handleAuthLogin)
+	mux.HandleFunc("/auth/callback", s.handleAuthCallback)
+	mux.HandleFunc("/auth/logout", s.handleLogout)
+	mux.HandleFunc("/api/me", s.handleMe)
 	mux.HandleFunc("/api/notes", s.handleNotes)
 	mux.HandleFunc("/api/notes/", s.handleNoteByTitle)
 	mux.HandleFunc("/api/health", func(w http.ResponseWriter, r *http.Request) {
@@ -63,10 +118,188 @@ func main() {
 	}
 }
 
+func (s *Server) handleAuthLogin(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	state, err := randomToken(32)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, errors.New("failed to start auth"))
+		return
+	}
+
+	http.SetCookie(w, &http.Cookie{
+		Name:     stateCookieName,
+		Value:    state,
+		Path:     "/",
+		MaxAge:   600,
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteLaxMode,
+	})
+
+	http.Redirect(w, r, s.oauthConfig.AuthCodeURL(state), http.StatusFound)
+}
+
+func (s *Server) handleAuthCallback(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	stateCookie, err := r.Cookie(stateCookieName)
+	if err != nil || stateCookie.Value == "" {
+		writeError(w, http.StatusBadRequest, errors.New("missing oauth state"))
+		return
+	}
+
+	q := r.URL.Query()
+	if q.Get("state") == "" || q.Get("state") != stateCookie.Value {
+		writeError(w, http.StatusBadRequest, errors.New("invalid oauth state"))
+		return
+	}
+
+	code := q.Get("code")
+	if code == "" {
+		writeError(w, http.StatusBadRequest, errors.New("missing auth code"))
+		return
+	}
+
+	ctx := r.Context()
+	token, err := s.oauthConfig.Exchange(ctx, code)
+	if err != nil {
+		writeError(w, http.StatusUnauthorized, errors.New("oauth exchange failed"))
+		return
+	}
+
+	user, err := s.fetchGoogleUser(ctx, token)
+	if err != nil {
+		writeError(w, http.StatusUnauthorized, errors.New("failed to fetch google user"))
+		return
+	}
+
+	if err := os.MkdirAll(s.userNotesDir(user.ID), 0o755); err != nil {
+		writeError(w, http.StatusInternalServerError, errors.New("failed to prepare user notes directory"))
+		return
+	}
+
+	sessionID, err := randomToken(48)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, errors.New("failed creating session"))
+		return
+	}
+
+	expiresAt := time.Now().Add(30 * 24 * time.Hour)
+	s.sessionsMu.Lock()
+	s.sessions[sessionID] = Session{User: user, ExpiresAt: expiresAt}
+	s.sessionsMu.Unlock()
+
+	http.SetCookie(w, &http.Cookie{
+		Name:     sessionCookieName,
+		Value:    sessionID,
+		Path:     "/",
+		Expires:  expiresAt,
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteLaxMode,
+	})
+
+	http.SetCookie(w, &http.Cookie{
+		Name:     stateCookieName,
+		Value:    "",
+		Path:     "/",
+		MaxAge:   -1,
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteLaxMode,
+	})
+
+	http.Redirect(w, r, "/", http.StatusFound)
+}
+
+func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	if cookie, err := r.Cookie(sessionCookieName); err == nil && cookie.Value != "" {
+		s.sessionsMu.Lock()
+		delete(s.sessions, cookie.Value)
+		s.sessionsMu.Unlock()
+	}
+
+	http.SetCookie(w, &http.Cookie{
+		Name:     sessionCookieName,
+		Value:    "",
+		Path:     "/",
+		MaxAge:   -1,
+		HttpOnly: true,
+		Secure:   true,
+		SameSite: http.SameSiteLaxMode,
+	})
+
+	writeJSON(w, http.StatusOK, map[string]string{"status": "logged out"})
+}
+
+func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	session, ok := s.requireAuth(w, r)
+	if !ok {
+		return
+	}
+
+	writeJSON(w, http.StatusOK, session.User)
+}
+
+func (s *Server) requireAuth(w http.ResponseWriter, r *http.Request) (Session, bool) {
+	cookie, err := r.Cookie(sessionCookieName)
+	if err != nil || cookie.Value == "" {
+		writeError(w, http.StatusUnauthorized, errors.New("unauthorized"))
+		return Session{}, false
+	}
+
+	now := time.Now()
+	s.sessionsMu.RLock()
+	session, ok := s.sessions[cookie.Value]
+	s.sessionsMu.RUnlock()
+	if !ok || now.After(session.ExpiresAt) {
+		if ok {
+			s.sessionsMu.Lock()
+			delete(s.sessions, cookie.Value)
+			s.sessionsMu.Unlock()
+		}
+		writeError(w, http.StatusUnauthorized, errors.New("unauthorized"))
+		return Session{}, false
+	}
+
+	return session, true
+}
+
+func (s *Server) userNotesDir(userID string) string {
+	return filepath.Join(s.notesBaseDir, userID)
+}
+
 func (s *Server) handleNotes(w http.ResponseWriter, r *http.Request) {
+	session, ok := s.requireAuth(w, r)
+	if !ok {
+		return
+	}
+	userDir := s.userNotesDir(session.User.ID)
+	if err := os.MkdirAll(userDir, 0o755); err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+
 	switch r.Method {
 	case http.MethodGet:
-		notes, err := s.listNotes()
+		notes, err := s.listNotes(userDir)
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, err)
 			return
@@ -86,7 +319,7 @@ func (s *Server) handleNotes(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, err)
 			return
 		}
-		note, err := s.saveNote(title, payload.Content)
+		note, err := s.saveNote(userDir, title, payload.Content)
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, err)
 			return
@@ -98,6 +331,16 @@ func (s *Server) handleNotes(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleNoteByTitle(w http.ResponseWriter, r *http.Request) {
+	session, ok := s.requireAuth(w, r)
+	if !ok {
+		return
+	}
+	userDir := s.userNotesDir(session.User.ID)
+	if err := os.MkdirAll(userDir, 0o755); err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+
 	rest := strings.TrimPrefix(r.URL.Path, "/api/notes/")
 	rest = strings.TrimSpace(strings.TrimSuffix(rest, "/"))
 	parts := strings.Split(rest, "/")
@@ -127,7 +370,7 @@ func (s *Server) handleNoteByTitle(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		note, err := s.renameNote(oldTitle, strings.TrimSpace(payload.NewTitle))
+		note, err := s.renameNote(userDir, oldTitle, strings.TrimSpace(payload.NewTitle))
 		if err != nil {
 			switch {
 			case errors.Is(err, fs.ErrNotExist):
@@ -164,7 +407,7 @@ func (s *Server) handleNoteByTitle(w http.ResponseWriter, r *http.Request) {
 
 	switch r.Method {
 	case http.MethodGet:
-		note, err := s.getNote(title)
+		note, err := s.getNote(userDir, title)
 		if err != nil {
 			if errors.Is(err, fs.ErrNotExist) {
 				writeError(w, http.StatusNotFound, errors.New("note not found"))
@@ -182,14 +425,14 @@ func (s *Server) handleNoteByTitle(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, err)
 			return
 		}
-		note, err := s.saveNote(title, payload.Content)
+		note, err := s.saveNote(userDir, title, payload.Content)
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, err)
 			return
 		}
 		writeJSON(w, http.StatusOK, note)
 	case http.MethodDelete:
-		if err := s.deleteNote(title); err != nil {
+		if err := s.deleteNote(userDir, title); err != nil {
 			if errors.Is(err, fs.ErrNotExist) {
 				writeError(w, http.StatusNotFound, errors.New("note not found"))
 				return
@@ -203,8 +446,8 @@ func (s *Server) handleNoteByTitle(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *Server) listNotes() ([]NoteMeta, error) {
-	entries, err := os.ReadDir(s.notesDir)
+func (s *Server) listNotes(notesDir string) ([]NoteMeta, error) {
+	entries, err := os.ReadDir(notesDir)
 	if err != nil {
 		return nil, err
 	}
@@ -229,8 +472,8 @@ func (s *Server) listNotes() ([]NoteMeta, error) {
 	return result, nil
 }
 
-func (s *Server) getNote(title string) (*Note, error) {
-	path, err := s.notePath(title)
+func (s *Server) getNote(notesDir, title string) (*Note, error) {
+	path, err := s.notePath(notesDir, title)
 	if err != nil {
 		return nil, err
 	}
@@ -296,8 +539,8 @@ func writeFileAtomic(path string, data []byte, perm os.FileMode) error {
 	return nil
 }
 
-func (s *Server) saveNote(title, content string) (*Note, error) {
-	path, err := s.notePath(title)
+func (s *Server) saveNote(notesDir, title, content string) (*Note, error) {
+	path, err := s.notePath(notesDir, title)
 	if err != nil {
 		return nil, err
 	}
@@ -311,8 +554,8 @@ func (s *Server) saveNote(title, content string) (*Note, error) {
 	return &Note{Title: title, Content: content, UpdatedAt: info.ModTime()}, nil
 }
 
-func (s *Server) deleteNote(title string) error {
-	path, err := s.notePath(title)
+func (s *Server) deleteNote(notesDir, title string) error {
+	path, err := s.notePath(notesDir, title)
 	if err != nil {
 		return err
 	}
@@ -323,7 +566,7 @@ func (s *Server) deleteNote(title string) error {
 		return err
 	}
 
-	d, err := os.Open(s.notesDir)
+	d, err := os.Open(notesDir)
 	if err == nil {
 		_ = d.Sync()
 		_ = d.Close()
@@ -332,12 +575,12 @@ func (s *Server) deleteNote(title string) error {
 	return nil
 }
 
-func (s *Server) renameNote(oldTitle, newTitle string) (*Note, error) {
+func (s *Server) renameNote(notesDir, oldTitle, newTitle string) (*Note, error) {
 	if err := validateTitle(newTitle); err != nil {
 		return nil, err
 	}
 
-	oldPath, err := s.notePath(oldTitle)
+	oldPath, err := s.notePath(notesDir, oldTitle)
 	if err != nil {
 		return nil, err
 	}
@@ -351,10 +594,9 @@ func (s *Server) renameNote(oldTitle, newTitle string) (*Note, error) {
 	}
 
 	if oldTitle != newTitle {
-		// Auto-deduplicate atomically without clobbering existing files.
 		baseTitle := newTitle
 		for n := 2; ; n++ {
-			newPath, err := s.notePath(newTitle)
+			newPath, err := s.notePath(notesDir, newTitle)
 			if err != nil {
 				return nil, err
 			}
@@ -380,15 +622,15 @@ func (s *Server) renameNote(oldTitle, newTitle string) (*Note, error) {
 		}
 	}
 
-	return s.getNote(newTitle)
+	return s.getNote(notesDir, newTitle)
 }
 
-func (s *Server) notePath(title string) (string, error) {
+func (s *Server) notePath(notesDir, title string) (string, error) {
 	if err := validateTitle(title); err != nil {
 		return "", err
 	}
 
-	base, err := filepath.Abs(s.notesDir)
+	base, err := filepath.Abs(notesDir)
 	if err != nil {
 		return "", err
 	}
@@ -521,4 +763,51 @@ func loggingMiddleware(next http.Handler) http.Handler {
 		next.ServeHTTP(w, r)
 		log.Printf("%s %s %s", r.Method, r.URL.Path, time.Since(start).Round(time.Millisecond))
 	})
+}
+
+func randomToken(numBytes int) (string, error) {
+	buf := make([]byte, numBytes)
+	if _, err := rand.Read(buf); err != nil {
+		return "", err
+	}
+	return base64.RawURLEncoding.EncodeToString(buf), nil
+}
+
+func (s *Server) fetchGoogleUser(ctx context.Context, token *oauth2.Token) (SessionUser, error) {
+	client := s.oauthConfig.Client(ctx, token)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://www.googleapis.com/oauth2/v2/userinfo", nil)
+	if err != nil {
+		return SessionUser{}, err
+	}
+
+	res, err := client.Do(req)
+	if err != nil {
+		return SessionUser{}, err
+	}
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusOK {
+		return SessionUser{}, fmt.Errorf("google userinfo request failed with status %d", res.StatusCode)
+	}
+
+	var info struct {
+		ID      string `json:"id"`
+		Email   string `json:"email"`
+		Name    string `json:"name"`
+		Picture string `json:"picture"`
+	}
+	if err := json.NewDecoder(res.Body).Decode(&info); err != nil {
+		return SessionUser{}, err
+	}
+
+	if info.ID == "" {
+		return SessionUser{}, errors.New("google user id missing")
+	}
+
+	return SessionUser{
+		ID:      info.ID,
+		Email:   info.Email,
+		Name:    info.Name,
+		Picture: info.Picture,
+	}, nil
 }
