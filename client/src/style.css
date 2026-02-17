@@ -164,7 +164,7 @@ button:disabled {
 
 .user-menu-dropdown {
   position: absolute;
-  left: 0;
+  right: 0;
   top: calc(100% + .35rem);
   min-width: 220px;
   border: 1px solid var(--border);

@@ -82,10 +82,12 @@ const statusMeta = computed(() => {
   }
 
   if (dirty) {
+    const noteCount = props.store.notes?.length ?? 0
+    const syncedAt = lastSyncTime.value ? ` ${lastSyncTime.value}` : ''
     return {
-      state: 'dirty',
-      label: 'Ikke gemt',
-      detail: 'Lokale ændringer venter på synk'
+      state: 'synced',
+      label: '',
+      detail: `Synkroniseret${syncedAt}\n${noteCount} noter`
     }
   }
 
