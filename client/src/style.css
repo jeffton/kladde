@@ -346,6 +346,10 @@ button:disabled {
   font-size: .84rem;
   line-height: 1.4;
   opacity: .9;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 .pin {
   opacity: .72;
