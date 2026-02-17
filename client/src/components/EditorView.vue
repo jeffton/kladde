@@ -52,10 +52,14 @@ const NBSP = '\u00A0'
 // Custom paragraph extension that serializes empty paragraphs as nbsp
 const PreservingParagraph = Paragraph.extend({
   addStorage() {
+    const parentStorage = this.parent?.() || {}
+    const parentMarkdown = parentStorage.markdown || {}
+
     return {
-      ...this.parent?.(),
+      ...parentStorage,
       markdown: {
-        serialize(state: any, node: any, parent: any, index: number) {
+        ...parentMarkdown,
+        serialize(state: any, node: any) {
           if (node.content.size === 0) {
             state.write(NBSP)
             state.closeBlock(node)
@@ -64,7 +68,6 @@ const PreservingParagraph = Paragraph.extend({
           state.renderInline(node)
           state.closeBlock(node)
         },
-        parse: {},
       },
     }
   },
@@ -76,12 +79,28 @@ function editorToMd(md: string): string {
 }
 
 function mdToEditor(md: string): string {
+  let result = md
+
+  // Handle leading blank lines (2+ newlines at start)
+  result = result.replace(/^\n+/, (match) => {
+    if (match.length < 2) return match
+    return Array(match.length - 1).fill(NBSP).join('\n\n') + '\n\n'
+  })
+
+  // Handle trailing blank lines (2+ newlines at end)
+  result = result.replace(/\n+$/, (match) => {
+    if (match.length < 2) return match
+    return '\n\n' + Array(match.length - 1).fill(NBSP).join('\n\n')
+  })
+
   // Replace runs of 3+ newlines with nbsp spacer paragraphs
-  return md.replace(/\n{3,}/g, (match) => {
+  result = result.replace(/\n{3,}/g, (match) => {
     const extra = match.length - 2
     const spacers = Array(extra).fill(NBSP).join('\n\n')
     return '\n\n' + spacers + '\n\n'
   })
+
+  return result
 }
 
 const saveLabel = computed(() => (props.store.dirty ? 'Ikke gemt' : 'Gemt'))
@@ -163,13 +182,21 @@ const editor = useEditor({
     }),
     Markdown.configure({ html: false, transformCopiedText: true, transformPastedText: true })
   ],
+  editorProps: {
+    clipboardTextSerializer: (slice) => {
+      const defaultText = slice.content.textBetween(0, slice.content.size, '\n\n')
+      return defaultText.replace(new RegExp(NBSP, 'g'), '')
+    }
+  },
   content: mdToEditor(props.store.currentContent || ''),
   onUpdate: ({ editor: tiptapEditor }) => {
     if (ignoreEditorChanges) return
     const nextMarkdown = editorToMd(tiptapEditor.storage.markdown.getMarkdown())
+    const titleAtSchedule = props.store.selectedTitle
 
     if (updateDebounce) window.clearTimeout(updateDebounce)
     updateDebounce = window.setTimeout(() => {
+      if (props.store.selectedTitle !== titleAtSchedule) return
       if (nextMarkdown !== props.store.currentContent) {
         void props.store.setCurrentContent(nextMarkdown).catch((err: unknown) => {
           error.value = (err as Error)?.message || 'Kunne ikke gemme lokalt'
@@ -188,7 +215,7 @@ function setEditorMarkdown(markdown = '') {
 
 function syncEditorFromStore() {
   if (!editor.value || showPlain.value) return
-  const current = editor.value.storage.markdown.getMarkdown()
+  const current = editorToMd(editor.value.storage.markdown.getMarkdown())
   if (current === props.store.currentContent) return
   setEditorMarkdown(props.store.currentContent)
 }
@@ -417,6 +444,10 @@ watch(
 
 watch(() => props.store.currentContent, () => syncEditorFromStore())
 watch(() => props.store.selectedTitle, (title) => {
+  if (updateDebounce) {
+    window.clearTimeout(updateDebounce)
+    updateDebounce = null
+  }
   editableTitle.value = title || ''
   showNoteMenu.value = false
 }, { immediate: true })
