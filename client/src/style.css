@@ -146,36 +146,53 @@ button:disabled {
 
 .list { margin-top: 1rem; display: flex; flex-direction: column; gap: .35rem; flex: 1; min-height: 0; overflow: auto; }
 
-.sidebar-footer {
-  margin-top: .85rem;
-  padding: 0 .8rem .2rem;
-  display: grid;
-  gap: .45rem;
+.user-menu-wrap {
+  position: relative;
+  flex-shrink: 0;
 }
 
-.sidebar-user {
-  font-size: .8rem;
-  color: var(--muted);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.sidebar-user-actions {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: .45rem;
-}
-
-.sidebar-link,
-.sidebar-logout {
-  color: var(--muted);
-  padding: .35rem .5rem;
-  font-size: .8rem;
+.user-menu-button {
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 50%;
+  background: var(--surface-hover, rgba(128,128,128,.12));
   display: inline-flex;
   align-items: center;
-  gap: .35rem;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.user-menu-dropdown {
+  position: absolute;
+  left: 0;
+  top: calc(100% + .35rem);
+  min-width: 220px;
+  border: 1px solid var(--border);
+  border-radius: .5rem;
+  background: color-mix(in srgb, var(--panel) 95%, var(--bg));
+  box-shadow: 0 8px 20px color-mix(in srgb, #000 16%, transparent);
+  padding: .3rem;
+  z-index: 9999;
+}
+
+.user-menu-label {
+  font-size: .8rem;
+  color: var(--muted);
+  padding: .5rem .72rem .2rem;
+}
+
+.user-menu-item {
+  width: 100%;
+  min-height: 44px;
+  text-align: left;
+  color: var(--text);
+  border-radius: .4rem;
+  display: inline-flex;
+  align-items: center;
+  gap: .55rem;
+  padding: .62rem .72rem;
+  font-size: 1rem;
+  font-weight: 650;
 }
 
 .password-form {
@@ -185,6 +202,10 @@ button:disabled {
   background: var(--surface-soft);
   display: grid;
   gap: .45rem;
+}
+
+.user-menu-dropdown .password-form {
+  margin: .3rem 0 0;
 }
 
 .password-input {
@@ -780,6 +801,10 @@ button:disabled {
 
   .note-menu-delete:hover {
     background: color-mix(in srgb, #ef4444 18%, transparent);
+  }
+
+  .user-menu-item:hover {
+    background: var(--surface-hover, rgba(128,128,128,.12));
   }
 
   .login-button:hover {

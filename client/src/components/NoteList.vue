@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { TransitionGroup, computed, ref } from 'vue'
-import { FileText, KeyRound, Plus, Search, Star, X } from 'lucide-vue-next'
+import { TransitionGroup, computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { FileText, KeyRound, LogOut, Plus, Search, Star, User, X } from 'lucide-vue-next'
 import type { NoteMeta } from '../types'
 
 interface Props {
@@ -24,6 +24,8 @@ const emit = defineEmits<{
 
 const query = ref('')
 const sidebarRef = ref<HTMLElement | null>(null)
+const userMenuWrap = ref<HTMLElement | null>(null)
+const showUserMenu = ref(false)
 const showPasswordForm = ref(false)
 const currentPassword = ref('')
 const newPassword = ref('')
@@ -114,6 +116,25 @@ function onSelect(title: string) {
   emit('select', title)
 }
 
+function toggleUserMenu() {
+  showUserMenu.value = !showUserMenu.value
+}
+
+function onDocumentClick(event: MouseEvent) {
+  const target = event.target as Node | null
+  if (!target) return
+  if (userMenuWrap.value?.contains(target)) return
+  showUserMenu.value = false
+}
+
+onMounted(() => {
+  document.addEventListener('click', onDocumentClick)
+})
+
+onBeforeUnmount(() => {
+  document.removeEventListener('click', onDocumentClick)
+})
+
 function togglePasswordForm() {
   showPasswordForm.value = !showPasswordForm.value
   passwordError.value = ''
@@ -171,9 +192,37 @@ async function submitPasswordChange() {
   <aside ref="sidebarRef" class="sidebar">
     <div class="sidebar-header">
       <h1>kladde</h1>
-      <button class="create-fab" @click="emit('create')" aria-label="Opret ny note">
-        <Plus :size="20" />
-      </button>
+      <div style="display: flex; gap: .35rem; align-items: center;">
+        <div v-if="userLabel" ref="userMenuWrap" class="user-menu-wrap">
+          <button class="user-menu-button" aria-label="Brugermenu" @click="toggleUserMenu">
+            <User :size="20" />
+          </button>
+          <div v-if="showUserMenu" class="user-menu-dropdown">
+            <div class="user-menu-label">{{ userLabel }}</div>
+            <button class="user-menu-item" @click="togglePasswordForm">
+              <KeyRound :size="18" />
+              Skift password
+            </button>
+            <button class="user-menu-item" @click="emit('logout')">
+              <LogOut :size="18" />
+              Log ud
+            </button>
+
+            <form v-if="showPasswordForm" class="password-form" @submit.prevent="submitPasswordChange">
+              <input v-model="currentPassword" class="password-input" type="password" autocomplete="current-password" placeholder="Nuværende password" required />
+              <input v-model="newPassword" class="password-input" type="password" autocomplete="new-password" placeholder="Nyt password" required />
+              <input v-model="confirmPassword" class="password-input" type="password" autocomplete="new-password" placeholder="Bekræft nyt password" required />
+              <p v-if="passwordError" class="password-error">{{ passwordError }}</p>
+              <p v-if="passwordSuccess" class="password-success">{{ passwordSuccess }}</p>
+              <button class="password-submit" type="submit" :disabled="changingPassword">Opdater password</button>
+            </form>
+          </div>
+        </div>
+
+        <button class="create-fab" @click="emit('create')" aria-label="Opret ny note">
+          <Plus :size="20" />
+        </button>
+      </div>
     </div>
 
     <div class="search-wrap">
@@ -213,24 +262,5 @@ async function submitPasswordChange() {
       </button>
     </TransitionGroup>
 
-    <div class="sidebar-footer" v-if="userLabel">
-      <div class="sidebar-user">{{ userLabel }}</div>
-      <div class="sidebar-user-actions">
-        <button class="sidebar-link" @click="togglePasswordForm">
-          <KeyRound :size="14" />
-          Skift password
-        </button>
-        <button class="sidebar-logout" @click="emit('logout')">Log ud</button>
-      </div>
-    </div>
-
-    <form v-if="showPasswordForm" class="password-form" @submit.prevent="submitPasswordChange">
-      <input v-model="currentPassword" class="password-input" type="password" autocomplete="current-password" placeholder="Nuværende password" required />
-      <input v-model="newPassword" class="password-input" type="password" autocomplete="new-password" placeholder="Nyt password" required />
-      <input v-model="confirmPassword" class="password-input" type="password" autocomplete="new-password" placeholder="Bekræft nyt password" required />
-      <p v-if="passwordError" class="password-error">{{ passwordError }}</p>
-      <p v-if="passwordSuccess" class="password-success">{{ passwordSuccess }}</p>
-      <button class="password-submit" type="submit" :disabled="changingPassword">Opdater password</button>
-    </form>
   </aside>
 </template>
