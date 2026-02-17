@@ -132,23 +132,27 @@ onUnmounted(() => {
 <template>
   <div class="app-shell" :class="appShellClass">
     <template v-if="isMobile">
-      <NoteList
-        v-if="isListRoute"
-        :notes="sortedNotes"
-        :selected-title="store.selectedTitle"
-        :pinned="store.pinned"
-        :note-contents="store.noteContents"
-        @create="createNote"
-        @select="selectNote"
-        @toggle-pin="togglePin" />
+      <Transition :name="mobileTransitionName">
+        <NoteList
+          v-if="isListRoute"
+          key="mobile-list"
+          :notes="sortedNotes"
+          :selected-title="store.selectedTitle"
+          :pinned="store.pinned"
+          :note-contents="store.noteContents"
+          @create="createNote"
+          @select="selectNote"
+          @toggle-pin="togglePin" />
 
-      <EditorView
-        v-else
-        :store="store"
-        :show-back="true"
-        @rename="onRename"
-        @back="goBackToList"
-        @deleted="onDeleted" />
+        <EditorView
+          v-else
+          key="mobile-editor"
+          :store="store"
+          :show-back="true"
+          @rename="onRename"
+          @back="goBackToList"
+          @deleted="onDeleted" />
+      </Transition>
     </template>
 
     <template v-else>
