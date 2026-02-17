@@ -1,7 +1,7 @@
 import { openDB } from 'idb'
 import type { CachedNote } from '../types'
 
-const DB_NAME = 'noteapp-db'
+const DB_NAME = 'kladde-db'
 const DB_VERSION = 1
 const NOTES_STORE = 'notes'
 

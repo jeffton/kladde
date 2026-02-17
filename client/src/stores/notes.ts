@@ -3,7 +3,7 @@ import { defineStore } from 'pinia'
 import { deleteCachedNote, getAllCachedNotes, getCachedNote, putCachedNote } from './notesDb'
 import type { CachedNote, NoteMeta, NoteResponse, RenameResponse } from '../types'
 
-const PINNED_KEY = 'noteapp:pinned'
+const PINNED_KEY = 'kladde:pinned'
 
 function loadPinned(): Set<string> {
   try {

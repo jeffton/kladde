@@ -109,7 +109,7 @@ function onSelect(title: string) {
 <template>
   <aside ref="sidebarRef" class="sidebar">
     <div class="sidebar-header">
-      <h1>Noteapp</h1>
+      <h1>kladde</h1>
       <button class="create-fab" @click="emit('create')" aria-label="Opret ny note">
         <Plus :size="20" />
       </button>

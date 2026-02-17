@@ -9,8 +9,8 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg'],
       manifest: {
-        name: 'Noteapp',
-        short_name: 'Noteapp',
+        name: 'kladde',
+        short_name: 'kladde',
         description: 'Offline-first markdown note app',
         theme_color: '#111827',
         background_color: '#ffffff',

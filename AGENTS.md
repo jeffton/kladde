@@ -1,4 +1,4 @@
-# AGENTS.md — Noteapp
+# AGENTS.md — kladde
 
 ## Screenshots
 When taking screenshots (Playwright, QA, etc.), save them in `screenshots/` (gitignored).
@@ -8,9 +8,9 @@ Do NOT save screenshots in the project root or other directories.
 ```bash
 cd client && npm run build
 cd ../server && go build -o server .
-sudo systemctl stop noteapp
-sudo cp server /usr/local/bin/noteapp
-sudo systemctl start noteapp
+sudo systemctl stop kladde
+sudo cp server /usr/local/bin/kladde
+sudo systemctl start kladde
 ```
 
 ## Conventions

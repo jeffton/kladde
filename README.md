@@ -1,4 +1,4 @@
-# Noteapp
+# kladde
 
 A minimal, offline-first note-taking PWA with a warm, Notion-inspired aesthetic.
 
@@ -41,7 +41,7 @@ cd ../server && go build
 ## Run
 
 ```bash
-./server -addr :8080 -notes /var/data/noteapp/notes/ -dist ../client/dist
+./server -addr :8080 -notes /var/data/kladde/notes/ -dist ../client/dist
 ```
 
 ## Deploy (production)
@@ -52,9 +52,9 @@ cd client && npm run build
 
 # Build + deploy server
 cd ../server && go build -o server .
-sudo systemctl stop noteapp
-sudo cp server /usr/local/bin/noteapp
-sudo systemctl start noteapp
+sudo systemctl stop kladde
+sudo cp server /usr/local/bin/kladde
+sudo systemctl start kladde
 ```
 
 Served via nginx reverse proxy on `<redacted-domain>`.

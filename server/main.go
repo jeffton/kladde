@@ -40,7 +40,7 @@ type Server struct {
 
 func main() {
 	addr := flag.String("addr", ":8080", "HTTP listen address")
-	notesDir := flag.String("notes", "/var/data/noteapp/notes/", "Path to notes directory")
+	notesDir := flag.String("notes", "/var/data/kladde/notes/", "Path to notes directory")
 	distDir := flag.String("dist", "../client/dist", "Path to built client dist directory")
 	flag.Parse()
 
@@ -57,7 +57,7 @@ func main() {
 	})
 	mux.HandleFunc("/", s.handleSPA)
 
-	log.Printf("noteapp listening on %s, notes=%s, dist=%s", *addr, *notesDir, *distDir)
+	log.Printf("kladde listening on %s, notes=%s, dist=%s", *addr, *notesDir, *distDir)
 	if err := http.ListenAndServe(*addr, loggingMiddleware(mux)); err != nil {
 		log.Fatal(err)
 	}
@@ -250,7 +250,7 @@ func (s *Server) getNote(title string) (*Note, error) {
 
 func writeFileAtomic(path string, data []byte, perm os.FileMode) error {
 	dir := filepath.Dir(path)
-	tmpFile, err := os.CreateTemp(dir, ".noteapp-*.tmp")
+	tmpFile, err := os.CreateTemp(dir, ".kladde-*.tmp")
 	if err != nil {
 		return err
 	}
