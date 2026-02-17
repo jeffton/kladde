@@ -1,8 +1,7 @@
 # kladde
 
-A minimal, offline-first note-taking PWA with a warm, Notion-inspired aesthetic.
+Kladde is an agent-friendly notes app that syncs to a folder with plain markdown files. Kladde is Danish for draft and sounds kind of like Clawd if you squint hard enough.
 
-**Live:** [<redacted-domain>](https://<redacted-domain>)
 
 ## Features
 
