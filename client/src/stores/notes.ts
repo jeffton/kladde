@@ -182,7 +182,7 @@ export const useNotesStore = defineStore('notes', () => {
 
     if (selectedTitle.value) {
       const selected = cached.find((n) => n.title === selectedTitle.value)
-      if (selected) {
+      if (selected && !dirty.value) {
         currentContent.value = selected.content || ''
         currentUpdatedAt.value = normalizeTs(selected.updatedAt)
         dirty.value = Boolean(selected.dirty)
@@ -359,7 +359,8 @@ export const useNotesStore = defineStore('notes', () => {
           const local = currentLocalMap.get(serverMeta.title)
           const serverTs = new Date(serverMeta.updatedAt).getTime()
           const localTs = local ? new Date(local.updatedAt).getTime() : 0
-          const shouldPull = !local || (!local.dirty && serverTs > localTs)
+          const isActiveAndDirty = serverMeta.title === selectedTitle.value && dirty.value
+          const shouldPull = !isActiveAndDirty && (!local || (!local.dirty && serverTs > localTs))
           if (!shouldPull) continue
 
           let noteRes: Response
