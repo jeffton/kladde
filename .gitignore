@@ -4,7 +4,4 @@ client/dist/
 server/server
 *.log
 .DS_Store
-*.png
-!client/public/pwa-*.png
-*.jpg
 screenshots/
