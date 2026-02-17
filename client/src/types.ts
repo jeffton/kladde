@@ -20,10 +20,8 @@ export interface RenameResponse extends NoteResponse {
 }
 
 export interface AuthUser {
-  id: string
-  email: string
-  name: string
-  picture?: string
+  username: string
+  displayName: string
 }
 
 export interface NotesState {

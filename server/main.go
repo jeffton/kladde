@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
@@ -22,17 +21,13 @@ import (
 	"time"
 	"unicode"
 
-	"golang.org/x/oauth2"
-	"golang.org/x/oauth2/google"
+	"golang.org/x/crypto/bcrypt"
 )
 
 const maxJSONBodySize = 1 << 20 // 1MB
 const maxTitleLength = 200
 
-const (
-	sessionCookieName = "kladde_session"
-	stateCookieName   = "kladde_oauth_state"
-)
+const sessionCookieName = "kladde_session"
 
 type NoteMeta struct {
 	Title     string    `json:"title"`
@@ -46,10 +41,14 @@ type Note struct {
 }
 
 type SessionUser struct {
-	ID      string `json:"id"`
-	Email   string `json:"email"`
-	Name    string `json:"name"`
-	Picture string `json:"picture,omitempty"`
+	Username    string `json:"username"`
+	DisplayName string `json:"displayName"`
+}
+
+type UserRecord struct {
+	Username     string `json:"username"`
+	PasswordHash string `json:"passwordHash"`
+	DisplayName  string `json:"displayName"`
 }
 
 type Session struct {
@@ -60,49 +59,41 @@ type Session struct {
 type Server struct {
 	notesBaseDir string
 	distDir      string
-	oauthConfig  *oauth2.Config
+	usersFile    string
 	sessions     map[string]Session
 	sessionsMu   sync.RWMutex
 }
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "adduser" {
+		if err := runAddUser(os.Args[2:]); err != nil {
+			log.Fatal(err)
+		}
+		return
+	}
+
 	addr := flag.String("addr", ":8080", "HTTP listen address")
 	notesDir := flag.String("notes", "/var/data/kladde/notes/", "Path to notes directory")
 	distDir := flag.String("dist", "../client/dist", "Path to built client dist directory")
+	usersFile := flag.String("users", "/var/data/kladde/users.json", "Path to users.json")
 	flag.Parse()
 
 	if err := os.MkdirAll(*notesDir, 0o755); err != nil {
 		log.Fatalf("failed creating notes dir: %v", err)
 	}
-
-	clientID := strings.TrimSpace(os.Getenv("GOOGLE_CLIENT_ID"))
-	clientSecret := strings.TrimSpace(os.Getenv("GOOGLE_CLIENT_SECRET"))
-	if clientID == "" || clientSecret == "" {
-		log.Fatal("GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET must be set")
-	}
-
-	oauthConfig := &oauth2.Config{
-		ClientID:     clientID,
-		ClientSecret: clientSecret,
-		RedirectURL:  "https://<redacted-domain>/auth/callback",
-		Scopes: []string{
-			"openid",
-			"email",
-			"profile",
-		},
-		Endpoint: google.Endpoint,
+	if err := os.MkdirAll(filepath.Dir(*usersFile), 0o755); err != nil {
+		log.Fatalf("failed creating users dir: %v", err)
 	}
 
 	s := &Server{
 		notesBaseDir: *notesDir,
 		distDir:      *distDir,
-		oauthConfig:  oauthConfig,
+		usersFile:    *usersFile,
 		sessions:     make(map[string]Session),
 	}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/auth/login", s.handleAuthLogin)
-	mux.HandleFunc("/auth/callback", s.handleAuthCallback)
 	mux.HandleFunc("/auth/logout", s.handleLogout)
 	mux.HandleFunc("/api/me", s.handleMe)
 	mux.HandleFunc("/api/notes", s.handleNotes)
@@ -118,69 +109,102 @@ func main() {
 	}
 }
 
-func (s *Server) handleAuthLogin(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		return
+func runAddUser(args []string) error {
+	fs := flag.NewFlagSet("adduser", flag.ContinueOnError)
+	username := fs.String("username", "", "Username")
+	password := fs.String("password", "", "Password")
+	name := fs.String("name", "", "Display name")
+	usersFile := fs.String("users", "/var/data/kladde/users.json", "Path to users.json")
+
+	if err := fs.Parse(args); err != nil {
+		return err
 	}
 
-	state, err := randomToken(32)
+	*username = strings.TrimSpace(*username)
+	*password = strings.TrimSpace(*password)
+	*name = strings.TrimSpace(*name)
+
+	if *username == "" || *password == "" || *name == "" {
+		return errors.New("usage: kladde adduser --username <username> --password <password> --name \"Display Name\"")
+	}
+
+	if err := os.MkdirAll(filepath.Dir(*usersFile), 0o755); err != nil {
+		return fmt.Errorf("failed creating users dir: %w", err)
+	}
+
+	users, err := loadUsers(*usersFile)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, errors.New("failed to start auth"))
-		return
+		return err
 	}
 
-	http.SetCookie(w, &http.Cookie{
-		Name:     stateCookieName,
-		Value:    state,
-		Path:     "/",
-		MaxAge:   600,
-		HttpOnly: true,
-		Secure:   true,
-		SameSite: http.SameSiteLaxMode,
+	for _, u := range users {
+		if u.Username == *username {
+			return fmt.Errorf("user %q already exists", *username)
+		}
+	}
+
+	hash, err := bcrypt.GenerateFromPassword([]byte(*password), bcrypt.DefaultCost)
+	if err != nil {
+		return fmt.Errorf("failed hashing password: %w", err)
+	}
+
+	users = append(users, UserRecord{
+		Username:     *username,
+		PasswordHash: string(hash),
+		DisplayName:  *name,
 	})
 
-	http.Redirect(w, r, s.oauthConfig.AuthCodeURL(state), http.StatusFound)
+	if err := saveUsers(*usersFile, users); err != nil {
+		return err
+	}
+
+	log.Printf("user %q added", *username)
+	return nil
 }
 
-func (s *Server) handleAuthCallback(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
+func (s *Server) handleAuthLogin(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
 
-	stateCookie, err := r.Cookie(stateCookieName)
-	if err != nil || stateCookie.Value == "" {
-		writeError(w, http.StatusBadRequest, errors.New("missing oauth state"))
+	var payload struct {
+		Username string `json:"username"`
+		Password string `json:"password"`
+	}
+	if err := decodeJSONBody(w, r, &payload); err != nil {
+		writeError(w, http.StatusBadRequest, err)
 		return
 	}
 
-	q := r.URL.Query()
-	if q.Get("state") == "" || q.Get("state") != stateCookie.Value {
-		writeError(w, http.StatusBadRequest, errors.New("invalid oauth state"))
+	username := strings.TrimSpace(payload.Username)
+	password := strings.TrimSpace(payload.Password)
+	if username == "" || password == "" {
+		writeError(w, http.StatusBadRequest, errors.New("username and password are required"))
 		return
 	}
 
-	code := q.Get("code")
-	if code == "" {
-		writeError(w, http.StatusBadRequest, errors.New("missing auth code"))
-		return
-	}
-
-	ctx := r.Context()
-	token, err := s.oauthConfig.Exchange(ctx, code)
+	users, err := loadUsers(s.usersFile)
 	if err != nil {
-		writeError(w, http.StatusUnauthorized, errors.New("oauth exchange failed"))
+		writeError(w, http.StatusInternalServerError, errors.New("failed loading users"))
 		return
 	}
 
-	user, err := s.fetchGoogleUser(ctx, token)
-	if err != nil {
-		writeError(w, http.StatusUnauthorized, errors.New("failed to fetch google user"))
+	var matched *UserRecord
+	for i := range users {
+		if users[i].Username == username {
+			matched = &users[i]
+			break
+		}
+	}
+
+	if matched == nil || bcrypt.CompareHashAndPassword([]byte(matched.PasswordHash), []byte(password)) != nil {
+		writeError(w, http.StatusUnauthorized, errors.New("invalid credentials"))
 		return
 	}
 
-	if err := os.MkdirAll(s.userNotesDir(user.ID), 0o755); err != nil {
+	user := SessionUser{Username: matched.Username, DisplayName: matched.DisplayName}
+	if err := os.MkdirAll(s.userNotesDir(user.Username), 0o755); err != nil {
 		writeError(w, http.StatusInternalServerError, errors.New("failed to prepare user notes directory"))
 		return
 	}
@@ -206,17 +230,7 @@ func (s *Server) handleAuthCallback(w http.ResponseWriter, r *http.Request) {
 		SameSite: http.SameSiteLaxMode,
 	})
 
-	http.SetCookie(w, &http.Cookie{
-		Name:     stateCookieName,
-		Value:    "",
-		Path:     "/",
-		MaxAge:   -1,
-		HttpOnly: true,
-		Secure:   true,
-		SameSite: http.SameSiteLaxMode,
-	})
-
-	http.Redirect(w, r, "/", http.StatusFound)
+	writeJSON(w, http.StatusOK, user)
 }
 
 func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
@@ -258,6 +272,38 @@ func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, session.User)
 }
 
+func loadUsers(path string) ([]UserRecord, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return []UserRecord{}, nil
+		}
+		return nil, fmt.Errorf("failed reading users file: %w", err)
+	}
+	if len(strings.TrimSpace(string(data))) == 0 {
+		return []UserRecord{}, nil
+	}
+
+	var users []UserRecord
+	if err := json.Unmarshal(data, &users); err != nil {
+		return nil, fmt.Errorf("failed parsing users file: %w", err)
+	}
+	return users, nil
+}
+
+func saveUsers(path string, users []UserRecord) error {
+	data, err := json.MarshalIndent(users, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed serializing users: %w", err)
+	}
+	data = append(data, '\n')
+
+	if err := writeFileAtomic(path, data, 0o600); err != nil {
+		return fmt.Errorf("failed writing users file: %w", err)
+	}
+	return nil
+}
+
 func (s *Server) requireAuth(w http.ResponseWriter, r *http.Request) (Session, bool) {
 	cookie, err := r.Cookie(sessionCookieName)
 	if err != nil || cookie.Value == "" {
@@ -291,7 +337,7 @@ func (s *Server) handleNotes(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	userDir := s.userNotesDir(session.User.ID)
+	userDir := s.userNotesDir(session.User.Username)
 	if err := os.MkdirAll(userDir, 0o755); err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
@@ -335,7 +381,7 @@ func (s *Server) handleNoteByTitle(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	userDir := s.userNotesDir(session.User.ID)
+	userDir := s.userNotesDir(session.User.Username)
 	if err := os.MkdirAll(userDir, 0o755); err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
@@ -771,43 +817,4 @@ func randomToken(numBytes int) (string, error) {
 		return "", err
 	}
 	return base64.RawURLEncoding.EncodeToString(buf), nil
-}
-
-func (s *Server) fetchGoogleUser(ctx context.Context, token *oauth2.Token) (SessionUser, error) {
-	client := s.oauthConfig.Client(ctx, token)
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://www.googleapis.com/oauth2/v2/userinfo", nil)
-	if err != nil {
-		return SessionUser{}, err
-	}
-
-	res, err := client.Do(req)
-	if err != nil {
-		return SessionUser{}, err
-	}
-	defer res.Body.Close()
-
-	if res.StatusCode != http.StatusOK {
-		return SessionUser{}, fmt.Errorf("google userinfo request failed with status %d", res.StatusCode)
-	}
-
-	var info struct {
-		ID      string `json:"id"`
-		Email   string `json:"email"`
-		Name    string `json:"name"`
-		Picture string `json:"picture"`
-	}
-	if err := json.NewDecoder(res.Body).Decode(&info); err != nil {
-		return SessionUser{}, err
-	}
-
-	if info.ID == "" {
-		return SessionUser{}, errors.New("google user id missing")
-	}
-
-	return SessionUser{
-		ID:      info.ID,
-		Email:   info.Email,
-		Name:    info.Name,
-		Picture: info.Picture,
-	}, nil
 }

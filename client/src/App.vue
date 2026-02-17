@@ -15,7 +15,11 @@ const authChecked = ref(false)
 const user = ref<AuthUser | null>(null)
 
 const isAuthenticated = computed(() => Boolean(user.value))
-const userLabel = computed(() => user.value?.name || user.value?.email || '')
+const userLabel = computed(() => user.value?.displayName || user.value?.username || '')
+const username = ref('')
+const password = ref('')
+const loginError = ref('')
+const loggingIn = ref(false)
 
 function isNetworkError(err: unknown): boolean {
   if (!err) return false
@@ -64,12 +68,39 @@ async function loadMe() {
   }
 }
 
+async function login() {
+  loginError.value = ''
+  loggingIn.value = true
+
+  try {
+    const res = await fetch('/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: username.value, password: password.value })
+    })
+
+    if (res.status === 401) {
+      loginError.value = 'Forkert brugernavn eller adgangskode'
+      return
+    }
+    if (!res.ok) throw new Error('Kunne ikke logge ind')
+
+    user.value = (await res.json()) as AuthUser
+    password.value = ''
+  } catch {
+    loginError.value = 'Kunne ikke logge ind lige nu'
+  } finally {
+    loggingIn.value = false
+  }
+}
+
 async function logout() {
   try {
     await fetch('/auth/logout', { method: 'POST' })
   } finally {
     user.value = null
     error.value = ''
+    loginError.value = ''
   }
 }
 
@@ -207,7 +238,18 @@ onUnmounted(() => {
   <div v-else-if="!isAuthenticated" class="login-shell">
     <div class="login-card">
       <h1>kladde</h1>
-      <a class="google-login-button" href="/auth/login">Sign in with Google</a>
+      <form class="login-form" @submit.prevent="login">
+        <input v-model="username" class="login-input" type="text" autocomplete="username" placeholder="Brugernavn" required />
+        <input
+          v-model="password"
+          class="login-input"
+          type="password"
+          autocomplete="current-password"
+          placeholder="Adgangskode"
+          required />
+        <p v-if="loginError" class="login-error">{{ loginError }}</p>
+        <button class="login-button" type="submit" :disabled="loggingIn">Log ind</button>
+      </form>
     </div>
   </div>
 

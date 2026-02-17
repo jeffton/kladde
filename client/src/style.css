@@ -191,21 +191,38 @@ button:disabled {
   font-size: 2rem;
 }
 
-.google-login-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 2.75rem;
-  padding: 0 1rem;
-  border-radius: 9999px;
-  text-decoration: none;
-  color: var(--text);
-  background: var(--surface-soft);
-  transition: background-color .15s ease;
+.login-form {
+  width: 100%;
+  display: grid;
+  gap: .75rem;
 }
 
-.google-login-button:hover {
+.login-input {
+  width: 100%;
+  border: 0;
+  border-radius: .75rem;
+  background: var(--surface-soft);
+  color: var(--text);
+  padding: .78rem .9rem;
+  outline: none;
+}
+
+.login-input:focus {
   background: var(--surface-active);
+}
+
+.login-button {
+  min-height: 2.75rem;
+  border-radius: 9999px;
+  background: var(--accent);
+  color: var(--panel);
+  font-weight: 600;
+}
+
+.login-error {
+  margin: 0;
+  font-size: .85rem;
+  color: #ef4444;
 }
 
 .note-list-move {
@@ -713,6 +730,10 @@ button:disabled {
 
   .note-menu-delete:hover {
     background: color-mix(in srgb, #ef4444 18%, transparent);
+  }
+
+  .login-button:hover {
+    background: color-mix(in srgb, var(--accent) 88%, black 12%);
   }
 }
 
