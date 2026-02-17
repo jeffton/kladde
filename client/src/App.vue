@@ -156,8 +156,12 @@ function onDeleted() {
   void router.push({ name: 'list' })
 }
 
-function togglePin(title: string) {
-  store.togglePin(title)
+async function togglePin(title: string) {
+  try {
+    await store.togglePin(title)
+  } catch (e) {
+    setUiError(e)
+  }
 }
 
 const online = () => store.setOnline(true)
@@ -262,7 +266,6 @@ onUnmounted(() => {
           v-show="isListRoute"
           :notes="sortedNotes"
           :selected-title="store.selectedTitle"
-          :pinned="store.pinned"
           :note-contents="store.noteContents"
           :user-label="userLabel"
           @create="createNote"
@@ -286,7 +289,6 @@ onUnmounted(() => {
       <NoteList
         :notes="sortedNotes"
         :selected-title="store.selectedTitle"
-        :pinned="store.pinned"
         :note-contents="store.noteContents"
         :user-label="userLabel"
         @create="createNote"

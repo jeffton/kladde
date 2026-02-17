@@ -3,15 +3,6 @@ import { defineStore } from 'pinia'
 import { deleteCachedNote, getAllCachedNotes, getCachedNote, putCachedNote } from './notesDb'
 import type { CachedNote, NoteMeta, NoteResponse, RenameResponse } from '../types'
 
-const PINNED_KEY = 'kladde:pinned'
-
-function loadPinned(): Set<string> {
-  try {
-    return new Set(JSON.parse(localStorage.getItem(PINNED_KEY) ?? '[]') as string[])
-  } catch {
-    return new Set<string>()
-  }
-}
 
 function normalizeTs(value?: string | null): string {
   return value ? new Date(value).toISOString() : new Date().toISOString()
@@ -21,7 +12,8 @@ function toMeta(note: CachedNote): NoteMeta {
   return {
     title: note.title,
     updatedAt: normalizeTs(note.updatedAt),
-    dirty: Boolean(note.dirty)
+    dirty: Boolean(note.dirty),
+    starred: Boolean(note.starred)
   }
 }
 
@@ -86,7 +78,7 @@ export const useNotesStore = defineStore('notes', () => {
   const selectedTitle = ref('')
   const currentContent = ref('')
   const currentUpdatedAt = ref<string | null>(null)
-  const pinned = ref(loadPinned())
+  const pinned = computed(() => new Set(notes.value.filter((n) => n.starred).map((n) => n.title)))
   const dirty = ref(false)
   const online = ref(navigator.onLine)
   const syncStatus = ref('Synkroniseret')
@@ -179,10 +171,23 @@ export const useNotesStore = defineStore('notes', () => {
     clearSyncRetry()
   }
 
-  const togglePin = (title: string) => {
-    if (pinned.value.has(title)) pinned.value.delete(title)
-    else pinned.value.add(title)
-    localStorage.setItem(PINNED_KEY, JSON.stringify([...pinned.value]))
+  const togglePin = async (title: string) => {
+    const note = notes.value.find((n) => n.title === title)
+    if (!note) return
+
+    const nextStarred = !Boolean(note.starred)
+    await apiFetch(`/api/notes/${encodeURIComponent(title)}/star`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ starred: nextStarred })
+    })
+
+    note.starred = nextStarred
+
+    const cached = await getCachedNote(title)
+    if (cached) {
+      await putCachedNote({ ...cached, starred: nextStarred })
+    }
   }
 
   const refreshStateFromCache = async () => {
@@ -292,7 +297,8 @@ export const useNotesStore = defineStore('notes', () => {
       title: saved.title,
       content: saved.content,
       updatedAt: normalizeTs(saved.updatedAt),
-      dirty: false
+      dirty: false,
+      starred: Boolean(saved.starred)
     })
 
     if (selectedTitle.value === title) {
@@ -386,7 +392,6 @@ export const useNotesStore = defineStore('notes', () => {
           if (local.dirty || serverTitles.has(local.title)) continue
 
           await deleteCachedNote(local.title)
-          pinned.value.delete(local.title)
 
           if (selectedTitle.value === local.title) {
             selectedTitle.value = ''
@@ -395,7 +400,6 @@ export const useNotesStore = defineStore('notes', () => {
             dirty.value = false
           }
         }
-        localStorage.setItem(PINNED_KEY, JSON.stringify([...pinned.value]))
 
         for (const serverMeta of serverMetas) {
           const local = currentLocalMap.get(serverMeta.title)
@@ -403,6 +407,11 @@ export const useNotesStore = defineStore('notes', () => {
           const localTs = local ? new Date(local.updatedAt).getTime() : 0
           const isActiveAndDirty = serverMeta.title === selectedTitle.value && dirty.value
           const shouldPull = !isActiveAndDirty && (!local || (!local.dirty && serverTs > localTs))
+
+          if (local && local.starred !== serverMeta.starred) {
+            await putCachedNote({ ...local, starred: Boolean(serverMeta.starred) })
+          }
+
           if (!shouldPull) continue
 
           let noteRes: Response
@@ -416,7 +425,8 @@ export const useNotesStore = defineStore('notes', () => {
             title: serverNote.title,
             content: serverNote.content,
             updatedAt: normalizeTs(serverNote.updatedAt),
-            dirty: false
+            dirty: false,
+            starred: Boolean(serverNote.starred ?? serverMeta.starred)
           })
         }
 
@@ -498,12 +508,6 @@ export const useNotesStore = defineStore('notes', () => {
     await deleteCachedNote(oldTitle)
     await putCachedNote({ title: serverTitle, content: contentToPersist, updatedAt, dirty: false })
 
-    if (pinned.value.has(oldTitle)) {
-      pinned.value.delete(oldTitle)
-      pinned.value.add(serverTitle)
-      localStorage.setItem(PINNED_KEY, JSON.stringify([...pinned.value]))
-    }
-
     selectedTitle.value = serverTitle
     currentContent.value = contentToPersist
     currentUpdatedAt.value = updatedAt
@@ -529,8 +533,6 @@ export const useNotesStore = defineStore('notes', () => {
     }
 
     await deleteCachedNote(titleToDelete)
-    pinned.value.delete(titleToDelete)
-    localStorage.setItem(PINNED_KEY, JSON.stringify([...pinned.value]))
 
     selectedTitle.value = ''
     currentContent.value = ''

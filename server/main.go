@@ -32,12 +32,14 @@ const sessionCookieName = "kladde_session"
 type NoteMeta struct {
 	Title     string    `json:"title"`
 	UpdatedAt time.Time `json:"updatedAt"`
+	Starred   bool      `json:"starred"`
 }
 
 type Note struct {
 	Title     string    `json:"title"`
 	Content   string    `json:"content"`
 	UpdatedAt time.Time `json:"updatedAt"`
+	Starred   bool      `json:"starred"`
 }
 
 type SessionUser struct {
@@ -505,6 +507,47 @@ func (s *Server) handleNoteByTitle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if len(parts) == 2 && parts[1] == "star" {
+		if r.Method != http.MethodPut {
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+
+		title, err := url.PathUnescape(parts[0])
+		if err != nil {
+			writeError(w, http.StatusBadRequest, errors.New("invalid note path encoding"))
+			return
+		}
+		title = strings.TrimSpace(title)
+		if err := validateTitle(title); err != nil {
+			writeError(w, http.StatusBadRequest, err)
+			return
+		}
+
+		var payload struct {
+			Starred bool `json:"starred"`
+		}
+		if err := decodeJSONBody(w, r, &payload); err != nil {
+			writeError(w, http.StatusBadRequest, err)
+			return
+		}
+
+		stars := loadStars(userDir)
+		if payload.Starred {
+			stars[title] = true
+		} else {
+			delete(stars, title)
+		}
+
+		if err := saveStars(userDir, stars); err != nil {
+			writeError(w, http.StatusInternalServerError, err)
+			return
+		}
+
+		writeJSON(w, http.StatusOK, map[string]any{"title": title, "starred": payload.Starred})
+		return
+	}
+
 	if len(parts) != 1 {
 		writeError(w, http.StatusBadRequest, errors.New("invalid note path"))
 		return
@@ -568,8 +611,13 @@ func (s *Server) listNotes(notesDir string) ([]NoteMeta, error) {
 		return nil, err
 	}
 
+	stars := loadStars(notesDir)
+
 	result := make([]NoteMeta, 0)
 	for _, entry := range entries {
+		if strings.HasPrefix(entry.Name(), ".") {
+			continue
+		}
 		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".md") {
 			continue
 		}
@@ -578,7 +626,7 @@ func (s *Server) listNotes(notesDir string) ([]NoteMeta, error) {
 			continue
 		}
 		title := strings.TrimSuffix(entry.Name(), ".md")
-		result = append(result, NoteMeta{Title: title, UpdatedAt: info.ModTime()})
+		result = append(result, NoteMeta{Title: title, UpdatedAt: info.ModTime(), Starred: stars[title]})
 	}
 
 	sort.Slice(result, func(i, j int) bool {
@@ -604,7 +652,54 @@ func (s *Server) getNote(notesDir, title string) (*Note, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Note{Title: title, Content: string(content), UpdatedAt: info.ModTime()}, nil
+	stars := loadStars(notesDir)
+	return &Note{Title: title, Content: string(content), UpdatedAt: info.ModTime(), Starred: stars[title]}, nil
+}
+
+func loadStars(notesDir string) map[string]bool {
+	path := filepath.Join(notesDir, ".stars.json")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return map[string]bool{}
+		}
+		return map[string]bool{}
+	}
+
+	var titles []string
+	if err := json.Unmarshal(data, &titles); err != nil {
+		return map[string]bool{}
+	}
+
+	stars := make(map[string]bool, len(titles))
+	for _, title := range titles {
+		title = strings.TrimSpace(title)
+		if title == "" {
+			continue
+		}
+		stars[title] = true
+	}
+
+	return stars
+}
+
+func saveStars(notesDir string, stars map[string]bool) error {
+	path := filepath.Join(notesDir, ".stars.json")
+	titles := make([]string, 0, len(stars))
+	for title, starred := range stars {
+		if starred {
+			titles = append(titles, title)
+		}
+	}
+	sort.Strings(titles)
+
+	data, err := json.MarshalIndent(titles, "", "  ")
+	if err != nil {
+		return err
+	}
+	data = append(data, '\n')
+
+	return writeFileAtomic(path, data, 0o644)
 }
 
 func writeFileAtomic(path string, data []byte, perm os.FileMode) error {
@@ -667,7 +762,8 @@ func (s *Server) saveNote(notesDir, title, content string) (*Note, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Note{Title: title, Content: content, UpdatedAt: info.ModTime()}, nil
+	stars := loadStars(notesDir)
+	return &Note{Title: title, Content: content, UpdatedAt: info.ModTime(), Starred: stars[title]}, nil
 }
 
 func (s *Server) deleteNote(notesDir, title string) error {
@@ -680,6 +776,14 @@ func (s *Server) deleteNote(notesDir, title string) error {
 	}
 	if err := os.Remove(path); err != nil {
 		return err
+	}
+
+	stars := loadStars(notesDir)
+	if stars[title] {
+		delete(stars, title)
+		if err := saveStars(notesDir, stars); err != nil {
+			return err
+		}
 	}
 
 	d, err := os.Open(notesDir)
@@ -734,6 +838,15 @@ func (s *Server) renameNote(notesDir, oldTitle, newTitle string) (*Note, error) 
 				continue
 			}
 
+			return nil, err
+		}
+	}
+
+	stars := loadStars(notesDir)
+	if stars[oldTitle] {
+		delete(stars, oldTitle)
+		stars[newTitle] = true
+		if err := saveStars(notesDir, stars); err != nil {
 			return nil, err
 		}
 	}

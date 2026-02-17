@@ -6,7 +6,6 @@ import type { NoteMeta } from '../types'
 interface Props {
   notes: NoteMeta[]
   selectedTitle?: string
-  pinned: Set<string>
   noteContents: Record<string, string>
   userLabel?: string
 }
@@ -255,9 +254,9 @@ async function submitPasswordChange() {
         </div>
         <span
           class="pin"
-          :aria-label="pinned.has(item.note.title) ? 'Fjern stjerne' : 'Stjernemarkér note'"
+          :aria-label="item.note.starred ? 'Fjern stjerne' : 'Stjernemarkér note'"
           @click.stop="emit('toggle-pin', item.note.title)">
-          <Star :size="18" :fill="pinned.has(item.note.title) ? 'currentColor' : 'none'" />
+          <Star :size="18" :fill="item.note.starred ? 'currentColor' : 'none'" />
         </span>
       </button>
     </TransitionGroup>
