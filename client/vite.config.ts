@@ -12,8 +12,8 @@ export default defineConfig({
         name: 'kladde',
         short_name: 'kladde',
         description: 'Offline-first markdown note app',
-        theme_color: '#111827',
-        background_color: '#ffffff',
+        theme_color: '#f0ece4',
+        background_color: '#f0ece4',
         display: 'standalone',
         start_url: '/',
         icons: [
