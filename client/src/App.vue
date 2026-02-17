@@ -87,7 +87,11 @@ watch(
 )
 
 const removeAfterEach = router.afterEach(() => {
-  mobileTransitionName.value = ''
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      mobileTransitionName.value = ''
+    })
+  })
 })
 
 let media: MediaQueryList | null = null
