@@ -279,17 +279,12 @@ export const useNotesStore = defineStore('notes', () => {
     } catch (err: unknown) {
       if (!isNotFoundError(err)) throw err
 
-      await deleteCachedNote(title)
-      pinned.value.delete(title)
-      localStorage.setItem(PINNED_KEY, JSON.stringify([...pinned.value]))
-
-      if (selectedTitle.value === title) {
-        selectedTitle.value = ''
-        currentContent.value = ''
-        currentUpdatedAt.value = null
-        dirty.value = false
-      }
-      return
+      // Note doesn't exist on server — create it instead of discarding
+      res = await apiFetch('/api/notes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title, content: local.content })
+      })
     }
 
     const saved = (await res.json()) as NoteResponse
