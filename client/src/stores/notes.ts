@@ -103,10 +103,16 @@ export const useNotesStore = defineStore('notes', () => {
   let remoteChangeTimer: number | null = null
 
   const sortedNotes = computed(() => {
+    const activeDirtyTitle = dirty.value ? selectedTitle.value : ''
     return [...notes.value].sort((a, b) => {
       const aPinned = pinned.value.has(a.title)
       const bPinned = pinned.value.has(b.title)
       if (aPinned !== bPinned) return aPinned ? -1 : 1
+      // Pin the actively edited note at the top of its group
+      if (activeDirtyTitle) {
+        if (a.title === activeDirtyTitle && b.title !== activeDirtyTitle) return -1
+        if (b.title === activeDirtyTitle && a.title !== activeDirtyTitle) return 1
+      }
       return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
     })
   })
