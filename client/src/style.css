@@ -315,9 +315,16 @@ button:disabled {
 }
 
 .editor-toolbar .toolbar-more {
-  font-size: 1.25rem;
-  font-weight: 700;
-  line-height: 1;
+  margin-left: auto;
+  opacity: .55;
+}
+
+.editor-toolbar .toolbar-more svg {
+  transition: transform .25s ease;
+}
+
+.editor-toolbar .toolbar-more.expanded svg {
+  transform: rotate(180deg);
 }
 
 .toolbar-left { display: flex; align-items: center; gap: .55rem; }

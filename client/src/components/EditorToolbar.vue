@@ -13,7 +13,7 @@ import {
   List,
   ListOrdered,
   ListTodo,
-  Ellipsis,
+  ChevronDown,
   Minus,
   Quote
 } from 'lucide-vue-next'
@@ -87,7 +87,7 @@ onUnmounted(() => {
 
       <span v-if="!isMobile" class="toolbar-divider" aria-hidden="true"></span>
 
-      <button v-if="isMobile" class="toolbar-more" :title="showMobileMore ? 'Skjul flere værktøjer' : 'Vis flere værktøjer'" :aria-expanded="showMobileMore" @click="toggleMore"><Ellipsis :size="20" /></button>
+      <button v-if="isMobile" class="toolbar-more" :class="{ expanded: showMobileMore }" :title="showMobileMore ? 'Skjul flere værktøjer' : 'Vis flere værktøjer'" :aria-expanded="showMobileMore" @click="toggleMore"><ChevronDown :size="20" /></button>
     </div>
 
     <div v-if="!isMobile || showMobileMore" class="toolbar-row toolbar-row-secondary">
