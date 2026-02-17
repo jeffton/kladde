@@ -146,8 +146,14 @@ button:disabled {
 
 .list { margin-top: 1rem; display: flex; flex-direction: column; gap: .35rem; flex: 1; min-height: 0; overflow: auto; }
 
-.user-menu-wrap {
+.sidebar-header-actions {
+  display: flex;
+  gap: .35rem;
+  align-items: center;
   position: relative;
+}
+
+.user-menu-wrap {
   flex-shrink: 0;
 }
 

@@ -192,12 +192,13 @@ async function submitPasswordChange() {
   <aside ref="sidebarRef" class="sidebar">
     <div class="sidebar-header">
       <h1>kladde</h1>
-      <div style="display: flex; gap: .35rem; align-items: center;">
-        <div v-if="userLabel" ref="userMenuWrap" class="user-menu-wrap">
+      <div ref="userMenuWrap" class="sidebar-header-actions">
+        <div v-if="userLabel" class="user-menu-wrap">
           <button class="user-menu-button" aria-label="Brugermenu" @click="toggleUserMenu">
             <User :size="20" />
           </button>
-          <div v-if="showUserMenu" class="user-menu-dropdown">
+        </div>
+        <div v-if="userLabel && showUserMenu" class="user-menu-dropdown">
             <div class="user-menu-label">{{ userLabel }}</div>
             <button class="user-menu-item" @click="togglePasswordForm">
               <KeyRound :size="18" />
@@ -216,7 +217,6 @@ async function submitPasswordChange() {
               <p v-if="passwordSuccess" class="password-success">{{ passwordSuccess }}</p>
               <button class="password-submit" type="submit" :disabled="changingPassword">Opdater password</button>
             </form>
-          </div>
         </div>
 
         <button class="create-fab" @click="emit('create')" aria-label="Opret ny note">
