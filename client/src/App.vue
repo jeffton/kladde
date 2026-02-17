@@ -14,7 +14,8 @@ const error = ref('')
 const sortedNotes = computed(() => store.sortedNotes)
 const isMobile = ref(window.matchMedia('(max-width: 900px)').matches)
 const isListRoute = computed(() => route.name === 'list')
-const mobileTransitionName = ref('slide-from-right')
+const mobileTransitionName = ref<'slide-from-right' | 'slide-from-left' | 'no-transition'>('slide-from-right')
+const skipNextMobileTransition = ref(false)
 const currentMobileView = computed<'list' | 'editor'>(() => (isListRoute.value ? 'list' : 'editor'))
 let previousMobileView: 'list' | 'editor' = currentMobileView.value
 
@@ -63,6 +64,9 @@ function togglePin(title: string) {
 
 const online = () => store.setOnline(true)
 const offline = () => store.setOnline(false)
+const onPopState = () => {
+  skipNextMobileTransition.value = true
+}
 
 useAutosave({
   store,
@@ -86,7 +90,10 @@ watch(currentMobileView, (nextView) => {
     return
   }
 
-  if (previousMobileView === 'list' && nextView === 'editor') {
+  if (skipNextMobileTransition.value) {
+    mobileTransitionName.value = 'no-transition'
+    skipNextMobileTransition.value = false
+  } else if (previousMobileView === 'list' && nextView === 'editor') {
     mobileTransitionName.value = 'slide-from-right'
   } else if (previousMobileView === 'editor' && nextView === 'list') {
     mobileTransitionName.value = 'slide-from-left'
@@ -120,12 +127,14 @@ onMounted(async () => {
   media.addEventListener('change', mediaListener)
   window.addEventListener('online', online)
   window.addEventListener('offline', offline)
+  window.addEventListener('popstate', onPopState)
 })
 
 onUnmounted(() => {
   if (media && mediaListener) media.removeEventListener('change', mediaListener)
   window.removeEventListener('online', online)
   window.removeEventListener('offline', offline)
+  window.removeEventListener('popstate', onPopState)
 })
 </script>
 
