@@ -22,7 +22,6 @@ const emit = defineEmits<{
 }>()
 
 const query = ref('')
-const sidebarRef = ref<HTMLElement | null>(null)
 const userMenuWrap = ref<HTMLElement | null>(null)
 const showUserMenu = ref(false)
 const showPasswordForm = ref(false)
@@ -42,7 +41,6 @@ function isSameDay(a: Date, b: Date) {
 }
 
 const locale = navigator.language || 'en'
-const rtf = typeof Intl.RelativeTimeFormat !== 'undefined' ? new Intl.RelativeTimeFormat(locale, { numeric: 'auto' }) : null
 
 function startOfWeek(date: Date) {
   const copy = new Date(date)
@@ -188,9 +186,9 @@ async function submitPasswordChange() {
 </script>
 
 <template>
-  <aside ref="sidebarRef" class="sidebar">
+  <aside class="sidebar">
     <div class="sidebar-header">
-      <h1>kladde</h1>
+      <h1 class="app-logo">kladde</h1>
       <div ref="userMenuWrap" class="sidebar-header-actions">
         <div v-if="userLabel" class="user-menu-wrap">
           <button class="user-menu-button" aria-label="Brugermenu" @click="toggleUserMenu">

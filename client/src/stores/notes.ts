@@ -5,7 +5,10 @@ import type { CachedNote, NoteMeta, NoteResponse, RenameResponse } from '../type
 
 
 function normalizeTs(value?: string | null): string {
-  return value ? new Date(value).toISOString() : new Date().toISOString()
+  if (!value) return ''
+  const ms = Date.parse(value)
+  if (Number.isNaN(ms)) return ''
+  return new Date(ms).toISOString()
 }
 
 function toMeta(note: CachedNote): NoteMeta {
@@ -15,6 +18,16 @@ function toMeta(note: CachedNote): NoteMeta {
     dirty: Boolean(note.dirty),
     starred: Boolean(note.starred)
   }
+}
+
+function tsMs(value?: string | null): number {
+  if (!value) return 0
+  const ms = Date.parse(value)
+  return Number.isNaN(ms) ? 0 : ms
+}
+
+function newerTs(a?: string | null, b?: string | null): string {
+  return tsMs(a) >= tsMs(b) ? normalizeTs(a) : normalizeTs(b)
 }
 
 function isNetworkError(err: unknown): boolean {
@@ -103,17 +116,11 @@ export const useNotesStore = defineStore('notes', () => {
   let remoteChangeTimer: number | null = null
 
   const sortedNotes = computed(() => {
-    const activeDirtyTitle = dirty.value ? selectedTitle.value : ''
     return [...notes.value].sort((a, b) => {
       const aPinned = pinned.value.has(a.title)
       const bPinned = pinned.value.has(b.title)
       if (aPinned !== bPinned) return aPinned ? -1 : 1
-      // Pin the actively edited note at the top of its group
-      if (activeDirtyTitle) {
-        if (a.title === activeDirtyTitle && b.title !== activeDirtyTitle) return -1
-        if (b.title === activeDirtyTitle && a.title !== activeDirtyTitle) return 1
-      }
-      return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+      return tsMs(b.updatedAt) - tsMs(a.updatedAt)
     })
   })
 
@@ -215,20 +222,53 @@ export const useNotesStore = defineStore('notes', () => {
 
   const refreshStateFromCache = async () => {
     const cached = await getAllCachedNotes()
-    notes.value = cached.map(toMeta)
-    noteContents.value = Object.fromEntries(cached.map((n) => [n.title, n.content || '']))
+    const activeTitle = selectedTitle.value
+    const cachedByTitle = new Map(cached.map((n) => [n.title, n]))
 
-    if (!selectedTitle.value && cached.length > 0) {
-      selectedTitle.value = cached.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())[0].title
+    const newNotes = cached.filter((n) => n.title !== activeTitle).map(toMeta)
+    const newNoteContents: Record<string, string> = Object.fromEntries(
+      cached.filter((n) => n.title !== activeTitle).map((n) => [n.title, n.content || ''])
+    )
+
+    if (activeTitle) {
+      const inMemoryActive = notes.value.find((n) => n.title === activeTitle)
+      const cachedActive = cachedByTitle.get(activeTitle)
+      const isLocallyDirty = dirty.value || Boolean(inMemoryActive?.dirty)
+      const cachedUpdatedAt = normalizeTs(cachedActive?.updatedAt)
+      const inMemoryUpdatedAt = normalizeTs(currentUpdatedAt.value)
+
+      const activeMeta: NoteMeta | null = inMemoryActive
+        ? {
+            ...inMemoryActive,
+            dirty: isLocallyDirty,
+            updatedAt: isLocallyDirty ? inMemoryUpdatedAt || cachedUpdatedAt : cachedUpdatedAt || inMemoryUpdatedAt
+          }
+        : {
+            title: activeTitle,
+            updatedAt: isLocallyDirty ? inMemoryUpdatedAt || cachedUpdatedAt : cachedUpdatedAt || inMemoryUpdatedAt,
+            dirty: isLocallyDirty || Boolean(cachedActive?.dirty),
+            starred: Boolean(cachedActive?.starred)
+          }
+
+      if (activeMeta) newNotes.push(activeMeta)
+
+      newNoteContents[activeTitle] = isLocallyDirty
+        ? noteContents.value[activeTitle] ?? currentContent.value ?? cachedActive?.content ?? ''
+        : cachedActive?.content ?? currentContent.value ?? noteContents.value[activeTitle] ?? ''
     }
 
-    if (selectedTitle.value) {
-      const selected = cached.find((n) => n.title === selectedTitle.value)
-      if (selected && !dirty.value) {
-        currentContent.value = selected.content || ''
-        currentUpdatedAt.value = normalizeTs(selected.updatedAt)
-        dirty.value = Boolean(selected.dirty)
-      }
+    notes.value = newNotes
+    noteContents.value = newNoteContents
+
+    if (!selectedTitle.value && cached.length > 0) {
+      selectedTitle.value = cached.sort((a, b) => tsMs(b.updatedAt) - tsMs(a.updatedAt))[0].title
+    }
+
+    if (selectedTitle.value && !dirty.value) {
+      const selectedMeta = notes.value.find((n) => n.title === selectedTitle.value)
+      currentContent.value = noteContents.value[selectedTitle.value] || ''
+      currentUpdatedAt.value = selectedMeta?.updatedAt || null
+      dirty.value = Boolean(selectedMeta?.dirty)
     }
   }
 
@@ -249,18 +289,53 @@ export const useNotesStore = defineStore('notes', () => {
     await refreshStateFromCache()
   }
 
-  const queueRemoteChange = (title: string, action: string) => {
+  const handleRemoteNoteChange = async (title: string, action: string) => {
     if (action === 'deleted') {
-      void handleRemoteDelete(title)
+      await handleRemoteDelete(title)
       return
     }
 
+    const isCurrentDirty = selectedTitle.value === title && dirty.value
+    if (isCurrentDirty) return
+
+    try {
+      const noteRes = await apiFetch(`/api/notes/${encodeURIComponent(title)}`)
+      const serverNote = (await noteRes.json()) as NoteResponse
+
+      const local = await getCachedNote(title)
+      if (local?.dirty) return
+
+      await putCachedNote({
+        title: serverNote.title,
+        content: serverNote.content,
+        updatedAt: normalizeTs(serverNote.updatedAt),
+        dirty: false,
+        starred: Boolean(serverNote.starred)
+      })
+    } catch {
+      // If note disappeared between event and fetch, reconcile via full sync.
+      if (action === 'created' || action === 'updated') {
+        void syncWithServer().catch(() => undefined)
+      }
+    }
+  }
+
+  const queueRemoteChange = (title: string, action: string) => {
     pendingRemoteChanges.set(title, action)
     if (remoteChangeTimer !== null) window.clearTimeout(remoteChangeTimer)
     remoteChangeTimer = window.setTimeout(() => {
       remoteChangeTimer = null
+      const changes = Array.from(pendingRemoteChanges.entries())
       pendingRemoteChanges.clear()
-      void syncWithServer().catch(() => undefined)
+
+      void (async () => {
+        for (const [changedTitle, changedAction] of changes) {
+          await handleRemoteNoteChange(changedTitle, changedAction)
+        }
+        await refreshStateFromCache()
+      })().catch(() => {
+        void syncWithServer().catch(() => undefined)
+      })
     }, 200)
   }
 
@@ -388,16 +463,43 @@ export const useNotesStore = defineStore('notes', () => {
     const cached = await getCachedNote(title)
     if (cached) {
       currentContent.value = cached.content || ''
-      currentUpdatedAt.value = normalizeTs(cached.updatedAt)
+      currentUpdatedAt.value = cached.updatedAt ? normalizeTs(cached.updatedAt) : null
       dirty.value = Boolean(cached.dirty)
-      return
+    } else {
+      currentContent.value = ''
+      currentUpdatedAt.value = null
+      dirty.value = false
     }
 
-    currentContent.value = ''
-    currentUpdatedAt.value = null
-    dirty.value = false
+    if (!online.value) return
 
-    if (online.value) {
+    try {
+      const noteRes = await apiFetch(`/api/notes/${encodeURIComponent(title)}`)
+      const serverNote = (await noteRes.json()) as NoteResponse
+      const latestLocal = await getCachedNote(title)
+
+      if (!latestLocal?.dirty) {
+        await putCachedNote({
+          title: serverNote.title,
+          content: serverNote.content,
+          updatedAt: normalizeTs(serverNote.updatedAt),
+          dirty: false,
+          starred: Boolean(serverNote.starred)
+        })
+      }
+
+      if (selectedTitle.value === title && !dirty.value) {
+        currentContent.value = serverNote.content || ''
+        currentUpdatedAt.value = normalizeTs(serverNote.updatedAt)
+        dirty.value = false
+      }
+
+      await refreshStateFromCache()
+      clearSyncError()
+    } catch (err: unknown) {
+      if (!isNotFoundError(err)) {
+        handleSyncFailure(err, 'Kunne ikke hente note')
+      }
       void syncWithServer().catch(() => undefined)
     }
   }
@@ -414,7 +516,8 @@ export const useNotesStore = defineStore('notes', () => {
   const setCurrentContent = async (content: string) => {
     currentContent.value = content
     dirty.value = true
-    currentUpdatedAt.value = new Date().toISOString()
+    const nowIso = new Date().toISOString()
+    currentUpdatedAt.value = nowIso
     contentVersion.value += 1
 
     if (!selectedTitle.value) return
@@ -422,6 +525,7 @@ export const useNotesStore = defineStore('notes', () => {
     const selectedMeta = notes.value.find((n) => n.title === selectedTitle.value)
     if (selectedMeta) {
       selectedMeta.dirty = true
+      selectedMeta.updatedAt = nowIso
     }
     noteContents.value = {
       ...noteContents.value,
@@ -431,8 +535,7 @@ export const useNotesStore = defineStore('notes', () => {
     const snapshot: CachedNote = {
       title: selectedTitle.value,
       content: currentContent.value,
-      // Keep note-list ordering stable while user edits; server timestamp wins after sync.
-      updatedAt: selectedMeta?.updatedAt || currentUpdatedAt.value,
+      updatedAt: nowIso,
       dirty: true,
       version: contentVersion.value,
       starred: selectedMeta?.starred
@@ -470,17 +573,32 @@ export const useNotesStore = defineStore('notes', () => {
 
     const saved = (await res.json()) as NoteResponse
     resetWsFailuresAndReconnect()
+
+    // Dirty until server has saved the exact content we currently hold locally.
+    const current = await getCachedNote(title)
+    const stillDirty = Boolean(current?.dirty) && (current?.content ?? '') !== saved.content
+    const chosenContent = stillDirty ? (current?.content ?? local.content) : saved.content
+    const chosenUpdatedAt = stillDirty
+      ? normalizeTs(current?.updatedAt ?? local.updatedAt)
+      : newerTs(current?.updatedAt ?? local.updatedAt, saved.updatedAt ?? local.updatedAt)
+
     await putCachedNote({
       title: saved.title,
-      content: saved.content,
-      updatedAt: normalizeTs(saved.updatedAt),
-      dirty: false,
+      content: chosenContent,
+      updatedAt: chosenUpdatedAt,
+      dirty: stillDirty,
       starred: Boolean(saved.starred)
     })
 
-    if (selectedTitle.value === title) {
-      currentUpdatedAt.value = normalizeTs(saved.updatedAt)
+    if (selectedTitle.value === title && !stillDirty) {
+      currentUpdatedAt.value = chosenUpdatedAt
       dirty.value = false
+
+      const selectedMeta = notes.value.find((n) => n.title === title)
+      if (selectedMeta) {
+        selectedMeta.updatedAt = chosenUpdatedAt
+        selectedMeta.dirty = false
+      }
     }
   }
 
@@ -511,7 +629,6 @@ export const useNotesStore = defineStore('notes', () => {
         updatedAt: currentUpdatedAt.value || new Date().toISOString(),
         dirty: true
       })
-      await refreshStateFromCache()
 
       if (!online.value) {
         updateSyncStatus()
@@ -522,7 +639,6 @@ export const useNotesStore = defineStore('notes', () => {
       updateSyncStatus()
       try {
         await runPushDirtyNote(titleAtStart)
-        await refreshStateFromCache()
         clearSyncError()
       } catch (err: unknown) {
         handleSyncFailure(err, 'Kunne ikke gemme note')
@@ -580,8 +696,8 @@ export const useNotesStore = defineStore('notes', () => {
 
         for (const serverMeta of serverMetas) {
           const local = currentLocalMap.get(serverMeta.title)
-          const serverTs = new Date(serverMeta.updatedAt).getTime()
-          const localTs = local ? new Date(local.updatedAt).getTime() : 0
+          const serverTs = tsMs(serverMeta.updatedAt)
+          const localTs = local ? tsMs(local.updatedAt) : 0
           const isActiveAndDirty = serverMeta.title === selectedTitle.value && dirty.value
           const shouldPull = !isActiveAndDirty && (!local || (!local.dirty && serverTs > localTs))
 
@@ -601,7 +717,7 @@ export const useNotesStore = defineStore('notes', () => {
           await putCachedNote({
             title: serverNote.title,
             content: serverNote.content,
-            updatedAt: normalizeTs(serverNote.updatedAt),
+            updatedAt: normalizeTs(serverNote.updatedAt || serverMeta.updatedAt),
             dirty: false,
             starred: Boolean(serverNote.starred ?? serverMeta.starred)
           })
@@ -681,7 +797,7 @@ export const useNotesStore = defineStore('notes', () => {
     if (!serverTitle) throw new Error('Server returnerede ugyldig titel')
 
     const contentToPersist = payload?.content ?? currentContent.value
-    const updatedAt = normalizeTs(payload?.updatedAt)
+    const updatedAt = normalizeTs(payload?.updatedAt || currentUpdatedAt.value || new Date().toISOString())
 
     await deleteCachedNote(oldTitle)
     await putCachedNote({ title: serverTitle, content: contentToPersist, updatedAt, dirty: false })
@@ -735,18 +851,11 @@ export const useNotesStore = defineStore('notes', () => {
     syncError,
     wsConnected,
     noteContents,
-    updateSyncStatus,
-    setSyncError,
-    clearSyncError,
     setOnline,
     togglePin,
-    refreshStateFromCache,
     initialize,
     selectNote,
-    queueWrite,
-    flushPendingWrites,
     setCurrentContent,
-    pushDirtyNote,
     saveCurrent,
     syncWithServer,
     generateDefaultTitle,

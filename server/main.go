@@ -339,7 +339,7 @@ func (s *Server) handleChangePassword(w http.ResponseWriter, r *http.Request) {
 
 	users, err := loadUsers(s.usersFile)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, errors.New("failed loading users"))
+		writeError(w, http.StatusInternalServerError, errors.New("failed loading users"))
 		return
 	}
 
@@ -362,13 +362,13 @@ func (s *Server) handleChangePassword(w http.ResponseWriter, r *http.Request) {
 
 	hash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, errors.New("failed hashing password"))
+		writeError(w, http.StatusInternalServerError, errors.New("failed hashing password"))
 		return
 	}
 
 	users[matchedIndex].PasswordHash = string(hash)
 	if err := saveUsers(s.usersFile, users); err != nil {
-		writeError(w, http.StatusBadRequest, errors.New("failed saving password"))
+		writeError(w, http.StatusInternalServerError, errors.New("failed saving password"))
 		return
 	}
 
@@ -468,11 +468,12 @@ func (s *Server) handleNotes(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, err)
 			return
 		}
-		note, _, err := s.saveNote(userDir, title, payload.Content)
+		note, action, err := s.saveNote(userDir, title, payload.Content)
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, err)
 			return
 		}
+		s.hub.Broadcast(session.User.Username, NoteChangeEvent{Type: "note_changed", Title: note.Title, Action: action})
 		writeJSON(w, http.StatusCreated, note)
 	default:
 		w.WriteHeader(http.StatusMethodNotAllowed)
@@ -519,7 +520,7 @@ func (s *Server) handleNoteByTitle(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		note, _, err := s.renameNote(userDir, oldTitle, strings.TrimSpace(payload.NewTitle))
+		note, finalTitle, err := s.renameNote(userDir, oldTitle, strings.TrimSpace(payload.NewTitle))
 		if err != nil {
 			switch {
 			case errors.Is(err, fs.ErrNotExist):
@@ -534,6 +535,8 @@ func (s *Server) handleNoteByTitle(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		s.hub.Broadcast(session.User.Username, NoteChangeEvent{Type: "note_changed", Title: oldTitle, Action: "deleted"})
+		s.hub.Broadcast(session.User.Username, NoteChangeEvent{Type: "note_changed", Title: finalTitle, Action: "created"})
 		writeJSON(w, http.StatusOK, note)
 		return
 	}
@@ -615,11 +618,12 @@ func (s *Server) handleNoteByTitle(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, err)
 			return
 		}
-		note, _, err := s.saveNote(userDir, title, payload.Content)
+		note, action, err := s.saveNote(userDir, title, payload.Content)
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, err)
 			return
 		}
+		s.hub.Broadcast(session.User.Username, NoteChangeEvent{Type: "note_changed", Title: note.Title, Action: action})
 		writeJSON(w, http.StatusOK, note)
 	case http.MethodDelete:
 		if err := s.deleteNote(userDir, title); err != nil {
@@ -630,6 +634,7 @@ func (s *Server) handleNoteByTitle(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusInternalServerError, err)
 			return
 		}
+		s.hub.Broadcast(session.User.Username, NoteChangeEvent{Type: "note_changed", Title: title, Action: "deleted"})
 		writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
 	default:
 		w.WriteHeader(http.StatusMethodNotAllowed)
@@ -1340,7 +1345,9 @@ func writeError(w http.ResponseWriter, status int, err error) {
 func writeJSON(w http.ResponseWriter, status int, data any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	_ = json.NewEncoder(w).Encode(data)
+	if err := json.NewEncoder(w).Encode(data); err != nil {
+		log.Printf("failed to write JSON response: %v", err)
+	}
 }
 
 func loggingMiddleware(next http.Handler) http.Handler {

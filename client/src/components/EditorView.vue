@@ -49,6 +49,16 @@ let updateDebounce: number | null = null
 // We serialize them as \u00A0 (nbsp), then strip on save.
 const NBSP = '\u00A0'
 
+interface MarkdownSerializerState {
+  write: (content: string) => void
+  closeBlock: (node: unknown) => void
+  renderInline: (node: unknown) => void
+}
+
+interface ProseMirrorNodeLike {
+  content: { size: number }
+}
+
 // Custom paragraph extension that serializes empty paragraphs as nbsp
 const PreservingParagraph = Paragraph.extend({
   addStorage() {
@@ -59,7 +69,7 @@ const PreservingParagraph = Paragraph.extend({
       ...parentStorage,
       markdown: {
         ...parentMarkdown,
-        serialize(state: any, node: any) {
+        serialize(state: MarkdownSerializerState, node: ProseMirrorNodeLike) {
           if (node.content.size === 0) {
             state.write(NBSP)
             state.closeBlock(node)
@@ -74,33 +84,11 @@ const PreservingParagraph = Paragraph.extend({
 })
 
 function editorToMd(md: string): string {
-  // Strip nbsp-only lines back to empty lines
-  return md.replace(new RegExp(`^${NBSP}$`, 'gm'), '')
+  return md
 }
 
 function mdToEditor(md: string): string {
-  let result = md
-
-  // Handle leading blank lines (2+ newlines at start)
-  result = result.replace(/^\n+/, (match) => {
-    if (match.length < 2) return match
-    return Array(match.length - 1).fill(NBSP).join('\n\n') + '\n\n'
-  })
-
-  // Handle trailing blank lines (2+ newlines at end)
-  result = result.replace(/\n+$/, (match) => {
-    if (match.length < 2) return match
-    return '\n\n' + Array(match.length - 1).fill(NBSP).join('\n\n')
-  })
-
-  // Replace runs of 3+ newlines with nbsp spacer paragraphs
-  result = result.replace(/\n{3,}/g, (match) => {
-    const extra = match.length - 2
-    const spacers = Array(extra).fill(NBSP).join('\n\n')
-    return '\n\n' + spacers + '\n\n'
-  })
-
-  return result
+  return md
 }
 
 const saveLabel = computed(() => (props.store.dirty ? 'Ikke gemt' : 'Gemt'))
@@ -218,18 +206,6 @@ function syncEditorFromStore() {
   const current = editorToMd(editor.value.storage.markdown.getMarkdown())
   if (current === props.store.currentContent) return
   setEditorMarkdown(props.store.currentContent)
-}
-
-function applyLink() {
-  if (!editor.value) return
-  const previousUrl = editor.value.getAttributes('link').href
-  const href = window.prompt('Indsæt link (https://...)', previousUrl || '')
-  if (href === null) return
-  if (href === '') {
-    editor.value.chain().focus().unsetLink().run()
-    return
-  }
-  editor.value.chain().focus().setLink({ href }).run()
 }
 
 async function updatePlainText(nextValue: string, selectionStart: number, selectionEnd: number) {
@@ -520,8 +496,7 @@ onUnmounted(() => {
       :editor="editor || null"
       :is-plain="showPlain"
       @toggle-plain="showPlain = !showPlain"
-      @plain-action="applyPlainAction"
-      @apply-link="applyLink" />
+      @plain-action="applyPlainAction" />
 
     <p v-if="error" class="error">{{ error }}</p>
     <section v-if="showPlain" class="plain-wrap">

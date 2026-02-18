@@ -87,6 +87,7 @@ async function login() {
 
     user.value = (await res.json()) as AuthUser
     password.value = ''
+    await store.initialize()
   } catch {
     loginError.value = 'Kunne ikke logge ind lige nu'
   } finally {
@@ -235,13 +236,13 @@ onUnmounted(() => {
 <template>
   <div v-if="!authChecked" class="login-shell">
     <div class="login-card">
-      <h1>kladde</h1>
+      <h1 class="app-logo">kladde</h1>
     </div>
   </div>
 
   <div v-else-if="!isAuthenticated" class="login-shell">
     <div class="login-card">
-      <h1>kladde</h1>
+      <h1 class="app-logo">kladde</h1>
       <form class="login-form" @submit.prevent="login">
         <input v-model="username" class="login-input" type="text" autocomplete="username" placeholder="Brugernavn" required />
         <input

@@ -11,11 +11,8 @@ export function useAutosave({ store, onError }: UseAutosaveOptions) {
   let syncTimer: number | null = null
 
   const flush = () => {
-    if (!store.selectedTitle) return
-    void store.flushPendingWrites()
-    if (store.dirty) {
-      void store.saveCurrent().catch((err) => onError?.(err))
-    }
+    if (!store.selectedTitle || !store.dirty) return
+    void store.saveCurrent().catch((err) => onError?.(err))
   }
 
   onMounted(() => {
@@ -42,8 +39,8 @@ export function useAutosave({ store, onError }: UseAutosaveOptions) {
   })
 
   onUnmounted(() => {
-    if (autosaveTimer) window.clearInterval(autosaveTimer)
-    if (syncTimer) window.clearInterval(syncTimer)
+    if (autosaveTimer !== null) window.clearInterval(autosaveTimer)
+    if (syncTimer !== null) window.clearInterval(syncTimer)
     window.removeEventListener('beforeunload', flush)
     window.removeEventListener('pagehide', flush)
   })

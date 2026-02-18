@@ -9,7 +9,6 @@ import {
   Heading2,
   Heading3,
   Italic,
-  // Link removed
   List,
   ListOrdered,
   ListTodo,
@@ -31,7 +30,6 @@ const props = withDefaults(defineProps<Props>(), {
 
 const emit = defineEmits<{
   (e: 'toggle-plain'): void
-  (e: 'apply-link'): void
   (e: 'plain-action', action: string): void
 }>()
 
@@ -97,8 +95,6 @@ onUnmounted(() => {
       <button title="Fed" :disabled="isDisabled()" :class="{ active: !isPlain && editor?.isActive('bold') }" @click="run('bold', () => editor?.chain().focus().toggleBold().run())"><Bold :size="18" /></button>
 
       <button title="Kursiv" :disabled="isDisabled()" :class="{ active: !isPlain && editor?.isActive('italic') }" @click="run('italic', () => editor?.chain().focus().toggleItalic().run())"><Italic :size="18" /></button>
-
-      <!-- link button removed, autolink handles URLs -->
 
       <button title="Inline kode" :disabled="isDisabled()" :class="{ active: !isPlain && editor?.isActive('code') }" @click="run('code', () => editor?.chain().focus().toggleCode().run())"><Code :size="18" /></button>
 

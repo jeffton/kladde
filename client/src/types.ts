@@ -7,7 +7,6 @@ export interface NoteMeta {
 
 export interface CachedNote extends NoteMeta {
   content: string
-  starred?: boolean
   version?: number
 }
 
