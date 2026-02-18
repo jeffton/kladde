@@ -6,3 +6,4 @@ server/server
 .DS_Store
 screenshots/
 server/kladde
+*.log
