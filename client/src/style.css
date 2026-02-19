@@ -460,7 +460,7 @@ button:disabled {
   align-items: center;
   justify-content: center;
   border-radius: 50%;
-  background: var(--surface-hover, rgba(128,128,128,.12));
+  background: transparent;
   padding: 0;
   flex-shrink: 0;
   font-size: 1.4rem;
