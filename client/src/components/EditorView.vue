@@ -12,7 +12,6 @@ import { Markdown } from 'tiptap-markdown'
 import {
   AlertTriangle,
   ChevronLeft,
-  Circle,
   CloudCheck,
   CloudOff,
   MoreVertical,
@@ -91,7 +90,6 @@ function mdToEditor(md: string): string {
   return md
 }
 
-const saveLabel = computed(() => (props.store.dirty ? 'Ikke gemt' : 'Gemt'))
 const showTooltip = ref(false)
 const isTouchLike = ref(false)
 const showNoteMenu = ref(false)
@@ -143,29 +141,30 @@ function formatUpdatedAt(value: string) {
 }
 
 const statusMeta = computed(() => {
-  const sync = (props.store.syncStatus || '').toLowerCase()
-  const dirty = saveLabel.value.toLowerCase().includes('ikke gemt')
+  const syncState = props.store.syncState
   const modifiedRaw = props.store.currentUpdatedAt || props.store.notes.find((n) => n.title === props.store.selectedTitle)?.updatedAt || ''
   const modifiedText = modifiedRaw ? formatUpdatedAt(modifiedRaw) : ''
   const modifiedLine = modifiedText ? `Ændret ${modifiedText}` : ''
 
   const lines: string[] = []
 
-  if (!props.store.online) {
+  if (syncState === 'offline') {
     lines.push('Offline')
     if (modifiedLine) lines.push(modifiedLine)
     lines.push(lastSyncTime.value ? `Sidst synkroniseret ${lastSyncTime.value}` : 'Ændringer gemmes lokalt')
     return { state: 'offline' as const, lines }
   }
 
-  if (sync.includes('synkroniserer')) {
+  if (syncState === 'syncing') {
     if (modifiedLine) lines.push(modifiedLine)
     lines.push(props.store.syncStatus || 'Synkroniserer ændringer…')
     return { state: 'syncing' as const, lines }
   }
 
-  if (sync.includes('sync-fejl')) {
+  if (syncState === 'error') {
+    if (modifiedLine) lines.push(modifiedLine)
     lines.push(props.store.syncStatus || 'Der opstod en synkroniseringsfejl')
+    lines.push(lastSyncTime.value ? `Sidst synkroniseret ${lastSyncTime.value}` : 'Ingen vellykket synkronisering endnu')
     return { state: 'error' as const, lines }
   }
 
@@ -461,12 +460,9 @@ watch(showPlain, (isPlain) => {
 })
 
 watch(
-  () => [props.store.online, props.store.syncStatus] as const,
-  ([isOnline, syncStatus], previous) => {
-    const [wasOnline, prevSyncStatus] = previous ?? [false, '']
-    const sync = (syncStatus || '').toLowerCase()
-    const prevSync = (prevSyncStatus || '').toLowerCase()
-    const enteredSynced = isOnline && sync.includes('synkroniseret') && (!wasOnline || !prevSync.includes('synkroniseret'))
+  () => props.store.syncState,
+  (syncState, previousState) => {
+    const enteredSynced = syncState === 'synced' && previousState !== 'synced'
     if (!enteredSynced) return
 
     lastSyncTime.value = new Date().toLocaleTimeString(navigator.language, {
@@ -520,6 +516,7 @@ onUnmounted(() => {
           class="status-indicator"
           :class="`state-${statusMeta.state}`"
           :aria-label="statusAriaLabel"
+          :aria-describedby="showTooltip ? 'sync-tooltip' : undefined"
           @mouseenter="handleStatusHover"
           @mouseleave="closeTooltip"
           @focus="handleStatusFocus"
@@ -527,12 +524,11 @@ onUnmounted(() => {
           @click="handleStatusClick">
           <CloudCheck v-if="statusMeta.state === 'synced'" :size="18" />
           <RefreshCw v-else-if="statusMeta.state === 'syncing'" :size="18" class="spin" />
-          <!-- dirty state removed -->
           <CloudOff v-else-if="statusMeta.state === 'offline'" :size="18" />
           <AlertTriangle v-else :size="18" />
         </button>
 
-        <div v-if="showTooltip" class="status-tooltip" role="status">
+        <div v-if="showTooltip" id="sync-tooltip" class="status-tooltip" role="tooltip">
           <span v-for="(line, i) in statusMeta.lines" :key="i">{{ line }}</span>
         </div>
       </div>

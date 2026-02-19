@@ -1,7 +1,7 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 import { deleteCachedNote, getAllCachedNotes, getCachedNote, putCachedNote } from './notesDb'
-import type { CachedNote, NoteMeta, NoteResponse, RenameResponse } from '../types'
+import type { CachedNote, NoteMeta, NoteResponse, RenameResponse, SyncState } from '../types'
 
 
 function normalizeTs(value?: string | null): string {
@@ -97,6 +97,12 @@ export const useNotesStore = defineStore('notes', () => {
   const syncStatus = ref('Synkroniseret')
   const syncing = ref(false)
   const syncError = ref('')
+  const syncState = computed<SyncState>(() => {
+    if (!online.value) return 'offline'
+    if (syncing.value) return 'syncing'
+    if (syncError.value) return 'error'
+    return 'synced'
+  })
   const contentVersion = ref(0)
   const noteContents = ref<Record<string, string>>({})
   let writeQueue: Promise<unknown> = Promise.resolve()
@@ -125,14 +131,18 @@ export const useNotesStore = defineStore('notes', () => {
   })
 
   const updateSyncStatus = () => {
-    if (!online.value) {
-      syncStatus.value = 'Offline — ændringer gemmes lokalt'
-    } else if (syncing.value) {
-      syncStatus.value = 'Synkroniserer...'
-    } else if (syncError.value) {
-      syncStatus.value = `Sync-fejl: ${syncError.value}`
-    } else {
-      syncStatus.value = 'Synkroniseret'
+    switch (syncState.value) {
+      case 'offline':
+        syncStatus.value = 'Offline — ændringer gemmes lokalt'
+        break
+      case 'syncing':
+        syncStatus.value = 'Synkroniserer...'
+        break
+      case 'error':
+        syncStatus.value = `Sync-fejl: ${syncError.value}`
+        break
+      default:
+        syncStatus.value = 'Synkroniseret'
     }
   }
 
@@ -847,6 +857,7 @@ export const useNotesStore = defineStore('notes', () => {
     dirty,
     online,
     syncStatus,
+    syncState,
     syncing,
     syncError,
     wsConnected,

@@ -26,6 +26,8 @@ export interface AuthUser {
   displayName: string
 }
 
+export type SyncState = 'offline' | 'syncing' | 'error' | 'synced'
+
 export interface NotesState {
   notes: NoteMeta[]
   selectedTitle: string
@@ -35,6 +37,7 @@ export interface NotesState {
   dirty: boolean
   online: boolean
   syncStatus: string
+  syncState: SyncState
   syncing: boolean
   syncError: string
   contentVersion: number
