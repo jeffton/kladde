@@ -196,6 +196,33 @@ const removeAfterEach = router.afterEach(() => {
 
 let media: MediaQueryList | null = null
 let mediaListener: ((event: MediaQueryListEvent) => void) | null = null
+let visualViewport: VisualViewport | null = null
+let viewportListener: (() => void) | null = null
+
+function isIOSDevice(): boolean {
+  const ua = navigator.userAgent
+  const platform = navigator.platform
+
+  const iosByUa = /iPad|iPhone|iPod/.test(ua)
+  const ipadOsDesktopUa = platform === 'MacIntel' && navigator.maxTouchPoints > 1
+
+  return iosByUa || ipadOsDesktopUa
+}
+
+function updateIOSViewportHeight() {
+  if (!visualViewport) return
+
+  const viewportHeight = Math.round(visualViewport.height)
+  const fullHeight = Math.round(window.innerHeight)
+
+  if (Math.abs(fullHeight - viewportHeight) < 2) {
+    document.documentElement.style.removeProperty('--app-height')
+  } else {
+    document.documentElement.style.setProperty('--app-height', `${viewportHeight}px`)
+  }
+
+  window.scrollTo(0, 0)
+}
 
 onMounted(async () => {
   await loadMe()
@@ -223,12 +250,30 @@ onMounted(async () => {
   media.addEventListener('change', mediaListener)
   window.addEventListener('online', online)
   window.addEventListener('offline', offline)
+
+  if (isIOSDevice() && window.visualViewport) {
+    visualViewport = window.visualViewport
+    viewportListener = () => {
+      updateIOSViewportHeight()
+    }
+
+    visualViewport.addEventListener('resize', viewportListener)
+    visualViewport.addEventListener('scroll', viewportListener)
+    updateIOSViewportHeight()
+  }
 })
 
 onUnmounted(() => {
   if (media && mediaListener) media.removeEventListener('change', mediaListener)
   window.removeEventListener('online', online)
   window.removeEventListener('offline', offline)
+
+  if (visualViewport && viewportListener) {
+    visualViewport.removeEventListener('resize', viewportListener)
+    visualViewport.removeEventListener('scroll', viewportListener)
+  }
+
+  document.documentElement.style.removeProperty('--app-height')
   removeAfterEach()
 })
 </script>

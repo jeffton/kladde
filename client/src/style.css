@@ -93,7 +93,7 @@ select {
   display: grid;
   grid-template-columns: 320px minmax(0, 1fr);
   height: 100vh;
-  height: 100dvh;
+  height: var(--app-height, 100dvh);
   overflow: hidden;
 }
 
