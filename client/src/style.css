@@ -590,8 +590,8 @@ button:disabled {
   position: absolute;
   right: 0;
   top: calc(100% + .35rem);
-  min-width: 170px;
-  max-width: min(240px, 70vw);
+  max-width: min(280px, 70vw);
+  white-space: nowrap;
   display: flex;
   flex-direction: column;
   gap: .12rem;
