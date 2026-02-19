@@ -910,7 +910,7 @@ button:disabled {
   }
 }
 
-@media (min-width: 900px) {
+@media (min-width: 901px) {
   .sidebar {
     border-top-right-radius: .6rem;
   }
