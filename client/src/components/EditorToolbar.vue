@@ -13,7 +13,9 @@ import {
   ListOrdered,
   ListTodo,
   ChevronDown,
+  Indent,
   Minus,
+  Outdent,
   Quote
 } from 'lucide-vue-next'
 import type { Editor } from '@tiptap/vue-3'
@@ -52,6 +54,28 @@ function isDisabled() {
 
 function toggleMore() {
   showMobileMore.value = !showMobileMore.value
+}
+
+function indentRich() {
+  if (!props.editor) return
+
+  if (props.editor.isActive('taskItem')) {
+    props.editor.chain().focus().sinkListItem('taskItem').run()
+    return
+  }
+
+  props.editor.chain().focus().sinkListItem('listItem').run()
+}
+
+function outdentRich() {
+  if (!props.editor) return
+
+  if (props.editor.isActive('taskItem')) {
+    props.editor.chain().focus().liftListItem('taskItem').run()
+    return
+  }
+
+  props.editor.chain().focus().liftListItem('listItem').run()
 }
 
 onMounted(() => {
@@ -101,6 +125,10 @@ onUnmounted(() => {
       <button title="Kodeblok" :disabled="isDisabled()" :class="{ active: !isPlain && editor?.isActive('codeBlock') }" @click="run('codeBlock', () => editor?.chain().focus().toggleCodeBlock().run())"><FileCode :size="18" /></button>
 
       <button title="Citat" :disabled="isDisabled()" :class="{ active: !isPlain && editor?.isActive('blockquote') }" @click="run('blockquote', () => editor?.chain().focus().toggleBlockquote().run())"><Quote :size="18" /></button>
+
+      <button title="Indryk" :disabled="isDisabled()" @click="run('indent', indentRich)"><Indent :size="18" /></button>
+
+      <button title="Ryk ud" :disabled="isDisabled()" @click="run('outdent', outdentRich)"><Outdent :size="18" /></button>
 
       <button title="Horisontal linje" :disabled="isDisabled()" @click="run('hr', () => editor?.chain().focus().setHorizontalRule().run())"><Minus :size="18" /></button>
 

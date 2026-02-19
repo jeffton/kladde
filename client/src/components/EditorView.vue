@@ -308,6 +308,40 @@ function prefixLines(prefix: string) {
   void updatePlainText(nextValue, start + shiftAtStart, end + addedChars)
 }
 
+function unprefixLines(prefix: string) {
+  const textarea = plainTextarea.value
+  if (!textarea) return
+
+  const { value } = textarea
+  const start = textarea.selectionStart
+  const end = textarea.selectionEnd
+
+  const blockStart = value.lastIndexOf('\n', Math.max(0, start - 1)) + 1
+  const blockEndIndex = value.indexOf('\n', end)
+  const blockEnd = blockEndIndex === -1 ? value.length : blockEndIndex
+
+  const block = value.slice(blockStart, blockEnd)
+  const lines = block.split('\n')
+
+  let removedBeforeStart = 0
+  let removedBeforeEnd = 0
+
+  const unprefixed = lines.map((line, index) => {
+    const hadPrefix = line.startsWith(prefix)
+    if (!hadPrefix) return line
+
+    if (index === 0) removedBeforeStart = prefix.length
+    removedBeforeEnd += prefix.length
+    return line.slice(prefix.length)
+  }).join('\n')
+
+  const nextValue = value.slice(0, blockStart) + unprefixed + value.slice(blockEnd)
+  const nextStart = Math.max(blockStart, start - removedBeforeStart)
+  const nextEnd = Math.max(nextStart, end - removedBeforeEnd)
+
+  void updatePlainText(nextValue, nextStart, nextEnd)
+}
+
 function insertHr() {
   const textarea = plainTextarea.value
   if (!textarea) return
@@ -359,6 +393,8 @@ function applyPlainAction(action: string) {
     case 'code': wrapSelection('`'); break
     case 'codeBlock': wrapSelection('```\n', '\n```'); break
     case 'blockquote': prefixLines('> '); break
+    case 'indent': prefixLines('  '); break
+    case 'outdent': unprefixLines('  '); break
     case 'hr': insertHr(); break
   }
 }
