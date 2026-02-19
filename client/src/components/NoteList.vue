@@ -32,73 +32,16 @@ const passwordError = ref('')
 const passwordSuccess = ref('')
 const changingPassword = ref(false)
 
-function capitalize(text = '') {
-  return text ? text.charAt(0).toUpperCase() + text.slice(1) : text
-}
-
-function isSameDay(a: Date, b: Date) {
-  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate()
-}
-
-const locale = navigator.language || 'en'
-
-function startOfWeek(date: Date) {
-  const copy = new Date(date)
-  copy.setHours(0, 0, 0, 0)
-  const day = copy.getDay()
-  copy.setDate(copy.getDate() - (day === 0 ? 6 : day - 1))
-  return copy
-}
-
-function fmtTime(date: Date) {
-  return new Intl.DateTimeFormat(locale, { hour: '2-digit', minute: '2-digit' }).format(date)
-}
-
-function formatUpdatedAt(value: string) {
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return ''
-
-  const now = new Date()
-  const time = fmtTime(date)
-  if (isSameDay(date, now)) return time
-
-  if (date >= startOfWeek(now)) {
-    const weekday = capitalize(new Intl.DateTimeFormat(locale, { weekday: 'long' }).format(date))
-    return `${weekday}, ${time}`
-  }
-
-  return new Intl.DateTimeFormat(locale, {
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit'
-  }).format(date)
-}
-
-function buildSnippet(content: string, term: string) {
-  const index = content.toLowerCase().indexOf(term.toLowerCase())
-  if (index < 0) return ''
-  const start = Math.max(0, index - 30)
-  const end = Math.min(content.length, index + term.length + 50)
-  const prefix = start > 0 ? '…' : ''
-  const suffix = end < content.length ? '…' : ''
-  return `${prefix}${content.slice(start, end).replace(/\s+/g, ' ').trim()}${suffix}`
-}
-
 const filteredNotes = computed(() => {
   const term = query.value.trim().toLowerCase()
-  if (!term) return props.notes.map((note) => ({ note, snippet: '' }))
+  if (!term) return props.notes
 
-  return props.notes
-    .map((note) => {
-      const content = props.noteContents[note.title] || ''
-      const titleMatch = note.title.toLowerCase().includes(term)
-      const contentMatch = content.toLowerCase().includes(term)
-      if (!titleMatch && !contentMatch) return null
-      return { note, snippet: contentMatch ? buildSnippet(content, term) : '' }
-    })
-    .filter((item): item is { note: NoteMeta; snippet: string } => Boolean(item))
+  return props.notes.filter((note) => {
+    const content = props.noteContents[note.title] || ''
+    const titleMatch = note.title.toLowerCase().includes(term)
+    const contentMatch = content.toLowerCase().includes(term)
+    return titleMatch || contentMatch
+  })
 })
 
 function clearQuery() {
@@ -237,25 +180,23 @@ async function submitPasswordChange() {
 
     <TransitionGroup name="note-list" tag="div" class="list">
       <button
-        v-for="item in filteredNotes"
-        :key="item.note.title"
+        v-for="note in filteredNotes"
+        :key="note.title"
         class="note-item"
-        :class="{ active: item.note.title === selectedTitle }"
-        @click="onSelect(item.note.title)">
+        :class="{ active: note.title === selectedTitle }"
+        @click="onSelect(note.title)">
         <div>
           <strong>
             <FileText :size="16" class="note-title-icon" />
-            <span class="note-title-text">{{ item.note.title }}</span>
+            <span class="note-title-text">{{ note.title }}</span>
           </strong>
-          <small>{{ formatUpdatedAt(item.note.updatedAt) }}</small>
-          <small v-if="item.snippet" class="snippet">{{ item.snippet }}</small>
         </div>
         <button
           class="pin"
           type="button"
-          :aria-label="item.note.starred ? 'Fjern fastgøring' : 'Fastgør note'"
-          @click.stop="emit('toggle-pin', item.note.title)">
-          <Star :size="18" :fill="item.note.starred ? 'currentColor' : 'none'" />
+          :aria-label="note.starred ? 'Fjern fastgøring' : 'Fastgør note'"
+          @click.stop="emit('toggle-pin', note.title)">
+          <Star :size="18" :fill="note.starred ? 'currentColor' : 'none'" />
         </button>
       </button>
     </TransitionGroup>

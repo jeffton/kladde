@@ -371,8 +371,8 @@ button:disabled {
   align-items: center;
   width: 100%;
   text-align: left;
-  padding-top: .85rem;
-  padding-bottom: .85rem;
+  padding-top: .6rem;
+  padding-bottom: .6rem;
   padding-left: 1rem;
   padding-right: var(--content-pad-right);
   background: transparent;
@@ -389,7 +389,7 @@ button:disabled {
   display: flex;
   align-items: center;
   gap: .35rem;
-  font-size: 1.02rem;
+  font-size: 1.12rem;
   line-height: 1.25;
   font-weight: 650;
   min-width: 0;
@@ -408,23 +408,6 @@ button:disabled {
 .note-item.active {
   background: transparent;
   border-left-color: var(--text);
-}
-.note-item small {
-  display: block;
-  color: var(--muted);
-  margin-top: .2rem;
-  font-size: .84rem;
-  line-height: 1.3;
-}
-.note-item .snippet {
-  margin-top: .24rem;
-  font-size: .84rem;
-  line-height: 1.4;
-  opacity: .9;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
 }
 .pin {
   opacity: .72;

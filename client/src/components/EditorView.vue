@@ -98,9 +98,56 @@ const showNoteMenu = ref(false)
 const lastSyncTime = ref('')
 const noteMenuWrap = ref<HTMLElement | null>(null)
 
+function capitalize(text = '') {
+  return text ? text.charAt(0).toUpperCase() + text.slice(1) : text
+}
+
+function isSameDay(a: Date, b: Date) {
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate()
+}
+
+const locale = navigator.language || 'en'
+
+function startOfWeek(date: Date) {
+  const copy = new Date(date)
+  copy.setHours(0, 0, 0, 0)
+  const day = copy.getDay()
+  copy.setDate(copy.getDate() - (day === 0 ? 6 : day - 1))
+  return copy
+}
+
+function fmtTime(date: Date) {
+  return new Intl.DateTimeFormat(locale, { hour: '2-digit', minute: '2-digit' }).format(date)
+}
+
+function formatUpdatedAt(value: string) {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return ''
+
+  const now = new Date()
+  const time = fmtTime(date)
+  if (isSameDay(date, now)) return time
+
+  if (date >= startOfWeek(now)) {
+    const weekday = capitalize(new Intl.DateTimeFormat(locale, { weekday: 'long' }).format(date))
+    return `${weekday}, ${time}`
+  }
+
+  return new Intl.DateTimeFormat(locale, {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  }).format(date)
+}
+
 const statusMeta = computed(() => {
   const sync = (props.store.syncStatus || '').toLowerCase()
   const dirty = saveLabel.value.toLowerCase().includes('ikke gemt')
+  const modifiedRaw = props.store.currentUpdatedAt || props.store.notes.find((n) => n.title === props.store.selectedTitle)?.updatedAt || ''
+  const modifiedText = modifiedRaw ? formatUpdatedAt(modifiedRaw) : ''
+  const modifiedLine = modifiedText ? `Ændret ${modifiedText}` : ''
 
   if (!props.store.online) {
     const lastLine = lastSyncTime.value
@@ -109,15 +156,16 @@ const statusMeta = computed(() => {
     return {
       state: 'offline',
       label: '',
-      detail: `Offline\n${lastLine}`
+      detail: modifiedLine ? `Offline\n${lastLine}\n${modifiedLine}` : `Offline\n${lastLine}`
     }
   }
 
   if (sync.includes('synkroniserer')) {
+    const syncDetail = props.store.syncStatus || 'Synkroniserer ændringer…'
     return {
       state: 'syncing',
       label: 'Synkroniserer',
-      detail: props.store.syncStatus || 'Synkroniserer ændringer…'
+      detail: modifiedLine ? `${syncDetail}\n${modifiedLine}` : syncDetail
     }
   }
 
@@ -130,22 +178,20 @@ const statusMeta = computed(() => {
   }
 
   if (dirty) {
-    const noteCount = props.store.notes?.length ?? 0
     const syncedAt = lastSyncTime.value ? ` ${lastSyncTime.value}` : ''
     return {
       state: 'synced',
       label: '',
-      detail: `Synkroniseret${syncedAt}\n${noteCount} noter`
+      detail: modifiedLine ? `Synkroniseret${syncedAt}\n${modifiedLine}` : `Synkroniseret${syncedAt}`
     }
   }
 
-  const noteCount = props.store.notes?.length ?? 0
   const syncedAt = lastSyncTime.value ? ` ${lastSyncTime.value}` : ''
 
   return {
     state: 'synced',
     label: '',
-    detail: `Synkroniseret${syncedAt}\n${noteCount} noter`
+    detail: modifiedLine ? `Synkroniseret${syncedAt}\n${modifiedLine}` : `Synkroniseret${syncedAt}`
   }
 })
 
