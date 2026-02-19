@@ -609,6 +609,7 @@ button:disabled {
 
 .status-tooltip span {
   display: block;
+  white-space: nowrap;
 }
 
 .note-menu-wrap {
