@@ -250,12 +250,13 @@ async function submitPasswordChange() {
           <small>{{ formatUpdatedAt(item.note.updatedAt) }}</small>
           <small v-if="item.snippet" class="snippet">{{ item.snippet }}</small>
         </div>
-        <span
+        <button
           class="pin"
-          :aria-label="item.note.starred ? 'Fjern stjerne' : 'Stjernemarkér note'"
+          type="button"
+          :aria-label="item.note.starred ? 'Fjern fastgøring' : 'Fastgør note'"
           @click.stop="emit('toggle-pin', item.note.title)">
           <Star :size="18" :fill="item.note.starred ? 'currentColor' : 'none'" />
-        </span>
+        </button>
       </button>
     </TransitionGroup>
 
