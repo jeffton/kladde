@@ -446,6 +446,14 @@ button:disabled {
   height: 100%;
   overflow: hidden;
 }
+.ios-keyboard-open .editor-area {
+  padding-bottom: 0;
+}
+
+.ios-keyboard-open .note-title-wrap {
+  display: none;
+}
+
 .note-title-wrap {
   margin-bottom: .35rem;
   display: flex;

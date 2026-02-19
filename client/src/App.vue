@@ -215,11 +215,15 @@ function updateIOSViewportHeight() {
   const viewportHeight = Math.round(visualViewport.height)
   const fullHeight = Math.round(window.innerHeight)
 
+  const keyboardOpen = fullHeight - viewportHeight > 120
+
   if (Math.abs(fullHeight - viewportHeight) < 2) {
     document.documentElement.style.removeProperty('--app-height')
   } else {
     document.documentElement.style.setProperty('--app-height', `${viewportHeight}px`)
   }
+
+  document.documentElement.classList.toggle('ios-keyboard-open', keyboardOpen)
 
   window.scrollTo(0, 0)
 }
