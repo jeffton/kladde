@@ -187,7 +187,6 @@ async function submitPasswordChange() {
         @click="onSelect(note.title)">
         <div>
           <strong>
-            <FileText :size="16" class="note-title-icon" />
             <span class="note-title-text">{{ note.title }}</span>
           </strong>
         </div>
