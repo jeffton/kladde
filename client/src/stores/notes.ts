@@ -523,6 +523,15 @@ export const useNotesStore = defineStore('notes', () => {
     await writeQueue
   }
 
+  const markCurrentDirty = () => {
+    if (dirty.value) return
+    dirty.value = true
+
+    if (!selectedTitle.value) return
+    const selectedMeta = notes.value.find((n) => n.title === selectedTitle.value)
+    if (selectedMeta) selectedMeta.dirty = true
+  }
+
   const setCurrentContent = async (content: string) => {
     currentContent.value = content
     dirty.value = true
@@ -866,6 +875,7 @@ export const useNotesStore = defineStore('notes', () => {
     togglePin,
     initialize,
     selectNote,
+    markCurrentDirty,
     setCurrentContent,
     saveCurrent,
     syncWithServer,

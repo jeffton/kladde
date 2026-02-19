@@ -201,6 +201,7 @@ const editor = useEditor({
   content: mdToEditor(props.store.currentContent || ''),
   onUpdate: ({ editor: tiptapEditor }) => {
     if (ignoreEditorChanges) return
+    props.store.markCurrentDirty()
     const nextMarkdown = editorToMd(tiptapEditor.storage.markdown.getMarkdown())
     const titleAtSchedule = props.store.selectedTitle
 
@@ -481,6 +482,7 @@ watch(() => props.store.selectedTitle, (title) => {
   }
   editableTitle.value = title || ''
   showNoteMenu.value = false
+  syncEditorFromStore()
 }, { immediate: true })
 
 onMounted(() => {
