@@ -910,6 +910,12 @@ button:disabled {
   }
 }
 
+@media (min-width: 901px) {
+  .sidebar {
+    border-top-right-radius: .6rem;
+  }
+}
+
 @media (max-width: 900px) {
   .app-shell {
     position: relative;
