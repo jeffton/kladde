@@ -591,7 +591,6 @@ button:disabled {
   right: 0;
   top: calc(100% + .35rem);
   max-width: min(280px, 70vw);
-  white-space: nowrap;
   display: flex;
   flex-direction: column;
   gap: .12rem;
@@ -608,9 +607,8 @@ button:disabled {
   z-index: 9999;
 }
 
-.status-tooltip strong {
-  font-size: .76rem;
-  font-weight: 650;
+.status-tooltip span {
+  display: block;
 }
 
 .note-menu-wrap {

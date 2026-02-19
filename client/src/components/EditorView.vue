@@ -149,56 +149,33 @@ const statusMeta = computed(() => {
   const modifiedText = modifiedRaw ? formatUpdatedAt(modifiedRaw) : ''
   const modifiedLine = modifiedText ? `Ændret ${modifiedText}` : ''
 
+  const lines: string[] = []
+
   if (!props.store.online) {
-    const lastLine = lastSyncTime.value
-      ? `Sidst synkroniseret ${lastSyncTime.value}`
-      : 'Ændringer gemmes lokalt'
-    return {
-      state: 'offline',
-      label: '',
-      detail: modifiedLine ? `Offline\n${modifiedLine}\n${lastLine}` : `Offline\n${lastLine}`
-    }
+    lines.push('Offline')
+    if (modifiedLine) lines.push(modifiedLine)
+    lines.push(lastSyncTime.value ? `Sidst synkroniseret ${lastSyncTime.value}` : 'Ændringer gemmes lokalt')
+    return { state: 'offline' as const, lines }
   }
 
   if (sync.includes('synkroniserer')) {
-    const syncDetail = props.store.syncStatus || 'Synkroniserer ændringer…'
-    return {
-      state: 'syncing',
-      label: 'Synkroniserer',
-      detail: modifiedLine ? `${modifiedLine}\n${syncDetail}` : syncDetail
-    }
+    if (modifiedLine) lines.push(modifiedLine)
+    lines.push(props.store.syncStatus || 'Synkroniserer ændringer…')
+    return { state: 'syncing' as const, lines }
   }
 
   if (sync.includes('sync-fejl')) {
-    return {
-      state: 'error',
-      label: 'Sync-fejl',
-      detail: props.store.syncStatus || 'Der opstod en synkroniseringsfejl'
-    }
-  }
-
-  if (dirty) {
-    const syncedAt = lastSyncTime.value ? ` ${lastSyncTime.value}` : ''
-    return {
-      state: 'synced',
-      label: '',
-      detail: modifiedLine ? `${modifiedLine}\nSynkroniseret${syncedAt}` : `Synkroniseret${syncedAt}`
-    }
+    lines.push(props.store.syncStatus || 'Der opstod en synkroniseringsfejl')
+    return { state: 'error' as const, lines }
   }
 
   const syncedAt = lastSyncTime.value ? ` ${lastSyncTime.value}` : ''
-
-  return {
-    state: 'synced',
-    label: '',
-    detail: modifiedLine ? `${modifiedLine}\nSynkroniseret${syncedAt}` : `Synkroniseret${syncedAt}`
-  }
+  if (modifiedLine) lines.push(modifiedLine)
+  lines.push(`Synkroniseret${syncedAt}`)
+  return { state: 'synced' as const, lines }
 })
 
-const statusAriaLabel = computed(() => {
-  if (!statusMeta.value.label) return statusMeta.value.detail
-  return `${statusMeta.value.label}: ${statusMeta.value.detail}`
-})
+const statusAriaLabel = computed(() => statusMeta.value.lines.join(', '))
 
 const editor = useEditor({
   extensions: [
@@ -550,14 +527,13 @@ onUnmounted(() => {
           @click="handleStatusClick">
           <CloudCheck v-if="statusMeta.state === 'synced'" :size="18" />
           <RefreshCw v-else-if="statusMeta.state === 'syncing'" :size="18" class="spin" />
-          <Circle v-else-if="statusMeta.state === 'dirty'" :size="18" />
+          <!-- dirty state removed -->
           <CloudOff v-else-if="statusMeta.state === 'offline'" :size="18" />
           <AlertTriangle v-else :size="18" />
         </button>
 
         <div v-if="showTooltip" class="status-tooltip" role="status">
-          <strong v-if="statusMeta.label">{{ statusMeta.label }}</strong>
-          <span style="white-space: pre">{{ statusMeta.detail }}</span>
+          <span v-for="(line, i) in statusMeta.lines" :key="i">{{ line }}</span>
         </div>
       </div>
 
