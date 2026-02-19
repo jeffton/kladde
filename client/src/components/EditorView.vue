@@ -129,7 +129,7 @@ function formatUpdatedAt(value: string) {
   if (isSameDay(date, now)) return time
 
   if (date >= startOfWeek(now)) {
-    const weekday = capitalize(new Intl.DateTimeFormat(locale, { weekday: 'long' }).format(date))
+    const weekday = new Intl.DateTimeFormat(locale, { weekday: 'long' }).format(date)
     return `${weekday}, ${time}`
   }
 
