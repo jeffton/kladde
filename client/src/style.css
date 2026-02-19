@@ -595,6 +595,7 @@ button:disabled {
   display: flex;
   flex-direction: column;
   gap: .12rem;
+  text-align: right;
   padding: .46rem .58rem;
   border-radius: .5rem;
   border: 1px solid var(--border);

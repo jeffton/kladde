@@ -156,7 +156,7 @@ const statusMeta = computed(() => {
     return {
       state: 'offline',
       label: '',
-      detail: modifiedLine ? `Offline\n${lastLine}\n${modifiedLine}` : `Offline\n${lastLine}`
+      detail: modifiedLine ? `Offline\n${modifiedLine}\n${lastLine}` : `Offline\n${lastLine}`
     }
   }
 
@@ -165,7 +165,7 @@ const statusMeta = computed(() => {
     return {
       state: 'syncing',
       label: 'Synkroniserer',
-      detail: modifiedLine ? `${syncDetail}\n${modifiedLine}` : syncDetail
+      detail: modifiedLine ? `${modifiedLine}\n${syncDetail}` : syncDetail
     }
   }
 
@@ -182,7 +182,7 @@ const statusMeta = computed(() => {
     return {
       state: 'synced',
       label: '',
-      detail: modifiedLine ? `Synkroniseret${syncedAt}\n${modifiedLine}` : `Synkroniseret${syncedAt}`
+      detail: modifiedLine ? `${modifiedLine}\nSynkroniseret${syncedAt}` : `Synkroniseret${syncedAt}`
     }
   }
 
@@ -191,7 +191,7 @@ const statusMeta = computed(() => {
   return {
     state: 'synced',
     label: '',
-    detail: modifiedLine ? `Synkroniseret${syncedAt}\n${modifiedLine}` : `Synkroniseret${syncedAt}`
+    detail: modifiedLine ? `${modifiedLine}\nSynkroniseret${syncedAt}` : `Synkroniseret${syncedAt}`
   }
 })
 
