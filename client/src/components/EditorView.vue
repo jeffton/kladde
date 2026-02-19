@@ -557,7 +557,7 @@ onUnmounted(() => {
 
         <div v-if="showTooltip" class="status-tooltip" role="status">
           <strong v-if="statusMeta.label">{{ statusMeta.label }}</strong>
-          <span style="white-space: pre-line">{{ statusMeta.detail }}</span>
+          <span style="white-space: pre">{{ statusMeta.detail }}</span>
         </div>
       </div>
 
