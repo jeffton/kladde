@@ -40,6 +40,8 @@ const editableTitle = ref('')
 const error = ref('')
 const showPlain = ref(false)
 const plainTextarea = ref<HTMLTextAreaElement | null>(null)
+const plainWrap = ref<HTMLElement | null>(null)
+const wysiwygWrap = ref<HTMLElement | null>(null)
 let ignoreEditorChanges = false
 let updateDebounce: number | null = null
 
@@ -464,6 +466,19 @@ function onGlobalPointerDown(event: Event) {
   showTooltip.value = false
 }
 
+function resetEditorScrollPosition() {
+  const reset = (el?: HTMLElement | null) => {
+    if (!el) return
+    el.scrollTop = 0
+  }
+
+  reset(plainWrap.value)
+  reset(plainTextarea.value)
+  reset(wysiwygWrap.value)
+  reset(wysiwygWrap.value?.querySelector<HTMLElement>('.tiptap-root'))
+  reset(wysiwygWrap.value?.querySelector<HTMLElement>('.ProseMirror'))
+}
+
 watch(showPlain, (isPlain) => {
   if (isPlain) {
     nextTick(() => plainTextarea.value?.focus())
@@ -495,6 +510,7 @@ watch(() => props.store.selectedTitle, (title) => {
   editableTitle.value = title || ''
   showNoteMenu.value = false
   syncEditorFromStore()
+  nextTick(() => resetEditorScrollPosition())
 }, { immediate: true })
 
 onMounted(() => {
@@ -567,13 +583,13 @@ onUnmounted(() => {
       @plain-action="applyPlainAction" />
 
     <p v-if="error" class="error">{{ error }}</p>
-    <section v-if="showPlain" class="plain-wrap">
+    <section v-if="showPlain" ref="plainWrap" class="plain-wrap">
       <textarea
         ref="plainTextarea"
         :value="store.currentContent"
         @input="store.setCurrentContent(($event.target as HTMLTextAreaElement).value)"></textarea>
     </section>
-    <section v-else class="wysiwyg-wrap">
+    <section v-else ref="wysiwygWrap" class="wysiwyg-wrap">
       <EditorContent v-if="editor" :editor="editor || null" class="tiptap-root" />
     </section>
   </main>
