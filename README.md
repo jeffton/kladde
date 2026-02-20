@@ -30,17 +30,60 @@ client/   Vue + Vite PWA
 server/   Go server
 ```
 
+## Prerequisites
+
+- Node.js + npm (for `client/`)
+- Go 1.22+ (for `server/`)
+
 ## Build
 
+From repo root:
+
 ```bash
-cd client && npm install && npm run build
-cd ../server && go build
+# Build frontend
+cd client
+npm ci
+npm run build
+
+# Build backend
+cd ../server
+go build -o ../tmp/kladde-server .
 ```
 
-## Run
+This produces:
+
+- Frontend static assets in `client/dist`
+- Server binary in `tmp/kladde-server`
+
+## Run locally
+
+From repo root:
 
 ```bash
-./server -addr :8080 -notes /var/data/kladde/notes/ -dist ../client/dist
+mkdir -p tmp/notes tmp/data
+./tmp/kladde-server \
+  -addr 127.0.0.1:8080 \
+  -notes ./tmp/notes \
+  -users ./tmp/data/users.json \
+  -dist ./client/dist
+```
+
+Health check:
+
+```bash
+curl http://127.0.0.1:8080/api/health
+```
+
+## Create first user
+
+Before logging in, create a user:
+
+```bash
+./tmp/kladde-server adduser \
+  --users ./tmp/data/users.json \
+  --username admin \
+  --password changeme \
+  --name "Admin"
 ```
 
 ## Deploy (production)
