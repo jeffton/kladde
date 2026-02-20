@@ -88,7 +88,7 @@ Fields:
 - `gitBackup.enabled` — enable automatic git commit + push backups
 - `gitBackup` always commits from the `notes` path
 - `gitBackup.remote` — git remote URL (required when `gitBackup.enabled=true`)
-- `gitBackup.githubToken` *(optional)* — GitHub personal access token used for authenticated push (with a GitHub remote)
+- `gitBackup.githubToken` *(optional)* — GitHub personal access token for authenticated push (see [Creating a GitHub token](#creating-a-github-token))
 - `gitBackup.authorName` / `gitBackup.authorEmail` — commit author identity
 
 Backup behavior:
@@ -98,6 +98,19 @@ Backup behavior:
 - If `gitBackup.githubToken` is set, HTTPS GitHub auth uses that token
 - If `gitBackup.githubToken` is not set, git falls back to normal host auth (SSH keys, credential helper, etc.)
 - Pushes are rate-limited to **at most once per minute**
+
+### Creating a GitHub token
+
+To use `gitBackup` with a GitHub remote, you need a **fine-grained personal access token**:
+
+1. Go to [github.com/settings/personal-access-tokens/new](https://github.com/settings/personal-access-tokens/new)
+2. **Name:** e.g. `kladde-backup`
+3. **Expiration:** pick what suits you (up to "no expiration")
+4. **Repository access:** "Only select repositories" → pick your backup repo
+5. **Permissions → Repository permissions:** Contents → **Read and write**
+6. Click **Generate token** and copy it into `gitBackup.githubToken` in your options file
+
+No other permissions or scopes are needed.
 
 ## Run locally
 
