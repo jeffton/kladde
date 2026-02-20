@@ -65,7 +65,7 @@ type debouncedEntry struct {
 
 type Server struct {
 	notesBaseDir string
-	distDir      string
+	clientDir    string
 	usersFile    string
 	sessions     map[string]Session
 	sessionsMu   sync.RWMutex

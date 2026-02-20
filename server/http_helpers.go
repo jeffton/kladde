@@ -51,11 +51,11 @@ func (s *Server) handleSPA(w http.ResponseWriter, r *http.Request) {
 
 	requested := filepath.Clean(strings.TrimPrefix(r.URL.Path, "/"))
 	if requested == "." || requested == "" {
-		http.ServeFile(w, r, filepath.Join(s.distDir, "index.html"))
+		http.ServeFile(w, r, filepath.Join(s.clientDir, "index.html"))
 		return
 	}
 
-	absDist, err := filepath.Abs(s.distDir)
+	absDist, err := filepath.Abs(s.clientDir)
 	if err != nil {
 		http.NotFound(w, r)
 		return

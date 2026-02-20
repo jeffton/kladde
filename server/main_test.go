@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
@@ -92,5 +93,55 @@ func TestDecodeJSONBodyRejectsUnknownFields(t *testing.T) {
 	err := decodeJSONBody(w, req, &payload)
 	if err == nil {
 		t.Fatal("expected error for unknown field, got nil")
+	}
+}
+
+func TestLoadOptionsDefaultsAndOverrides(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "options.json")
+
+	raw := map[string]string{
+		"addr":   "127.0.0.1:9090",
+		"notes":  "./notes",
+		"client": "./client/dist",
+		"users":  "./data/users.json",
+	}
+	data, err := json.Marshal(raw)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		t.Fatalf("write options: %v", err)
+	}
+
+	opts, err := loadOptions(path)
+	if err != nil {
+		t.Fatalf("loadOptions failed: %v", err)
+	}
+
+	if opts.Addr != "127.0.0.1:9090" {
+		t.Fatalf("unexpected addr: %q", opts.Addr)
+	}
+	if opts.Notes != "notes" {
+		t.Fatalf("unexpected notes path: %q", opts.Notes)
+	}
+	if opts.Client != "client/dist" {
+		t.Fatalf("unexpected client path: %q", opts.Client)
+	}
+	if opts.Users != "data/users.json" {
+		t.Fatalf("unexpected users path: %q", opts.Users)
+	}
+}
+
+func TestLoadOptionsRejectsUnknownFields(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "options.json")
+
+	if err := os.WriteFile(path, []byte(`{"addr":":8080","unknown":true}`), 0o644); err != nil {
+		t.Fatalf("write options: %v", err)
+	}
+
+	if _, err := loadOptions(path); err == nil {
+		t.Fatal("expected loadOptions to fail on unknown fields")
 	}
 }

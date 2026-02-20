@@ -16,23 +16,29 @@ func main() {
 		return
 	}
 
-	addr := flag.String("addr", ":8080", "HTTP listen address")
-	notesDir := flag.String("notes", "/var/data/kladde/notes/", "Path to notes directory")
-	distDir := flag.String("dist", "../client/dist", "Path to built client dist directory")
-	usersFile := flag.String("users", "/var/data/kladde/users.json", "Path to users.json")
+	optionsFile := flag.String("options", "", "Path to JSON options file")
 	flag.Parse()
 
-	if err := os.MkdirAll(*notesDir, 0o755); err != nil {
+	if flag.NArg() > 0 {
+		log.Fatal("unexpected positional arguments; use only -options <file>")
+	}
+
+	opts, err := loadOptions(*optionsFile)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	if err := os.MkdirAll(opts.Notes, 0o755); err != nil {
 		log.Fatalf("failed creating notes dir: %v", err)
 	}
-	if err := os.MkdirAll(filepath.Dir(*usersFile), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(opts.Users), 0o755); err != nil {
 		log.Fatalf("failed creating users dir: %v", err)
 	}
 
 	s := &Server{
-		notesBaseDir: *notesDir,
-		distDir:      *distDir,
-		usersFile:    *usersFile,
+		notesBaseDir: opts.Notes,
+		clientDir:    opts.Client,
+		usersFile:    opts.Users,
 		sessions:     make(map[string]Session),
 		hub:          NewHub(),
 	}
@@ -54,8 +60,8 @@ func main() {
 	})
 	mux.HandleFunc("/", s.handleSPA)
 
-	log.Printf("kladde listening on %s, notes=%s, dist=%s", *addr, *notesDir, *distDir)
-	if err := http.ListenAndServe(*addr, loggingMiddleware(mux)); err != nil {
+	log.Printf("kladde listening on %s, notes=%s, client=%s", opts.Addr, opts.Notes, opts.Client)
+	if err := http.ListenAndServe(opts.Addr, loggingMiddleware(mux)); err != nil {
 		log.Fatal(err)
 	}
 }

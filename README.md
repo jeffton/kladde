@@ -56,17 +56,45 @@ This produces:
 - Frontend static assets in `client/dist`
 - Server binary in `server/dist/kladde-server`
 
+## Options file (JSON)
+
+The server reads runtime configuration from a JSON options file.
+For normal startup, `-options <file>` is the only runtime CLI argument.
+
+Example production file (`/etc/kladde/options.json`):
+
+```json
+{
+  "addr": ":8080",
+  "notes": "/var/data/kladde/notes",
+  "client": "/var/www/kladde/client/dist",
+  "users": "/var/data/kladde/users.json"
+}
+```
+
+Fields:
+
+- `addr` — HTTP listen address
+- `notes` — path to notes directory
+- `client` — path to built frontend assets (`client/dist`)
+- `users` — path to `users.json`
+
 ## Run locally
 
 From repo root:
 
 ```bash
 mkdir -p tmp/notes tmp/data
-./server/dist/kladde-server \
-  -addr 127.0.0.1:8080 \
-  -notes ./tmp/notes \
-  -users ./tmp/data/users.json \
-  -dist ./client/dist
+cat > tmp/options.json <<'JSON'
+{
+  "addr": "127.0.0.1:8080",
+  "notes": "./tmp/notes",
+  "client": "./client/dist",
+  "users": "./tmp/data/users.json"
+}
+JSON
+
+./server/dist/kladde-server -options ./tmp/options.json
 ```
 
 Health check:
@@ -77,7 +105,7 @@ curl http://127.0.0.1:8080/api/health
 
 ## Create first user
 
-Before logging in, create a user:
+Before logging in, create a user (use the same `users` path as in your options file):
 
 ```bash
 ./server/dist/kladde-server adduser \
