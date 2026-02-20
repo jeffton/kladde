@@ -82,7 +82,7 @@ Before logging in, create a user:
 ./tmp/kladde-server adduser \
   --users ./tmp/data/users.json \
   --username admin \
-  --password changeme \
+  --password "<choose-a-strong-password>" \
   --name "Admin"
 ```
 
@@ -99,4 +99,4 @@ sudo cp server /usr/local/bin/kladde
 sudo systemctl start kladde
 ```
 
-Served via nginx reverse proxy on `<redacted-domain>`.
+Served via nginx reverse proxy.
