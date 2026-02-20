@@ -68,7 +68,13 @@ Example production file (`/etc/kladde/options.json`):
   "addr": ":8080",
   "notes": "/var/data/kladde/notes",
   "client": "/var/www/kladde/client/dist",
-  "users": "/var/data/kladde/users.json"
+  "users": "/var/data/kladde/users.json",
+  "gitBackup": {
+    "enabled": true,
+    "remote": "git@github.com:your-org/kladde-backup.git",
+    "authorName": "kladde backup",
+    "authorEmail": "kladde@localhost"
+  }
 }
 ```
 
@@ -78,6 +84,16 @@ Fields:
 - `notes` — path to notes directory
 - `client` — path to built frontend assets (`client/dist`)
 - `users` — path to `users.json`
+- `gitBackup.enabled` — enable automatic git commit + push backups
+- `gitBackup` always commits from the `notes` path
+- `gitBackup.remote` — git remote URL (required when `gitBackup.enabled=true`)
+- `gitBackup.authorName` / `gitBackup.authorEmail` — commit author identity
+
+Backup behavior:
+
+- Backup runs automatically on note changes
+- Pushes target the remote's default branch (`origin/HEAD`)
+- Pushes are rate-limited to **at most once per minute**
 
 ## Run locally
 

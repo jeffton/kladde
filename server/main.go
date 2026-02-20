@@ -43,6 +43,15 @@ func main() {
 		hub:          NewHub(),
 	}
 
+	if opts.GitBackup.Enabled {
+		backup, err := NewGitBackup(opts.Notes, opts.GitBackup)
+		if err != nil {
+			log.Fatalf("failed to initialize git backup: %v", err)
+		}
+		s.gitBackup = backup
+		s.triggerGitBackup("startup")
+	}
+
 	if err := s.startFileWatcher(); err != nil {
 		log.Fatalf("failed to start file watcher: %v", err)
 	}
@@ -60,7 +69,7 @@ func main() {
 	})
 	mux.HandleFunc("/", s.handleSPA)
 
-	log.Printf("kladde listening on %s, notes=%s, client=%s", opts.Addr, opts.Notes, opts.Client)
+	log.Printf("kladde listening on %s, notes=%s, client=%s, gitBackup=%t", opts.Addr, opts.Notes, opts.Client, opts.GitBackup.Enabled)
 	if err := http.ListenAndServe(opts.Addr, loggingMiddleware(mux)); err != nil {
 		log.Fatal(err)
 	}

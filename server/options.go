@@ -9,11 +9,19 @@ import (
 	"strings"
 )
 
+type GitBackupOptions struct {
+	Enabled     bool   `json:"enabled"`
+	Remote      string `json:"remote"`
+	AuthorName  string `json:"authorName"`
+	AuthorEmail string `json:"authorEmail"`
+}
+
 type Options struct {
-	Addr   string `json:"addr"`
-	Notes  string `json:"notes"`
-	Client string `json:"client"`
-	Users  string `json:"users"`
+	Addr      string           `json:"addr"`
+	Notes     string           `json:"notes"`
+	Client    string           `json:"client"`
+	Users     string           `json:"users"`
+	GitBackup GitBackupOptions `json:"gitBackup"`
 }
 
 func defaultOptions() Options {
@@ -22,6 +30,12 @@ func defaultOptions() Options {
 		Notes:  "/var/data/kladde/notes/",
 		Client: "../client/dist",
 		Users:  "/var/data/kladde/users.json",
+		GitBackup: GitBackupOptions{
+			Enabled:     false,
+			Remote:      "",
+			AuthorName:  "kladde backup",
+			AuthorEmail: "kladde@localhost",
+		},
 	}
 }
 
@@ -62,6 +76,20 @@ func loadOptions(path string) (Options, error) {
 	opts.Notes = filepath.Clean(opts.Notes)
 	opts.Client = filepath.Clean(opts.Client)
 	opts.Users = filepath.Clean(opts.Users)
+
+	opts.GitBackup.Remote = strings.TrimSpace(opts.GitBackup.Remote)
+	opts.GitBackup.AuthorName = strings.TrimSpace(opts.GitBackup.AuthorName)
+	opts.GitBackup.AuthorEmail = strings.TrimSpace(opts.GitBackup.AuthorEmail)
+
+	if opts.GitBackup.AuthorName == "" {
+		return Options{}, errors.New("options.gitBackup.authorName is required")
+	}
+	if opts.GitBackup.AuthorEmail == "" {
+		return Options{}, errors.New("options.gitBackup.authorEmail is required")
+	}
+	if opts.GitBackup.Enabled && opts.GitBackup.Remote == "" {
+		return Options{}, errors.New("options.gitBackup.remote is required when gitBackup.enabled is true")
+	}
 
 	return opts, nil
 }

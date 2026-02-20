@@ -71,4 +71,5 @@ type Server struct {
 	sessionsMu   sync.RWMutex
 	usersMu      sync.Mutex
 	hub          *Hub
+	gitBackup    *GitBackup
 }

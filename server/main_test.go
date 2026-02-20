@@ -145,3 +145,16 @@ func TestLoadOptionsRejectsUnknownFields(t *testing.T) {
 		t.Fatal("expected loadOptions to fail on unknown fields")
 	}
 }
+
+func TestLoadOptionsGitBackupRequiresRemoteWhenEnabled(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "options.json")
+
+	if err := os.WriteFile(path, []byte(`{"gitBackup":{"enabled":true}}`), 0o644); err != nil {
+		t.Fatalf("write options: %v", err)
+	}
+
+	if _, err := loadOptions(path); err == nil {
+		t.Fatal("expected loadOptions to fail when git backup is enabled without remote")
+	}
+}
