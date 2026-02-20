@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/base64"
 	"fmt"
 	"log"
 	"os"
@@ -17,6 +18,7 @@ const gitBackupMinPushInterval = time.Minute
 type GitBackup struct {
 	repo          string
 	opts          GitBackupOptions
+	remoteURL     string
 	defaultBranch string
 
 	mu              sync.Mutex
@@ -37,7 +39,12 @@ func NewGitBackup(repo string, opts GitBackupOptions) (*GitBackup, error) {
 		return nil, fmt.Errorf("failed creating git backup repo dir: %w", err)
 	}
 
-	g := &GitBackup{repo: repo, opts: opts}
+	remoteURL, err := normalizeGitHubRemote(opts.Remote, opts.GitHubToken)
+	if err != nil {
+		return nil, err
+	}
+
+	g := &GitBackup{repo: repo, opts: opts, remoteURL: remoteURL}
 	if err := g.prepareRepo(); err != nil {
 		return nil, err
 	}
@@ -63,7 +70,7 @@ func (g *GitBackup) prepareRepo() error {
 		return fmt.Errorf("failed to configure git user.email: %w", err)
 	}
 
-	if err := g.setRemote("origin", g.opts.Remote); err != nil {
+	if err := g.setRemote("origin", g.remoteURL); err != nil {
 		return err
 	}
 
@@ -119,6 +126,25 @@ func (g *GitBackup) resolveDefaultBranch() (string, error) {
 	}
 
 	return "", fmt.Errorf("failed parsing default branch from remote HEAD")
+}
+
+func normalizeGitHubRemote(remote, token string) (string, error) {
+	remote = strings.TrimSpace(remote)
+	token = strings.TrimSpace(token)
+	if token == "" {
+		return remote, nil
+	}
+
+	switch {
+	case strings.HasPrefix(remote, "https://github.com/"):
+		return remote, nil
+	case strings.HasPrefix(remote, "git@github.com:"):
+		return "https://github.com/" + strings.TrimPrefix(remote, "git@github.com:"), nil
+	case strings.HasPrefix(remote, "ssh://git@github.com/"):
+		return "https://github.com/" + strings.TrimPrefix(remote, "ssh://git@github.com/"), nil
+	default:
+		return "", fmt.Errorf("options.gitBackup.githubToken requires a github.com remote URL")
+	}
 }
 
 func (g *GitBackup) Trigger(reason string) {
@@ -233,7 +259,15 @@ func (g *GitBackup) hasStagedChanges() error {
 }
 
 func (g *GitBackup) runGit(args ...string) (string, error) {
-	cmd := exec.Command("git", append([]string{"-C", g.repo}, args...)...)
+	gitArgs := []string{"-C", g.repo}
+	if strings.TrimSpace(g.opts.GitHubToken) != "" {
+		auth := base64.StdEncoding.EncodeToString([]byte("x-access-token:" + g.opts.GitHubToken))
+		gitArgs = append(gitArgs, "-c", "http.https://github.com/.extraheader=AUTHORIZATION: basic "+auth)
+	}
+	gitArgs = append(gitArgs, args...)
+
+	cmd := exec.Command("git", gitArgs...)
+	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	cmd.Stdout = &stdout

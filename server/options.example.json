@@ -5,7 +5,8 @@
   "users": "/var/data/kladde/users.json",
   "gitBackup": {
     "enabled": true,
-    "remote": "git@github.com:your-org/kladde-backup.git",
+    "remote": "https://github.com/your-org/kladde-backup.git",
+    "githubToken": "ghp_your_personal_access_token",
     "authorName": "kladde backup",
     "authorEmail": "kladde@localhost"
   }

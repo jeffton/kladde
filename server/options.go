@@ -12,6 +12,7 @@ import (
 type GitBackupOptions struct {
 	Enabled     bool   `json:"enabled"`
 	Remote      string `json:"remote"`
+	GitHubToken string `json:"githubToken"`
 	AuthorName  string `json:"authorName"`
 	AuthorEmail string `json:"authorEmail"`
 }
@@ -33,6 +34,7 @@ func defaultOptions() Options {
 		GitBackup: GitBackupOptions{
 			Enabled:     false,
 			Remote:      "",
+			GitHubToken: "",
 			AuthorName:  "kladde backup",
 			AuthorEmail: "kladde@localhost",
 		},
@@ -78,6 +80,7 @@ func loadOptions(path string) (Options, error) {
 	opts.Users = filepath.Clean(opts.Users)
 
 	opts.GitBackup.Remote = strings.TrimSpace(opts.GitBackup.Remote)
+	opts.GitBackup.GitHubToken = strings.TrimSpace(opts.GitBackup.GitHubToken)
 	opts.GitBackup.AuthorName = strings.TrimSpace(opts.GitBackup.AuthorName)
 	opts.GitBackup.AuthorEmail = strings.TrimSpace(opts.GitBackup.AuthorEmail)
 

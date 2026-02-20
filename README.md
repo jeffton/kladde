@@ -71,7 +71,8 @@ Example production file (`/etc/kladde/options.json`):
   "users": "/var/data/kladde/users.json",
   "gitBackup": {
     "enabled": true,
-    "remote": "git@github.com:your-org/kladde-backup.git",
+    "remote": "https://github.com/your-org/kladde-backup.git",
+    "githubToken": "ghp_your_personal_access_token",
     "authorName": "kladde backup",
     "authorEmail": "kladde@localhost"
   }
@@ -87,12 +88,14 @@ Fields:
 - `gitBackup.enabled` — enable automatic git commit + push backups
 - `gitBackup` always commits from the `notes` path
 - `gitBackup.remote` — git remote URL (required when `gitBackup.enabled=true`)
+- `gitBackup.githubToken` — GitHub personal access token used for authenticated push (with a GitHub remote)
 - `gitBackup.authorName` / `gitBackup.authorEmail` — commit author identity
 
 Backup behavior:
 
 - Backup runs automatically on note changes
 - Pushes target the remote's default branch (`origin/HEAD`)
+- If `gitBackup.githubToken` is set, HTTPS GitHub auth uses that token
 - Pushes are rate-limited to **at most once per minute**
 
 ## Run locally
