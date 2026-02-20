@@ -18,6 +18,8 @@ import {
   Quote
 } from 'lucide-vue-next'
 import type { Editor } from '@tiptap/vue-3'
+import { Fragment } from '@tiptap/pm/model'
+import type { Node as ProseMirrorNode } from '@tiptap/pm/model'
 
 interface Props {
   editor: Editor | null
@@ -53,6 +55,120 @@ function isDisabled() {
 
 function toggleMore() {
   showMobileMore.value = !showMobileMore.value
+}
+
+function convertListSelection(target: 'bullet' | 'ordered' | 'task'): boolean {
+  if (!props.editor) return false
+
+  const editor = props.editor
+  const { state } = editor
+  const { schema, selection } = state
+
+  const bulletList = schema.nodes.bulletList
+  const orderedList = schema.nodes.orderedList
+  const taskList = schema.nodes.taskList
+  const listItem = schema.nodes.listItem
+  const taskItem = schema.nodes.taskItem
+
+  if (!bulletList || !orderedList || !taskList || !listItem || !taskItem) return false
+
+  const isListNodeName = (name: string) => name === 'bulletList' || name === 'orderedList' || name === 'taskList'
+
+  const outerListBounds = ($pos: typeof selection.$from) => {
+    for (let depth = 1; depth <= $pos.depth; depth++) {
+      const node = $pos.node(depth)
+      if (!isListNodeName(node.type.name)) continue
+      const start = $pos.before(depth)
+      return { from: start, to: start + node.nodeSize }
+    }
+    return null
+  }
+
+  let from = selection.from
+  let to = selection.to
+
+  const fromBounds = outerListBounds(selection.$from)
+  const toBounds = outerListBounds(selection.$to)
+
+  if (fromBounds) from = Math.min(from, fromBounds.from)
+  if (toBounds) from = Math.min(from, toBounds.from)
+  if (fromBounds) to = Math.max(to, fromBounds.to)
+  if (toBounds) to = Math.max(to, toBounds.to)
+
+  const listRoots: Array<{ pos: number; nodeSize: number; node: ProseMirrorNode }> = []
+  const addRootAt = (pos: number) => {
+    const node = state.doc.nodeAt(pos)
+    if (!node || !isListNodeName(node.type.name)) return
+    if (listRoots.some((root) => root.pos === pos)) return
+    listRoots.push({ pos, nodeSize: node.nodeSize, node })
+  }
+
+  if (fromBounds) addRootAt(fromBounds.from)
+  if (toBounds) addRootAt(toBounds.from)
+
+  state.doc.nodesBetween(from, to, (node, pos) => {
+    if (!isListNodeName(node.type.name)) return
+
+    const insideExistingRoot = listRoots.some((root) => pos > root.pos && pos < root.pos + root.nodeSize)
+    if (insideExistingRoot) return
+
+    listRoots.push({ pos, nodeSize: node.nodeSize, node })
+  })
+
+  if (listRoots.length === 0) return false
+
+  const convertNode = (node: ProseMirrorNode): ProseMirrorNode => {
+    const childNodes: ProseMirrorNode[] = []
+    node.forEach((child) => {
+      childNodes.push(convertNode(child))
+    })
+    const nextContent = Fragment.fromArray(childNodes)
+
+    const nodeName = node.type.name
+
+    if (target === 'bullet') {
+      if (nodeName === 'taskList' || nodeName === 'orderedList') return bulletList.create(node.attrs, nextContent)
+      if (nodeName === 'taskItem') return listItem.create(null, nextContent)
+      return node.copy(nextContent)
+    }
+
+    if (target === 'ordered') {
+      if (nodeName === 'taskList' || nodeName === 'bulletList') return orderedList.create(node.attrs, nextContent)
+      if (nodeName === 'taskItem') return listItem.create(null, nextContent)
+      return node.copy(nextContent)
+    }
+
+    if (nodeName === 'bulletList' || nodeName === 'orderedList') return taskList.create(node.attrs, nextContent)
+    if (nodeName === 'listItem') return taskItem.create({ checked: false }, nextContent)
+
+    return node.copy(nextContent)
+  }
+
+  let tr = state.tr
+  listRoots
+    .sort((a, b) => b.pos - a.pos)
+    .forEach((root) => {
+      const mappedPos = tr.mapping.map(root.pos)
+      const currentRoot = tr.doc.nodeAt(mappedPos)
+      if (!currentRoot) return
+      const converted = convertNode(currentRoot)
+      tr = tr.replaceWith(mappedPos, mappedPos + currentRoot.nodeSize, converted)
+    })
+
+  if (!tr.docChanged) return false
+  editor.view.dispatch(tr)
+  return true
+}
+
+function applyRichListType(target: 'bullet' | 'ordered' | 'task') {
+  if (!props.editor) return
+
+  const changed = convertListSelection(target)
+  if (changed) return
+
+  if (target === 'bullet') props.editor.chain().focus().toggleBulletList().run()
+  if (target === 'ordered') props.editor.chain().focus().toggleOrderedList().run()
+  if (target === 'task') props.editor.chain().focus().toggleTaskList().run()
 }
 
 function indentRich() {
@@ -98,11 +214,11 @@ onUnmounted(() => {
       <button title="Overskrift 2" :disabled="isDisabled()" :class="{ active: !isPlain && editor?.isActive('heading', { level: 2 }) }" @click="run('h2', () => editor?.chain().focus().toggleHeading({ level: 2 }).run())"><Heading2 :size="18" /></button>
       <button title="Overskrift 3" :disabled="isDisabled()" :class="{ active: !isPlain && editor?.isActive('heading', { level: 3 }) }" @click="run('h3', () => editor?.chain().focus().toggleHeading({ level: 3 }).run())"><Heading3 :size="18" /></button>
 
-      <button title="Punktliste" :disabled="isDisabled()" :class="{ active: !isPlain && editor?.isActive('bulletList') }" @click="run('bullet', () => editor?.chain().focus().toggleBulletList().run())"><List :size="18" /></button>
+      <button title="Punktliste" :disabled="isDisabled()" :class="{ active: !isPlain && editor?.isActive('bulletList') }" @click="run('bullet', () => applyRichListType('bullet'))"><List :size="18" /></button>
 
-      <button title="Nummereret liste" :disabled="isDisabled()" :class="{ active: !isPlain && editor?.isActive('orderedList') }" @click="run('ordered', () => editor?.chain().focus().toggleOrderedList().run())"><ListOrdered :size="18" /></button>
+      <button title="Nummereret liste" :disabled="isDisabled()" :class="{ active: !isPlain && editor?.isActive('orderedList') }" @click="run('ordered', () => applyRichListType('ordered'))"><ListOrdered :size="18" /></button>
 
-      <button title="Opgaveliste" :disabled="isDisabled()" :class="{ active: !isPlain && editor?.isActive('taskList') }" @click="run('task', () => editor?.chain().focus().toggleTaskList().run())"><ListTodo :size="18" /></button>
+      <button title="Opgaveliste" :disabled="isDisabled()" :class="{ active: !isPlain && editor?.isActive('taskList') }" @click="run('task', () => applyRichListType('task'))"><ListTodo :size="18" /></button>
 
       <button v-if="isMobile" class="toolbar-more" :class="{ expanded: showMobileMore }" :title="showMobileMore ? 'Skjul flere værktøjer' : 'Vis flere værktøjer'" :aria-expanded="showMobileMore" @click="toggleMore"><ChevronDown :size="20" /></button>
     </div>

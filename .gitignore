@@ -6,5 +6,6 @@ server/server
 .DS_Store
 screenshots/
 server/kladde
+server/dist/
 *.log
 tmp/

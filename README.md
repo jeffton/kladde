@@ -47,13 +47,14 @@ npm run build
 
 # Build backend
 cd ../server
-go build -o ../tmp/kladde-server .
+mkdir -p dist
+go build -o ./dist/kladde-server .
 ```
 
 This produces:
 
 - Frontend static assets in `client/dist`
-- Server binary in `tmp/kladde-server`
+- Server binary in `server/dist/kladde-server`
 
 ## Run locally
 
@@ -61,7 +62,7 @@ From repo root:
 
 ```bash
 mkdir -p tmp/notes tmp/data
-./tmp/kladde-server \
+./server/dist/kladde-server \
   -addr 127.0.0.1:8080 \
   -notes ./tmp/notes \
   -users ./tmp/data/users.json \
@@ -79,7 +80,7 @@ curl http://127.0.0.1:8080/api/health
 Before logging in, create a user:
 
 ```bash
-./tmp/kladde-server adduser \
+./server/dist/kladde-server adduser \
   --users ./tmp/data/users.json \
   --username admin \
   --password "<choose-a-strong-password>" \
