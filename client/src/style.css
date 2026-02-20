@@ -537,7 +537,7 @@ button:disabled {
 }
 
 .editor-toolbar .mode-toggle {
-  margin-left: 0;
+  margin-left: auto;
 }
 
 .editor-toolbar .toolbar-more {

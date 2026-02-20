@@ -14,7 +14,6 @@ import {
   ListTodo,
   ChevronDown,
   Indent,
-  Minus,
   Outdent,
   Quote
 } from 'lucide-vue-next'
@@ -99,15 +98,11 @@ onUnmounted(() => {
       <button title="Overskrift 2" :disabled="isDisabled()" :class="{ active: !isPlain && editor?.isActive('heading', { level: 2 }) }" @click="run('h2', () => editor?.chain().focus().toggleHeading({ level: 2 }).run())"><Heading2 :size="18" /></button>
       <button title="Overskrift 3" :disabled="isDisabled()" :class="{ active: !isPlain && editor?.isActive('heading', { level: 3 }) }" @click="run('h3', () => editor?.chain().focus().toggleHeading({ level: 3 }).run())"><Heading3 :size="18" /></button>
 
-      <span class="toolbar-divider" aria-hidden="true"></span>
-
       <button title="Punktliste" :disabled="isDisabled()" :class="{ active: !isPlain && editor?.isActive('bulletList') }" @click="run('bullet', () => editor?.chain().focus().toggleBulletList().run())"><List :size="18" /></button>
 
       <button title="Nummereret liste" :disabled="isDisabled()" :class="{ active: !isPlain && editor?.isActive('orderedList') }" @click="run('ordered', () => editor?.chain().focus().toggleOrderedList().run())"><ListOrdered :size="18" /></button>
 
       <button title="Opgaveliste" :disabled="isDisabled()" :class="{ active: !isPlain && editor?.isActive('taskList') }" @click="run('task', () => editor?.chain().focus().toggleTaskList().run())"><ListTodo :size="18" /></button>
-
-      <span v-if="!isMobile" class="toolbar-divider" aria-hidden="true"></span>
 
       <button v-if="isMobile" class="toolbar-more" :class="{ expanded: showMobileMore }" :title="showMobileMore ? 'Skjul flere værktøjer' : 'Vis flere værktøjer'" :aria-expanded="showMobileMore" @click="toggleMore"><ChevronDown :size="20" /></button>
     </div>
@@ -116,23 +111,21 @@ onUnmounted(() => {
       class="toolbar-row toolbar-row-secondary"
       :class="{ collapsed: isMobile && !showMobileMore }"
       :aria-hidden="isMobile && !showMobileMore">
+      <button title="Indryk" :disabled="isDisabled()" @click="run('indent', indentRich)"><Indent :size="18" /></button>
+
+      <button title="Ryk ud" :disabled="isDisabled()" @click="run('outdent', outdentRich)"><Outdent :size="18" /></button>
+
       <button title="Fed" :disabled="isDisabled()" :class="{ active: !isPlain && editor?.isActive('bold') }" @click="run('bold', () => editor?.chain().focus().toggleBold().run())"><Bold :size="18" /></button>
 
       <button title="Kursiv" :disabled="isDisabled()" :class="{ active: !isPlain && editor?.isActive('italic') }" @click="run('italic', () => editor?.chain().focus().toggleItalic().run())"><Italic :size="18" /></button>
+
+      <button title="Citat" :disabled="isDisabled()" :class="{ active: !isPlain && editor?.isActive('blockquote') }" @click="run('blockquote', () => editor?.chain().focus().toggleBlockquote().run())"><Quote :size="18" /></button>
 
       <button title="Inline kode" :disabled="isDisabled()" :class="{ active: !isPlain && editor?.isActive('code') }" @click="run('code', () => editor?.chain().focus().toggleCode().run())"><Code :size="18" /></button>
 
       <button title="Kodeblok" :disabled="isDisabled()" :class="{ active: !isPlain && editor?.isActive('codeBlock') }" @click="run('codeBlock', () => editor?.chain().focus().toggleCodeBlock().run())"><FileCode :size="18" /></button>
 
-      <button title="Citat" :disabled="isDisabled()" :class="{ active: !isPlain && editor?.isActive('blockquote') }" @click="run('blockquote', () => editor?.chain().focus().toggleBlockquote().run())"><Quote :size="18" /></button>
-
-      <button title="Indryk" :disabled="isDisabled()" @click="run('indent', indentRich)"><Indent :size="18" /></button>
-
-      <button title="Ryk ud" :disabled="isDisabled()" @click="run('outdent', outdentRich)"><Outdent :size="18" /></button>
-
-      <button title="Horisontal linje" :disabled="isDisabled()" @click="run('hr', () => editor?.chain().focus().setHorizontalRule().run())"><Minus :size="18" /></button>
-
-      <button class="mode-toggle" title="Skift mellem markdown og WYSIWYG" :class="{ active: isPlain }" @click="emit('toggle-plain')">
+      <button v-if="!isMobile" class="mode-toggle" title="Skift mellem markdown og WYSIWYG" :class="{ active: isPlain }" @click="emit('toggle-plain')">
         <FileText :size="18" />
       </button>
     </div>
