@@ -88,7 +88,7 @@ Fields:
 - `gitBackup.enabled` — enable automatic git commit + push backups
 - `gitBackup` always commits from the `notes` path
 - `gitBackup.remote` — git remote URL (required when `gitBackup.enabled=true`)
-- `gitBackup.githubToken` — GitHub personal access token used for authenticated push (with a GitHub remote)
+- `gitBackup.githubToken` *(optional)* — GitHub personal access token used for authenticated push (with a GitHub remote)
 - `gitBackup.authorName` / `gitBackup.authorEmail` — commit author identity
 
 Backup behavior:
@@ -96,6 +96,7 @@ Backup behavior:
 - Backup runs automatically on note changes
 - Pushes target the remote's default branch (`origin/HEAD`)
 - If `gitBackup.githubToken` is set, HTTPS GitHub auth uses that token
+- If `gitBackup.githubToken` is not set, git falls back to normal host auth (SSH keys, credential helper, etc.)
 - Pushes are rate-limited to **at most once per minute**
 
 ## Run locally
