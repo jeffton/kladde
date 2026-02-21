@@ -13,11 +13,10 @@ import (
 	"time"
 )
 
-const gitBackupMinPushInterval = time.Minute
-
 type GitBackup struct {
 	repo          string
 	opts          GitBackupOptions
+	pushInterval  time.Duration
 	remoteURL     string
 	defaultBranch string
 
@@ -44,7 +43,7 @@ func NewGitBackup(repo string, opts GitBackupOptions) (*GitBackup, error) {
 		return nil, err
 	}
 
-	g := &GitBackup{repo: repo, opts: opts, remoteURL: remoteURL}
+	g := &GitBackup{repo: repo, opts: opts, pushInterval: time.Duration(opts.PushIntervalSeconds) * time.Second, remoteURL: remoteURL}
 	if err := g.prepareRepo(); err != nil {
 		return nil, err
 	}
@@ -171,7 +170,7 @@ func (g *GitBackup) nextDelayLocked(now time.Time) time.Duration {
 	if g.lastPushAttempt.IsZero() {
 		return 0
 	}
-	next := g.lastPushAttempt.Add(gitBackupMinPushInterval)
+	next := g.lastPushAttempt.Add(g.pushInterval)
 	if now.After(next) {
 		return 0
 	}

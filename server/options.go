@@ -10,11 +10,12 @@ import (
 )
 
 type GitBackupOptions struct {
-	Enabled     bool   `json:"enabled"`
-	Remote      string `json:"remote"`
-	GitHubToken string `json:"githubToken"`
-	AuthorName  string `json:"authorName"`
-	AuthorEmail string `json:"authorEmail"`
+	Enabled             bool   `json:"enabled"`
+	Remote              string `json:"remote"`
+	GitHubToken         string `json:"githubToken"`
+	PushIntervalSeconds int    `json:"pushIntervalSeconds"`
+	AuthorName          string `json:"authorName"`
+	AuthorEmail         string `json:"authorEmail"`
 }
 
 type Options struct {
@@ -32,11 +33,12 @@ func defaultOptions() Options {
 		Client: "../client/dist",
 		Users:  "/var/data/kladde/users.json",
 		GitBackup: GitBackupOptions{
-			Enabled:     false,
-			Remote:      "",
-			GitHubToken: "",
-			AuthorName:  "kladde backup",
-			AuthorEmail: "kladde@localhost",
+			Enabled:             false,
+			Remote:              "",
+			GitHubToken:         "",
+			PushIntervalSeconds: 300,
+			AuthorName:          "kladde backup",
+			AuthorEmail:         "kladde@localhost",
 		},
 	}
 }
@@ -89,6 +91,9 @@ func loadOptions(path string) (Options, error) {
 	}
 	if opts.GitBackup.AuthorEmail == "" {
 		return Options{}, errors.New("options.gitBackup.authorEmail is required")
+	}
+	if opts.GitBackup.PushIntervalSeconds <= 0 {
+		return Options{}, errors.New("options.gitBackup.pushIntervalSeconds must be greater than 0")
 	}
 	if opts.GitBackup.Enabled && opts.GitBackup.Remote == "" {
 		return Options{}, errors.New("options.gitBackup.remote is required when gitBackup.enabled is true")

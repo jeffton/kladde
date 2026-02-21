@@ -92,9 +92,6 @@ func (s *Server) startFileWatcher() error {
 
 				notePath := event.Name
 				base := filepath.Base(notePath)
-				if strings.HasPrefix(base, ".") || filepath.Ext(base) != ".md" {
-					continue
-				}
 
 				if event.Op&(fsnotify.Create|fsnotify.Write|fsnotify.Remove|fsnotify.Rename) == 0 {
 					continue
@@ -109,6 +106,16 @@ func (s *Server) startFileWatcher() error {
 					continue
 				}
 				username := parts[0]
+
+				if base == ".stars.json" {
+					s.triggerGitBackup("filesystem change")
+					continue
+				}
+
+				if strings.HasPrefix(base, ".") || filepath.Ext(base) != ".md" {
+					continue
+				}
+				s.triggerGitBackup("filesystem change")
 				title := strings.TrimSuffix(base, ".md")
 
 				action := "updated"

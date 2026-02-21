@@ -168,7 +168,6 @@ func (s *Server) handleNoteByTitle(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		s.triggerGitBackup(fmt.Sprintf("star %s", title))
 		writeJSON(w, http.StatusOK, map[string]any{"title": title, "starred": payload.Starred})
 		return
 	}
@@ -394,7 +393,6 @@ func (s *Server) saveNote(notesDir, title, content string) (*Note, string, error
 		return nil, "", err
 	}
 	stars := loadStars(notesDir)
-	s.triggerGitBackup(fmt.Sprintf("%s %s", action, title))
 	return &Note{Title: title, Content: content, UpdatedAt: info.ModTime(), Starred: stars[title]}, action, nil
 }
 
@@ -424,7 +422,6 @@ func (s *Server) deleteNote(notesDir, title string) error {
 		_ = d.Close()
 	}
 
-	s.triggerGitBackup(fmt.Sprintf("deleted %s", title))
 	return nil
 }
 
@@ -488,7 +485,6 @@ func (s *Server) renameNote(notesDir, oldTitle, newTitle string) (*Note, string,
 	if err != nil {
 		return nil, "", err
 	}
-	s.triggerGitBackup(fmt.Sprintf("renamed %s -> %s", oldTitle, newTitle))
 	return note, newTitle, nil
 }
 

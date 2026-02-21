@@ -7,6 +7,7 @@
     "enabled": true,
     "remote": "https://github.com/your-org/kladde-backup.git",
     "githubToken": "ghp_your_personal_access_token",
+    "pushIntervalSeconds": 300,
     "authorName": "kladde backup",
     "authorEmail": "kladde@localhost"
   }
