@@ -8,6 +8,10 @@ import Link from '@tiptap/extension-link'
 import CodeBlock from '@tiptap/extension-code-block'
 import Strike from '@tiptap/extension-strike'
 import Paragraph from '@tiptap/extension-paragraph'
+import Table from '@tiptap/extension-table'
+import TableRow from '@tiptap/extension-table-row'
+import TableHeader from '@tiptap/extension-table-header'
+import TableCell from '@tiptap/extension-table-cell'
 import { Markdown } from 'tiptap-markdown'
 import {
   AlertTriangle,
@@ -198,6 +202,10 @@ const editor = useEditor({
     CodeBlock,
     TaskList,
     TaskItem.configure({ nested: true }),
+    Table.configure({ resizable: false }),
+    TableRow,
+    TableHeader,
+    TableCell,
     Link.configure({
       autolink: true,
       openOnClick: true,

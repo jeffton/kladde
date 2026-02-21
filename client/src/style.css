@@ -694,7 +694,7 @@ button:disabled {
 }
 
 .wysiwyg-wrap {
-  overflow-y: auto;
+  overflow: auto;
 }
 
 .tiptap-root .ProseMirror {
@@ -811,6 +811,32 @@ button:disabled {
   padding: .15rem 0 .15rem .8rem;
   border-left: 3px solid color-mix(in srgb, var(--muted) 35%, transparent);
   color: var(--muted);
+}
+
+.tiptap-root .ProseMirror table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  margin: .8rem 0;
+  background: color-mix(in srgb, var(--surface) 82%, transparent);
+  border-radius: .5rem;
+  overflow: hidden;
+}
+
+.tiptap-root .ProseMirror th,
+.tiptap-root .ProseMirror td {
+  padding: .45rem .6rem;
+  text-align: left;
+  vertical-align: top;
+}
+
+.tiptap-root .ProseMirror th {
+  font-weight: 650;
+  background: color-mix(in srgb, var(--surface-active) 75%, transparent);
+}
+
+.tiptap-root .ProseMirror tr:nth-child(even) td {
+  background: color-mix(in srgb, var(--surface) 78%, transparent);
 }
 
 .tiptap-root .ProseMirror a {
