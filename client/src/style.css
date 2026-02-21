@@ -817,21 +817,22 @@ button:disabled {
   width: 100%;
   border-collapse: separate;
   border-spacing: 0;
-  margin: .8rem 0;
+  margin: .5rem 0;
   background: color-mix(in srgb, var(--surface) 82%, transparent);
-  border-radius: .5rem;
+  border-radius: .4rem;
   overflow: hidden;
 }
 
 .tiptap-root .ProseMirror th,
 .tiptap-root .ProseMirror td {
-  padding: .45rem .6rem;
+  padding: .28rem .45rem;
   text-align: left;
   vertical-align: top;
+  line-height: 1.35;
 }
 
 .tiptap-root .ProseMirror th {
-  font-weight: 650;
+  font-weight: 620;
   background: color-mix(in srgb, var(--surface-active) 75%, transparent);
 }
 
