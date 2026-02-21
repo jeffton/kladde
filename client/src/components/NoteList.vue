@@ -36,12 +36,23 @@ const filteredNotes = computed(() => {
   const term = query.value.trim().toLowerCase()
   if (!term) return props.notes
 
-  return props.notes.filter((note) => {
-    const content = props.noteContents[note.title] || ''
+  const titleMatches: NoteMeta[] = []
+  const contentMatches: NoteMeta[] = []
+
+  for (const note of props.notes) {
     const titleMatch = note.title.toLowerCase().includes(term)
-    const contentMatch = content.toLowerCase().includes(term)
-    return titleMatch || contentMatch
-  })
+    if (titleMatch) {
+      titleMatches.push(note)
+      continue
+    }
+
+    const content = props.noteContents[note.title] || ''
+    if (content.toLowerCase().includes(term)) {
+      contentMatches.push(note)
+    }
+  }
+
+  return [...titleMatches, ...contentMatches]
 })
 
 function clearQuery() {
