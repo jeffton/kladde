@@ -9,3 +9,4 @@ server/kladde
 server/dist/
 *.log
 tmp/
+.vscode/
