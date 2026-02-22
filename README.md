@@ -87,7 +87,6 @@ Fields:
 - `client` — path to built frontend assets (`client/dist`)
 - `users` — path to `users.json`
 - `gitBackup.enabled` — enable automatic git commit + push backups
-- `gitBackup` always commits from the `notes` path
 - `gitBackup.remote` — git remote URL (required when `gitBackup.enabled=true`)
 - `gitBackup.githubToken` *(optional)* — GitHub personal access token for authenticated push (see [Creating a GitHub token](#creating-a-github-token))
 - `gitBackup.pushIntervalSeconds` *(optional, default `300`)* — minimum seconds between push attempts
