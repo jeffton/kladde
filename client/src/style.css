@@ -737,6 +737,12 @@ button:disabled {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, monospace;
 }
 
+.plain-wrap textarea:focus,
+.plain-wrap textarea:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+
 .tiptap-root {
   height: 100%;
   background: var(--panel);
