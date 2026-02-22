@@ -90,14 +90,6 @@ const PreservingParagraph = Paragraph.extend({
   },
 })
 
-function editorToMd(md: string): string {
-  return md
-}
-
-function mdToEditor(md: string): string {
-  return md
-}
-
 const showTooltip = ref(false)
 const isTouchLike = ref(false)
 const showNoteMenu = ref(false)
@@ -227,11 +219,11 @@ const editor = useEditor({
       return defaultText.replace(new RegExp(NBSP, 'g'), '')
     }
   },
-  content: mdToEditor(props.store.currentContent || ''),
+  content: props.store.currentContent || '',
   onUpdate: ({ editor: tiptapEditor }) => {
     if (ignoreEditorChanges) return
     props.store.markCurrentDirty()
-    const nextMarkdown = editorToMd(tiptapEditor.storage.markdown.getMarkdown())
+    const nextMarkdown = tiptapEditor.storage.markdown.getMarkdown()
     const titleAtSchedule = props.store.selectedTitle
 
     if (updateDebounce) window.clearTimeout(updateDebounce)
@@ -249,13 +241,13 @@ const editor = useEditor({
 function setEditorMarkdown(markdown = '') {
   if (!editor.value) return
   ignoreEditorChanges = true
-  editor.value.commands.setContent(mdToEditor(markdown || ''), false)
+  editor.value.commands.setContent(markdown || '', false)
   ignoreEditorChanges = false
 }
 
 function syncEditorFromStore() {
   if (!editor.value || showPlain.value) return
-  const current = editorToMd(editor.value.storage.markdown.getMarkdown())
+  const current = editor.value.storage.markdown.getMarkdown()
   if (current === props.store.currentContent) return
   setEditorMarkdown(props.store.currentContent)
 }
