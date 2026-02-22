@@ -664,7 +664,7 @@ button:disabled {
   line-height: 1.3;
   box-shadow: 0 8px 20px color-mix(in srgb, #000 16%, transparent);
   pointer-events: none;
-  z-index: 9999;
+  z-index: 10020;
 }
 
 .status-tooltip span {
