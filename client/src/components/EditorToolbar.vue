@@ -118,6 +118,20 @@ function convertListSelection(target: 'bullet' | 'ordered' | 'task'): boolean {
 
   if (listRoots.length === 0) return false
 
+  const targetNodeName = target === 'bullet' ? 'bulletList' : target === 'ordered' ? 'orderedList' : 'taskList'
+
+  const unwrapListRoot = (root: ProseMirrorNode): Fragment => {
+    const unwrapped: ProseMirrorNode[] = []
+
+    root.forEach((item) => {
+      item.forEach((child) => {
+        unwrapped.push(child)
+      })
+    })
+
+    return Fragment.fromArray(unwrapped)
+  }
+
   const convertNode = (node: ProseMirrorNode): ProseMirrorNode => {
     const childNodes: ProseMirrorNode[] = []
     node.forEach((child) => {
@@ -152,6 +166,12 @@ function convertListSelection(target: 'bullet' | 'ordered' | 'task'): boolean {
       const mappedPos = tr.mapping.map(root.pos)
       const currentRoot = tr.doc.nodeAt(mappedPos)
       if (!currentRoot) return
+
+      if (currentRoot.type.name === targetNodeName) {
+        tr = tr.replaceWith(mappedPos, mappedPos + currentRoot.nodeSize, unwrapListRoot(currentRoot))
+        return
+      }
+
       const converted = convertNode(currentRoot)
       tr = tr.replaceWith(mappedPos, mappedPos + currentRoot.nodeSize, converted)
     })
