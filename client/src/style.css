@@ -232,7 +232,9 @@ button:disabled {
   position: absolute;
   right: 0;
   top: calc(100% + .35rem);
-  min-width: 220px;
+  width: fit-content;
+  min-width: fit-content;
+  max-width: min(92vw, 24rem);
   border: 1px solid var(--border);
   border-radius: .5rem;
   background: color-mix(in srgb, var(--panel) 95%, var(--bg));
@@ -245,10 +247,12 @@ button:disabled {
   font-size: .8rem;
   color: var(--muted);
   padding: .5rem .72rem .2rem;
+  white-space: nowrap;
 }
 
 .user-menu-item {
-  width: 100%;
+  width: auto;
+  min-width: 0;
   min-height: 44px;
   text-align: left;
   color: var(--text);
@@ -258,6 +262,7 @@ button:disabled {
   gap: .55rem;
   padding: .62rem .72rem;
   font-size: 1rem;
+  white-space: nowrap;
 }
 
 .password-form {
