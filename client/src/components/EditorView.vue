@@ -187,7 +187,7 @@ const statusMeta = computed(() => {
   if (syncState === 'offline') {
     lines.push(t('offline'))
     if (modifiedLine) lines.push(modifiedLine)
-    lines.push(lastSyncTime.value ? `${t('lastSynced')} ${lastSyncTime.value}` : t('changesSavedLocally'))
+    lines.push(lastSyncTime.value ? `${t('synced')} ${lastSyncTime.value}` : t('changesSavedLocally'))
     return { state: 'offline' as const, lines }
   }
 
@@ -200,7 +200,7 @@ const statusMeta = computed(() => {
   if (syncState === 'error') {
     if (modifiedLine) lines.push(modifiedLine)
     lines.push(props.store.syncStatus || t('syncError'))
-    lines.push(lastSyncTime.value ? `${t('lastSynced')} ${lastSyncTime.value}` : t('noSuccessfulSyncYet'))
+    lines.push(lastSyncTime.value ? `${t('synced')} ${lastSyncTime.value}` : t('noSuccessfulSyncYet'))
     return { state: 'error' as const, lines }
   }
 
