@@ -162,4 +162,4 @@ sudo cp server /usr/local/bin/kladde
 sudo systemctl start kladde
 ```
 
-Served via nginx reverse proxy.
+Optionally served behind a reverse proxy (nginx, Caddy, etc.) for TLS and domain routing.
