@@ -24,6 +24,7 @@ import {
 } from 'lucide-vue-next'
 import EditorToolbar from './EditorToolbar.vue'
 import type { NotesStore } from '../stores/notes'
+import { intlLocale, t } from '../i18n'
 
 interface Props {
   store: NotesStore
@@ -122,13 +123,30 @@ function isSameDay(a: Date, b: Date) {
   return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate()
 }
 
-const locale = navigator.language || 'en'
+const locale = intlLocale
+
+function firstDayOfWeek(): number {
+  try {
+    const localeInfo = new Intl.Locale(locale) as Intl.Locale & { weekInfo?: { firstDay?: number } }
+    const first = localeInfo.weekInfo?.firstDay
+    if (typeof first === 'number') {
+      // Intl.Locale uses 1..7 (Mon..Sun). Date.getDay uses 0..6 (Sun..Sat).
+      return first % 7
+    }
+  } catch {
+    // Fallback below
+  }
+
+  return locale.toLowerCase().startsWith('en-us') ? 0 : 1
+}
 
 function startOfWeek(date: Date) {
   const copy = new Date(date)
   copy.setHours(0, 0, 0, 0)
   const day = copy.getDay()
-  copy.setDate(copy.getDate() - (day === 0 ? 6 : day - 1))
+  const weekStartsOn = firstDayOfWeek()
+  const diff = (day - weekStartsOn + 7) % 7
+  copy.setDate(copy.getDate() - diff)
   return copy
 }
 
@@ -162,33 +180,33 @@ const statusMeta = computed(() => {
   const syncState = props.store.syncState
   const modifiedRaw = props.store.currentUpdatedAt || props.store.notes.find((n) => n.title === props.store.selectedTitle)?.updatedAt || ''
   const modifiedText = modifiedRaw ? formatUpdatedAt(modifiedRaw) : ''
-  const modifiedLine = modifiedText ? `Ændret ${modifiedText}` : ''
+  const modifiedLine = modifiedText ? `${t('modified')} ${modifiedText}` : ''
 
   const lines: string[] = []
 
   if (syncState === 'offline') {
-    lines.push('Offline')
+    lines.push(t('offline'))
     if (modifiedLine) lines.push(modifiedLine)
-    lines.push(lastSyncTime.value ? `Sidst synkroniseret ${lastSyncTime.value}` : 'Ændringer gemmes lokalt')
+    lines.push(lastSyncTime.value ? `${t('lastSynced')} ${lastSyncTime.value}` : t('changesSavedLocally'))
     return { state: 'offline' as const, lines }
   }
 
   if (syncState === 'syncing') {
     if (modifiedLine) lines.push(modifiedLine)
-    lines.push(props.store.syncStatus || 'Synkroniserer ændringer…')
+    lines.push(props.store.syncStatus || t('syncingChanges'))
     return { state: 'syncing' as const, lines }
   }
 
   if (syncState === 'error') {
     if (modifiedLine) lines.push(modifiedLine)
-    lines.push(props.store.syncStatus || 'Der opstod en synkroniseringsfejl')
-    lines.push(lastSyncTime.value ? `Sidst synkroniseret ${lastSyncTime.value}` : 'Ingen vellykket synkronisering endnu')
+    lines.push(props.store.syncStatus || t('syncError'))
+    lines.push(lastSyncTime.value ? `${t('lastSynced')} ${lastSyncTime.value}` : t('noSuccessfulSyncYet'))
     return { state: 'error' as const, lines }
   }
 
   const syncedAt = lastSyncTime.value ? ` ${lastSyncTime.value}` : ''
   if (modifiedLine) lines.push(modifiedLine)
-  lines.push(`Synkroniseret${syncedAt}`)
+  lines.push(`${t('synced')}${syncedAt}`)
   return { state: 'synced' as const, lines }
 })
 
@@ -232,7 +250,7 @@ const editor = useEditor({
       if (props.store.selectedTitle !== titleAtSchedule) return
       if (nextMarkdown !== props.store.currentContent) {
         void props.store.setCurrentContent(nextMarkdown).catch((err: unknown) => {
-          error.value = (err as Error)?.message || 'Kunne ikke gemme lokalt'
+          error.value = (err as Error)?.message || t('couldNotSaveLocally')
         })
       }
     }, 300)
@@ -366,11 +384,11 @@ function applyPlainLink() {
 
   const start = textarea.selectionStart
   const end = textarea.selectionEnd
-  const selected = textarea.value.slice(start, end) || 'text'
-  const href = window.prompt('Indsæt link (https://...)', 'https://')
+  const selected = textarea.value.slice(start, end) || t('linkTextPlaceholder')
+  const href = window.prompt(t('insertLinkPrompt'), 'https://')
   if (href === null) return
 
-  const replacement = `[${selected}](${href || 'url'})`
+  const replacement = `[${selected}](${href || t('linkUrlFallback')})`
   const nextValue = textarea.value.slice(0, start) + replacement + textarea.value.slice(end)
   const textStart = start + 1
   const textEnd = textStart + selected.length
@@ -424,7 +442,7 @@ function toggleNoteMenu() {
 
 async function deleteCurrentNote() {
   if (!props.store.selectedTitle) return
-  const confirmed = window.confirm('Er du sikker?')
+  const confirmed = window.confirm(t('confirmDelete'))
   if (!confirmed) return
 
   try {
@@ -501,7 +519,7 @@ watch(
     const enteredSynced = syncState === 'synced' && previousState !== 'synced'
     if (!enteredSynced) return
 
-    lastSyncTime.value = new Date().toLocaleTimeString(navigator.language, {
+    lastSyncTime.value = new Date().toLocaleTimeString(locale, {
       hour: '2-digit',
       minute: '2-digit'
     })
@@ -538,7 +556,7 @@ onUnmounted(() => {
 <template>
   <main class="editor-area">
     <div class="note-title-wrap" v-if="store.selectedTitle">
-      <button v-if="showBack" class="mobile-title-back" @click="emit('back')" aria-label="Tilbage">
+      <button v-if="showBack" class="mobile-title-back" @click="emit('back')" :aria-label="t('back')">
         <ChevronLeft :size="20" />
       </button>
       <input
@@ -572,13 +590,13 @@ onUnmounted(() => {
       </div>
 
       <div ref="noteMenuWrap" class="note-menu-wrap">
-        <button class="note-menu-button" aria-label="Mere" :aria-expanded="showNoteMenu" @click="toggleNoteMenu">
+        <button class="note-menu-button" :aria-label="t('more')" :aria-expanded="showNoteMenu" @click="toggleNoteMenu">
           <MoreVertical :size="20" />
         </button>
         <div v-if="showNoteMenu" class="note-menu-dropdown" role="menu">
           <button class="note-menu-delete" role="menuitem" @click="deleteCurrentNote">
             <Trash2 :size="18" />
-            <span>Slet note</span>
+            <span>{{ t('deleteNote') }}</span>
           </button>
         </div>
       </div>

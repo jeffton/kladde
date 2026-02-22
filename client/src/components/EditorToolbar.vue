@@ -20,6 +20,7 @@ import {
 import type { Editor } from '@tiptap/vue-3'
 import { Fragment } from '@tiptap/pm/model'
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model'
+import { t } from '../i18n'
 
 interface Props {
   editor: Editor | null
@@ -208,40 +209,40 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="editor-toolbar" aria-label="Editor toolbar">
+  <div class="editor-toolbar" :aria-label="t('editorToolbar')">
     <div class="toolbar-row">
-      <button title="Overskrift 1" :disabled="isDisabled()" :class="{ active: !isPlain && editor?.isActive('heading', { level: 1 }) }" @click="run('h1', () => editor?.chain().focus().toggleHeading({ level: 1 }).run())"><Heading1 :size="18" /></button>
-      <button title="Overskrift 2" :disabled="isDisabled()" :class="{ active: !isPlain && editor?.isActive('heading', { level: 2 }) }" @click="run('h2', () => editor?.chain().focus().toggleHeading({ level: 2 }).run())"><Heading2 :size="18" /></button>
-      <button title="Overskrift 3" :disabled="isDisabled()" :class="{ active: !isPlain && editor?.isActive('heading', { level: 3 }) }" @click="run('h3', () => editor?.chain().focus().toggleHeading({ level: 3 }).run())"><Heading3 :size="18" /></button>
+      <button :title="t('heading1')" :disabled="isDisabled()" :class="{ active: !isPlain && editor?.isActive('heading', { level: 1 }) }" @click="run('h1', () => editor?.chain().focus().toggleHeading({ level: 1 }).run())"><Heading1 :size="18" /></button>
+      <button :title="t('heading2')" :disabled="isDisabled()" :class="{ active: !isPlain && editor?.isActive('heading', { level: 2 }) }" @click="run('h2', () => editor?.chain().focus().toggleHeading({ level: 2 }).run())"><Heading2 :size="18" /></button>
+      <button :title="t('heading3')" :disabled="isDisabled()" :class="{ active: !isPlain && editor?.isActive('heading', { level: 3 }) }" @click="run('h3', () => editor?.chain().focus().toggleHeading({ level: 3 }).run())"><Heading3 :size="18" /></button>
 
-      <button title="Punktliste" :disabled="isDisabled()" :class="{ active: !isPlain && editor?.isActive('bulletList') }" @click="run('bullet', () => applyRichListType('bullet'))"><List :size="18" /></button>
+      <button :title="t('bulletList')" :disabled="isDisabled()" :class="{ active: !isPlain && editor?.isActive('bulletList') }" @click="run('bullet', () => applyRichListType('bullet'))"><List :size="18" /></button>
 
-      <button title="Nummereret liste" :disabled="isDisabled()" :class="{ active: !isPlain && editor?.isActive('orderedList') }" @click="run('ordered', () => applyRichListType('ordered'))"><ListOrdered :size="18" /></button>
+      <button :title="t('orderedList')" :disabled="isDisabled()" :class="{ active: !isPlain && editor?.isActive('orderedList') }" @click="run('ordered', () => applyRichListType('ordered'))"><ListOrdered :size="18" /></button>
 
-      <button title="Opgaveliste" :disabled="isDisabled()" :class="{ active: !isPlain && editor?.isActive('taskList') }" @click="run('task', () => applyRichListType('task'))"><ListTodo :size="18" /></button>
+      <button :title="t('taskList')" :disabled="isDisabled()" :class="{ active: !isPlain && editor?.isActive('taskList') }" @click="run('task', () => applyRichListType('task'))"><ListTodo :size="18" /></button>
 
-      <button v-if="isMobile" class="toolbar-more" :class="{ expanded: showMobileMore }" :title="showMobileMore ? 'Skjul flere værktøjer' : 'Vis flere værktøjer'" :aria-expanded="showMobileMore" @click="toggleMore"><ChevronDown :size="20" /></button>
+      <button v-if="isMobile" class="toolbar-more" :class="{ expanded: showMobileMore }" :title="showMobileMore ? t('hideMoreTools') : t('showMoreTools')" :aria-expanded="showMobileMore" @click="toggleMore"><ChevronDown :size="20" /></button>
     </div>
 
     <div
       class="toolbar-row toolbar-row-secondary"
       :class="{ collapsed: isMobile && !showMobileMore }"
       :aria-hidden="isMobile && !showMobileMore">
-      <button title="Indryk" :disabled="isDisabled()" @click="run('indent', indentRich)"><Indent :size="18" /></button>
+      <button :title="t('indent')" :disabled="isDisabled()" @click="run('indent', indentRich)"><Indent :size="18" /></button>
 
-      <button title="Ryk ud" :disabled="isDisabled()" @click="run('outdent', outdentRich)"><Outdent :size="18" /></button>
+      <button :title="t('outdent')" :disabled="isDisabled()" @click="run('outdent', outdentRich)"><Outdent :size="18" /></button>
 
-      <button title="Fed" :disabled="isDisabled()" :class="{ active: !isPlain && editor?.isActive('bold') }" @click="run('bold', () => editor?.chain().focus().toggleBold().run())"><Bold :size="18" /></button>
+      <button :title="t('bold')" :disabled="isDisabled()" :class="{ active: !isPlain && editor?.isActive('bold') }" @click="run('bold', () => editor?.chain().focus().toggleBold().run())"><Bold :size="18" /></button>
 
-      <button title="Kursiv" :disabled="isDisabled()" :class="{ active: !isPlain && editor?.isActive('italic') }" @click="run('italic', () => editor?.chain().focus().toggleItalic().run())"><Italic :size="18" /></button>
+      <button :title="t('italic')" :disabled="isDisabled()" :class="{ active: !isPlain && editor?.isActive('italic') }" @click="run('italic', () => editor?.chain().focus().toggleItalic().run())"><Italic :size="18" /></button>
 
-      <button title="Citat" :disabled="isDisabled()" :class="{ active: !isPlain && editor?.isActive('blockquote') }" @click="run('blockquote', () => editor?.chain().focus().toggleBlockquote().run())"><Quote :size="18" /></button>
+      <button :title="t('quote')" :disabled="isDisabled()" :class="{ active: !isPlain && editor?.isActive('blockquote') }" @click="run('blockquote', () => editor?.chain().focus().toggleBlockquote().run())"><Quote :size="18" /></button>
 
-      <button title="Inline kode" :disabled="isDisabled()" :class="{ active: !isPlain && editor?.isActive('code') }" @click="run('code', () => editor?.chain().focus().toggleCode().run())"><Code :size="18" /></button>
+      <button :title="t('inlineCode')" :disabled="isDisabled()" :class="{ active: !isPlain && editor?.isActive('code') }" @click="run('code', () => editor?.chain().focus().toggleCode().run())"><Code :size="18" /></button>
 
-      <button title="Kodeblok" :disabled="isDisabled()" :class="{ active: !isPlain && editor?.isActive('codeBlock') }" @click="run('codeBlock', () => editor?.chain().focus().toggleCodeBlock().run())"><FileCode :size="18" /></button>
+      <button :title="t('codeBlock')" :disabled="isDisabled()" :class="{ active: !isPlain && editor?.isActive('codeBlock') }" @click="run('codeBlock', () => editor?.chain().focus().toggleCodeBlock().run())"><FileCode :size="18" /></button>
 
-      <button v-if="!isMobile" class="mode-toggle" title="Skift mellem markdown og WYSIWYG" :class="{ active: isPlain }" @click="emit('toggle-plain')">
+      <button v-if="!isMobile" class="mode-toggle" :title="t('toggleMarkdownWysiwyg')" :class="{ active: isPlain }" @click="emit('toggle-plain')">
         <FileText :size="18" />
       </button>
     </div>

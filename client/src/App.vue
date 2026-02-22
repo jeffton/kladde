@@ -6,6 +6,7 @@ import NoteList from './components/NoteList.vue'
 import EditorView from './components/EditorView.vue'
 import { useAutosave } from './composables/useAutosave'
 import type { AuthUser } from './types'
+import { t } from './i18n'
 
 const store = useNotesStore()
 const route = useRoute()
@@ -51,7 +52,7 @@ function setUiError(err: unknown) {
     error.value = ''
     return
   }
-  error.value = (err as Error)?.message || 'En fejl opstod'
+  error.value = (err as Error)?.message || t('genericError')
 }
 
 async function loadMe() {
@@ -61,7 +62,7 @@ async function loadMe() {
       user.value = null
       return
     }
-    if (!res.ok) throw new Error('Kunne ikke hente bruger')
+    if (!res.ok) throw new Error(t('couldNotLoadUser'))
     user.value = (await res.json()) as AuthUser
   } finally {
     authChecked.value = true
@@ -80,16 +81,16 @@ async function login() {
     })
 
     if (res.status === 401) {
-      loginError.value = 'Forkert brugernavn eller adgangskode'
+      loginError.value = t('wrongCredentials')
       return
     }
-    if (!res.ok) throw new Error('Kunne ikke logge ind')
+    if (!res.ok) throw new Error(t('couldNotLogin'))
 
     user.value = (await res.json()) as AuthUser
     password.value = ''
     await store.initialize()
   } catch {
-    loginError.value = 'Kunne ikke logge ind lige nu'
+    loginError.value = t('couldNotLoginNow')
   } finally {
     loggingIn.value = false
   }
@@ -293,16 +294,16 @@ onUnmounted(() => {
     <div class="login-card">
       <h1 class="app-logo">kladde</h1>
       <form class="login-form" @submit.prevent="login">
-        <input v-model="username" class="login-input" type="text" autocomplete="username" placeholder="Brugernavn" required />
+        <input v-model="username" class="login-input" type="text" autocomplete="username" :placeholder="t('username')" required />
         <input
           v-model="password"
           class="login-input"
           type="password"
           autocomplete="current-password"
-          placeholder="Adgangskode"
+          :placeholder="t('password')"
           required />
         <p v-if="loginError" class="login-error">{{ loginError }}</p>
-        <button class="login-button" type="submit" :disabled="loggingIn">Log ind</button>
+        <button class="login-button" type="submit" :disabled="loggingIn">{{ t('login') }}</button>
       </form>
     </div>
   </div>

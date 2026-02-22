@@ -2,6 +2,7 @@ import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 import { deleteCachedNote, getAllCachedNotes, getCachedNote, putCachedNote } from './notesDb'
 import type { CachedNote, NoteMeta, NoteResponse, RenameResponse, SyncState } from '../types'
+import { t } from '../i18n'
 
 
 function normalizeTs(value?: string | null): string {
@@ -47,7 +48,7 @@ function isNetworkError(err: unknown): boolean {
 
 function toUserSyncError(err: unknown, fallback: string): string {
   if ((err as Error)?.message === 'UNAUTHORIZED') return 'UNAUTHORIZED'
-  if (isNetworkError(err)) return 'Midlertidig forbindelsesproblem'
+  if (isNetworkError(err)) return t('temporaryConnectionIssue')
   return (err as Error)?.message || fallback
 }
 
@@ -73,7 +74,7 @@ async function apiFetch(input: RequestInfo | URL, init?: RequestInit): Promise<R
   }
 
   if (!res.ok) {
-    let message = 'Request failed'
+    let message = t('requestFailed')
     try {
       const payload = (await res.json()) as { error?: string }
       if (payload?.error) message = payload.error
@@ -94,7 +95,7 @@ export const useNotesStore = defineStore('notes', () => {
   const pinned = computed(() => new Set(notes.value.filter((n) => n.starred).map((n) => n.title)))
   const dirty = ref(false)
   const online = ref(navigator.onLine)
-  const syncStatus = ref('Synkroniseret')
+  const syncStatus = ref(t('syncedShort'))
   const syncing = ref(false)
   const syncError = ref('')
   const syncState = computed<SyncState>(() => {
@@ -133,21 +134,21 @@ export const useNotesStore = defineStore('notes', () => {
   const updateSyncStatus = () => {
     switch (syncState.value) {
       case 'offline':
-        syncStatus.value = 'Offline — ændringer gemmes lokalt'
+        syncStatus.value = t('syncOfflineLocal')
         break
       case 'syncing':
-        syncStatus.value = 'Synkroniserer...'
+        syncStatus.value = t('syncingShort')
         break
       case 'error':
-        syncStatus.value = `Sync-fejl: ${syncError.value}`
+        syncStatus.value = `${t('syncErrorPrefix')}: ${syncError.value}`
         break
       default:
-        syncStatus.value = 'Synkroniseret'
+        syncStatus.value = t('syncedShort')
     }
   }
 
   const setSyncError = (message: string) => {
-    syncError.value = message || 'Ukendt fejl'
+    syncError.value = message || t('unknownError')
     updateSyncStatus()
   }
 
@@ -508,7 +509,7 @@ export const useNotesStore = defineStore('notes', () => {
       clearSyncError()
     } catch (err: unknown) {
       if (!isNotFoundError(err)) {
-        handleSyncFailure(err, 'Kunne ikke hente note')
+        handleSyncFailure(err, t('couldNotFetchNote'))
       }
       void syncWithServer().catch(() => undefined)
     }
@@ -660,7 +661,7 @@ export const useNotesStore = defineStore('notes', () => {
         await runPushDirtyNote(titleAtStart)
         clearSyncError()
       } catch (err: unknown) {
-        handleSyncFailure(err, 'Kunne ikke gemme note')
+        handleSyncFailure(err, t('couldNotSaveNote'))
         throw err
       } finally {
         syncing.value = false
@@ -746,7 +747,7 @@ export const useNotesStore = defineStore('notes', () => {
         clearSyncRetry()
         clearSyncError()
       } catch (err: unknown) {
-        handleSyncFailure(err, 'Kunne ikke synkronisere')
+        handleSyncFailure(err, t('couldNotSync'))
         throw err
       } finally {
         syncing.value = false
@@ -761,7 +762,7 @@ export const useNotesStore = defineStore('notes', () => {
     }
   }
 
-  const generateDefaultTitle = (base = 'Ny note') => {
+  const generateDefaultTitle = (base = t('newNote')) => {
     const existing = new Set(notes.value.map((n) => n.title))
     if (!existing.has(base)) return base
     let i = 2
@@ -771,7 +772,7 @@ export const useNotesStore = defineStore('notes', () => {
 
   const createNote = async (title = '') => {
     const resolvedTitle = (title || generateDefaultTitle()).trim()
-    if (!resolvedTitle) throw new Error('Titel er påkrævet')
+    if (!resolvedTitle) throw new Error(t('titleRequired'))
 
     await putCachedNote({
       title: resolvedTitle,
@@ -793,13 +794,13 @@ export const useNotesStore = defineStore('notes', () => {
   }
 
   const renameCurrent = async (newTitle: string) => {
-    if (!selectedTitle.value) throw new Error('Ingen note valgt')
+    if (!selectedTitle.value) throw new Error(t('noNoteSelected'))
     const oldTitle = selectedTitle.value
     const requestedTitle = (newTitle || '').trim()
 
-    if (!requestedTitle) throw new Error('Titel er påkrævet')
+    if (!requestedTitle) throw new Error(t('titleRequired'))
     if (requestedTitle === oldTitle) return oldTitle
-    if (!online.value) throw new Error('Du skal være online for at omdøbe noter')
+    if (!online.value) throw new Error(t('mustBeOnlineRename'))
 
     if (dirty.value) await saveCurrent()
 
@@ -813,7 +814,7 @@ export const useNotesStore = defineStore('notes', () => {
     resetWsFailuresAndReconnect()
 
     const serverTitle = payload?.title?.trim()
-    if (!serverTitle) throw new Error('Server returnerede ugyldig titel')
+    if (!serverTitle) throw new Error(t('invalidServerTitle'))
 
     const contentToPersist = payload?.content ?? currentContent.value
     const updatedAt = normalizeTs(payload?.updatedAt || currentUpdatedAt.value || new Date().toISOString())
@@ -831,10 +832,10 @@ export const useNotesStore = defineStore('notes', () => {
   }
 
   const deleteCurrent = async () => {
-    if (!selectedTitle.value) throw new Error('Ingen note valgt')
+    if (!selectedTitle.value) throw new Error(t('noNoteSelected'))
     const titleToDelete = selectedTitle.value
 
-    if (!online.value) throw new Error('Du skal være online for at slette noter')
+    if (!online.value) throw new Error(t('mustBeOnlineDelete'))
     if (dirty.value) await saveCurrent()
 
     try {

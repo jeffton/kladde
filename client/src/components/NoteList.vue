@@ -2,6 +2,7 @@
 import { TransitionGroup, computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { FileText, KeyRound, LogOut, Plus, Search, Star, User, X } from 'lucide-vue-next'
 import type { NoteMeta } from '../types'
+import { t } from '../i18n'
 
 interface Props {
   notes: NoteMeta[]
@@ -102,12 +103,12 @@ async function submitPasswordChange() {
   passwordSuccess.value = ''
 
   if (!currentPassword.value || !newPassword.value || !confirmPassword.value) {
-    passwordError.value = 'Udfyld alle felter'
+    passwordError.value = t('fillAllFields')
     return
   }
 
   if (newPassword.value !== confirmPassword.value) {
-    passwordError.value = 'Ny adgangskode og bekræftelse matcher ikke'
+    passwordError.value = t('passwordMismatch')
     return
   }
 
@@ -124,15 +125,15 @@ async function submitPasswordChange() {
 
     if (!res.ok) {
       const data = (await res.json().catch(() => null)) as { error?: string } | null
-      throw new Error(data?.error || 'Kunne ikke skifte adgangskode')
+      throw new Error(data?.error || t('couldNotChangePassword'))
     }
 
-    passwordSuccess.value = 'Adgangskoden er opdateret'
+    passwordSuccess.value = t('passwordUpdated')
     currentPassword.value = ''
     newPassword.value = ''
     confirmPassword.value = ''
   } catch (err) {
-    passwordError.value = (err as Error)?.message || 'Kunne ikke skifte adgangskode'
+    passwordError.value = (err as Error)?.message || t('couldNotChangePassword')
   } finally {
     changingPassword.value = false
   }
@@ -145,7 +146,7 @@ async function submitPasswordChange() {
       <h1 class="app-logo">kladde</h1>
       <div ref="userMenuWrap" class="sidebar-header-actions">
         <div v-if="userLabel" class="user-menu-wrap">
-          <button class="user-menu-button" aria-label="Brugermenu" @click="toggleUserMenu">
+          <button class="user-menu-button" :aria-label="t('userMenu')" @click="toggleUserMenu">
             <User :size="20" />
           </button>
         </div>
@@ -153,24 +154,24 @@ async function submitPasswordChange() {
             <div class="user-menu-label">{{ userLabel }}</div>
             <button class="user-menu-item" @click="togglePasswordForm">
               <KeyRound :size="18" />
-              Skift password
+              {{ t('changePassword') }}
             </button>
             <button class="user-menu-item" @click="emit('logout')">
               <LogOut :size="18" />
-              Log ud
+              {{ t('logout') }}
             </button>
 
             <form v-if="showPasswordForm" class="password-form" @submit.prevent="submitPasswordChange">
-              <input v-model="currentPassword" class="password-input" type="password" autocomplete="current-password" placeholder="Nuværende password" required />
-              <input v-model="newPassword" class="password-input" type="password" autocomplete="new-password" placeholder="Nyt password" required />
-              <input v-model="confirmPassword" class="password-input" type="password" autocomplete="new-password" placeholder="Bekræft nyt password" required />
+              <input v-model="currentPassword" class="password-input" type="password" autocomplete="current-password" :placeholder="t('currentPassword')" required />
+              <input v-model="newPassword" class="password-input" type="password" autocomplete="new-password" :placeholder="t('newPassword')" required />
+              <input v-model="confirmPassword" class="password-input" type="password" autocomplete="new-password" :placeholder="t('confirmNewPassword')" required />
               <p v-if="passwordError" class="password-error">{{ passwordError }}</p>
               <p v-if="passwordSuccess" class="password-success">{{ passwordSuccess }}</p>
-              <button class="password-submit" type="submit" :disabled="changingPassword">Opdater password</button>
+              <button class="password-submit" type="submit" :disabled="changingPassword">{{ t('updatePassword') }}</button>
             </form>
         </div>
 
-        <button class="create-fab" @click="emit('create')" aria-label="Opret ny note">
+        <button class="create-fab" @click="emit('create')" :aria-label="t('createNewNote')">
           <Plus :size="20" />
         </button>
       </div>
@@ -182,9 +183,9 @@ async function submitPasswordChange() {
         v-model="query"
         class="search-input"
         type="text"
-        placeholder="Søg"
+        :placeholder="t('search')"
         @keydown="onKeydown" />
-      <button v-if="query" class="search-clear" aria-label="Ryd søgning" @click="clearQuery">
+      <button v-if="query" class="search-clear" :aria-label="t('clearSearch')" @click="clearQuery">
         <X :size="18" />
       </button>
     </div>
@@ -204,7 +205,7 @@ async function submitPasswordChange() {
         <button
           class="pin"
           type="button"
-          :aria-label="note.starred ? 'Fjern fastgøring' : 'Fastgør note'"
+          :aria-label="note.starred ? t('unpinNote') : t('pinNote')"
           @click.stop="emit('toggle-pin', note.title)">
           <Star :size="18" :fill="note.starred ? 'currentColor' : 'none'" />
         </button>
