@@ -59,7 +59,7 @@ This produces:
 ## Options file (JSON)
 
 The server reads runtime configuration from a JSON options file.
-For normal startup, `-options <file>` is the only runtime CLI argument.
+For normal startup, `--options <file>` is the only runtime CLI argument.
 
 Example production file (`/etc/kladde/options.json`):
 
@@ -128,7 +128,7 @@ cat > tmp/options.json <<'JSON'
 }
 JSON
 
-./server/dist/kladde-server -options ./tmp/options.json
+./server/dist/kladde-server --options ./tmp/options.json
 ```
 
 Health check:
