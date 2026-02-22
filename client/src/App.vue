@@ -187,6 +187,19 @@ watch(
   }
 )
 
+watch(
+  () => store.selectedTitle,
+  async (title) => {
+    if (!isAuthenticated.value || !title) return
+    if (route.name !== 'note') return
+
+    const routeTitle = typeof route.params.title === 'string' ? route.params.title : ''
+    if (routeTitle === title) return
+
+    await router.replace({ name: 'note', params: { title } })
+  }
+)
+
 const removeAfterEach = router.afterEach(() => {
   requestAnimationFrame(() => {
     requestAnimationFrame(() => {

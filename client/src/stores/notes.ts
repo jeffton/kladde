@@ -1,7 +1,7 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
-import { deleteCachedNote, getAllCachedNotes, getCachedNote, putCachedNote } from './notesDb'
-import type { CachedNote, NoteMeta, NoteResponse, RenameResponse, SyncState } from '../types'
+import { deleteCachedNote, getAllCachedNotes, getCachedNote, getPendingOps, putCachedNote, replacePendingOps } from './notesDb'
+import type { CachedNote, NoteMeta, NoteResponse, PendingOp, RenameResponse, SyncState } from '../types'
 import { t } from '../i18n'
 
 
@@ -29,6 +29,43 @@ function tsMs(value?: string | null): number {
 
 function newerTs(a?: string | null, b?: string | null): string {
   return tsMs(a) >= tsMs(b) ? normalizeTs(a) : normalizeTs(b)
+}
+
+function isServerBacked(note?: CachedNote | null): boolean {
+  return note?.existsOnServer !== false
+}
+
+function samePendingOp(a: PendingOp, b: PendingOp): boolean {
+  if (a.type !== b.type) return false
+  if (a.type === 'rename' && b.type === 'rename') return a.oldTitle === b.oldTitle && a.newTitle === b.newTitle
+  if (a.type === 'delete' && b.type === 'delete') return a.title === b.title
+  if (a.type === 'star' && b.type === 'star') return a.title === b.title && a.starred === b.starred
+  return false
+}
+
+function retargetPendingTitle(ops: PendingOp[], fromTitle: string, toTitle: string): PendingOp[] {
+  return ops.map((op) => {
+    if (op.type === 'rename') {
+      return {
+        ...op,
+        oldTitle: op.oldTitle === fromTitle ? toTitle : op.oldTitle,
+        newTitle: op.newTitle === fromTitle ? toTitle : op.newTitle
+      }
+    }
+
+    if (op.type === 'delete') {
+      return { ...op, title: op.title === fromTitle ? toTitle : op.title }
+    }
+
+    return { ...op, title: op.title === fromTitle ? toTitle : op.title }
+  })
+}
+
+function resolveUniqueTitle(existing: Set<string>, baseTitle: string): string {
+  if (!existing.has(baseTitle)) return baseTitle
+  let i = 2
+  while (existing.has(`${baseTitle} (${i})`)) i += 1
+  return `${baseTitle} (${i})`
 }
 
 function isNetworkError(err: unknown): boolean {
@@ -106,6 +143,7 @@ export const useNotesStore = defineStore('notes', () => {
   })
   const contentVersion = ref(0)
   const noteContents = ref<Record<string, string>>({})
+  const pendingOps = ref<PendingOp[]>([])
   let writeQueue: Promise<unknown> = Promise.resolve()
   let syncRetryTimer: number | null = null
   let syncRetryAttempt = 0
@@ -193,6 +231,24 @@ export const useNotesStore = defineStore('notes', () => {
     syncRetryAttempt = Math.min(syncRetryAttempt + 1, 8)
   }
 
+  const mutatePendingOps = async (mutator: (ops: PendingOp[]) => PendingOp[]) => {
+    await queueWrite(async () => {
+      const nextOps = mutator([...pendingOps.value])
+      pendingOps.value = nextOps
+      await replacePendingOps(nextOps)
+    })
+  }
+
+  const removePendingOp = async (op: PendingOp) => {
+    await mutatePendingOps((ops) => {
+      const idx = ops.findIndex((candidate) => samePendingOp(candidate, op))
+      if (idx === -1) return ops
+      const next = [...ops]
+      next.splice(idx, 1)
+      return next
+    })
+  }
+
   const setOnline = (value: boolean) => {
     online.value = value
     updateSyncStatus()
@@ -216,18 +272,29 @@ export const useNotesStore = defineStore('notes', () => {
     if (!note) return
 
     const nextStarred = !Boolean(note.starred)
-    await apiFetch(`/api/notes/${encodeURIComponent(title)}/star`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ starred: nextStarred })
-    })
-    resetWsFailuresAndReconnect()
-
     note.starred = nextStarred
 
-    const cached = await getCachedNote(title)
-    if (cached) {
+    await queueWrite(async () => {
+      const cached = await getCachedNote(title)
+      if (!cached) return
       await putCachedNote({ ...cached, starred: nextStarred })
+    })
+
+    await mutatePendingOps((ops) => {
+      if (ops.some((op) => op.type === 'delete' && op.title === title)) return ops
+
+      const next = [...ops]
+      const existingIdx = next.findIndex((op) => op.type === 'star' && op.title === title)
+      if (existingIdx === -1) {
+        next.push({ type: 'star', title, starred: nextStarred })
+      } else {
+        next[existingIdx] = { type: 'star', title, starred: nextStarred }
+      }
+      return next
+    })
+
+    if (online.value) {
+      void syncWithServer().catch(() => undefined)
     }
   }
 
@@ -287,6 +354,7 @@ export const useNotesStore = defineStore('notes', () => {
     const local = await getCachedNote(title)
     const isCurrentDirty = selectedTitle.value === title && dirty.value
     if (isCurrentDirty) return
+    if (local && !isServerBacked(local)) return
 
     if (local && !local.dirty) {
       await deleteCachedNote(title)
@@ -321,7 +389,8 @@ export const useNotesStore = defineStore('notes', () => {
         content: serverNote.content,
         updatedAt: normalizeTs(serverNote.updatedAt),
         dirty: false,
-        starred: Boolean(serverNote.starred)
+        starred: Boolean(serverNote.starred),
+        existsOnServer: true
       })
     } catch {
       // If note disappeared between event and fetch, reconcile via full sync.
@@ -461,6 +530,9 @@ export const useNotesStore = defineStore('notes', () => {
   }
 
   const initialize = async () => {
+    const storedOps = await getPendingOps()
+    pendingOps.value = storedOps.map(({ id: _id, ...op }) => op)
+
     await refreshStateFromCache()
     updateSyncStatus()
     if (online.value) {
@@ -495,7 +567,8 @@ export const useNotesStore = defineStore('notes', () => {
           content: serverNote.content,
           updatedAt: normalizeTs(serverNote.updatedAt),
           dirty: false,
-          starred: Boolean(serverNote.starred)
+          starred: Boolean(serverNote.starred),
+          existsOnServer: true
         })
       }
 
@@ -562,7 +635,11 @@ export const useNotesStore = defineStore('notes', () => {
     }
 
     await queueWrite(async () => {
-      await putCachedNote(snapshot)
+      const existing = await getCachedNote(snapshot.title)
+      await putCachedNote({
+        ...snapshot,
+        existsOnServer: existing?.existsOnServer
+      })
       if (selectedTitle.value === snapshot.title && contentVersion.value === snapshot.version) {
         updateSyncStatus()
       }
@@ -607,7 +684,8 @@ export const useNotesStore = defineStore('notes', () => {
       content: chosenContent,
       updatedAt: chosenUpdatedAt,
       dirty: stillDirty,
-      starred: Boolean(saved.starred)
+      starred: Boolean(saved.starred),
+      existsOnServer: true
     })
 
     if (selectedTitle.value === title && !stillDirty) {
@@ -635,6 +713,133 @@ export const useNotesStore = defineStore('notes', () => {
     }
   }
 
+  const applyLocalRename = async (oldTitle: string, desiredTitle: string) => {
+    const local = await getCachedNote(oldTitle)
+    if (!local) throw new Error(t('noNoteSelected'))
+
+    const targetTitle = resolveUniqueTitle(new Set(notes.value.map((n) => n.title).filter((title) => title !== oldTitle)), desiredTitle)
+    if (targetTitle === oldTitle) return targetTitle
+
+    const renamed: CachedNote = {
+      ...local,
+      title: targetTitle,
+      dirty: Boolean(local.dirty),
+      existsOnServer: local.existsOnServer
+    }
+
+    await queueWrite(async () => {
+      await putCachedNote(renamed)
+      await deleteCachedNote(oldTitle)
+    })
+
+    if (selectedTitle.value === oldTitle) {
+      selectedTitle.value = targetTitle
+      currentContent.value = renamed.content || ''
+      currentUpdatedAt.value = normalizeTs(renamed.updatedAt)
+      dirty.value = Boolean(renamed.dirty)
+    }
+
+    await refreshStateFromCache()
+    return targetTitle
+  }
+
+  const clearCurrentSelection = () => {
+    selectedTitle.value = ''
+    currentContent.value = ''
+    currentUpdatedAt.value = null
+    dirty.value = false
+  }
+
+  const processPendingOps = async () => {
+    while (pendingOps.value.length > 0) {
+      const op = pendingOps.value[0]
+
+      if (op.type === 'delete') {
+        try {
+          await apiFetch(`/api/notes/${encodeURIComponent(op.title)}`, { method: 'DELETE' })
+        } catch (err: unknown) {
+          if (!isNotFoundError(err)) throw err
+        }
+        resetWsFailuresAndReconnect()
+        await removePendingOp(op)
+        continue
+      }
+
+      if (op.type === 'star') {
+        await apiFetch(`/api/notes/${encodeURIComponent(op.title)}/star`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ starred: op.starred })
+        })
+        resetWsFailuresAndReconnect()
+        await removePendingOp(op)
+        continue
+      }
+
+      let res: Response
+      try {
+        res = await apiFetch(`/api/notes/${encodeURIComponent(op.oldTitle)}/rename`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ newTitle: op.newTitle })
+        })
+      } catch (err: unknown) {
+        if (!isNotFoundError(err)) throw err
+
+        const localMissingRename = await getCachedNote(op.newTitle)
+        if (localMissingRename) {
+          await queueWrite(async () => {
+            await putCachedNote({ ...localMissingRename, existsOnServer: false })
+          })
+        }
+
+        await removePendingOp(op)
+        continue
+      }
+      resetWsFailuresAndReconnect()
+
+      const payload = (await res.json()) as RenameResponse
+      const serverTitle = payload?.title?.trim()
+      if (!serverTitle) throw new Error(t('invalidServerTitle'))
+
+      const renamedLocal = await getCachedNote(op.newTitle)
+      if (renamedLocal) {
+        if (serverTitle !== op.newTitle) {
+          await queueWrite(async () => {
+            await deleteCachedNote(op.newTitle)
+            await putCachedNote({
+              ...renamedLocal,
+              title: serverTitle,
+              existsOnServer: true,
+              dirty: Boolean(renamedLocal.dirty)
+            })
+          })
+          if (selectedTitle.value === op.newTitle) {
+            selectedTitle.value = serverTitle
+          }
+        } else {
+          await queueWrite(async () => {
+            await putCachedNote({ ...renamedLocal, existsOnServer: true })
+          })
+        }
+      }
+
+      await mutatePendingOps((ops) => {
+        const idx = ops.findIndex((candidate) => samePendingOp(candidate, op))
+        if (idx === -1) return ops
+
+        const next = [...ops]
+        next.splice(idx, 1)
+
+        if (serverTitle !== op.newTitle) {
+          return retargetPendingTitle(next, op.newTitle, serverTitle)
+        }
+
+        return next
+      })
+    }
+  }
+
   const saveCurrent = async () => {
     if (!selectedTitle.value) return
     if (saveInFlight) return saveInFlight
@@ -643,11 +848,14 @@ export const useNotesStore = defineStore('notes', () => {
 
     saveInFlight = (async () => {
       await flushPendingWrites()
+      const existing = await getCachedNote(titleAtStart)
       await putCachedNote({
         title: titleAtStart,
         content: currentContent.value,
         updatedAt: currentUpdatedAt.value || new Date().toISOString(),
-        dirty: true
+        dirty: true,
+        starred: existing?.starred,
+        existsOnServer: existing?.existsOnServer
       })
 
       if (!online.value) {
@@ -690,6 +898,8 @@ export const useNotesStore = defineStore('notes', () => {
       updateSyncStatus()
 
       try {
+        await processPendingOps()
+
         const localNotes = await getAllCachedNotes()
         for (const local of localNotes) {
           if (!local.dirty) continue
@@ -702,7 +912,7 @@ export const useNotesStore = defineStore('notes', () => {
         const serverTitles = new Set(serverMetas.map((n) => n.title))
 
         for (const local of currentLocalMap.values()) {
-          if (local.dirty || serverTitles.has(local.title)) continue
+          if (local.dirty || !isServerBacked(local) || serverTitles.has(local.title)) continue
 
           await deleteCachedNote(local.title)
 
@@ -722,7 +932,7 @@ export const useNotesStore = defineStore('notes', () => {
           const shouldPull = !isActiveAndDirty && (!local || (!local.dirty && serverTs > localTs))
 
           if (local && local.starred !== serverMeta.starred) {
-            await putCachedNote({ ...local, starred: Boolean(serverMeta.starred) })
+            await putCachedNote({ ...local, starred: Boolean(serverMeta.starred), existsOnServer: true })
           }
 
           if (!shouldPull) continue
@@ -739,7 +949,8 @@ export const useNotesStore = defineStore('notes', () => {
             content: serverNote.content,
             updatedAt: normalizeTs(serverNote.updatedAt || serverMeta.updatedAt),
             dirty: false,
-            starred: Boolean(serverNote.starred ?? serverMeta.starred)
+            starred: Boolean(serverNote.starred ?? serverMeta.starred),
+            existsOnServer: true
           })
         }
 
@@ -778,7 +989,8 @@ export const useNotesStore = defineStore('notes', () => {
       title: resolvedTitle,
       content: '',
       updatedAt: new Date().toISOString(),
-      dirty: true
+      dirty: true,
+      existsOnServer: false
     })
 
     await refreshStateFromCache()
@@ -800,61 +1012,86 @@ export const useNotesStore = defineStore('notes', () => {
 
     if (!requestedTitle) throw new Error(t('titleRequired'))
     if (requestedTitle === oldTitle) return oldTitle
-    if (!online.value) throw new Error(t('mustBeOnlineRename'))
 
-    if (dirty.value) await saveCurrent()
+    const local = await getCachedNote(oldTitle)
+    if (!local) throw new Error(t('noNoteSelected'))
 
-    const res = await apiFetch(`/api/notes/${encodeURIComponent(oldTitle)}/rename`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ newTitle: requestedTitle })
+    const targetTitle = resolveUniqueTitle(
+      new Set(notes.value.map((n) => n.title).filter((title) => title !== oldTitle)),
+      requestedTitle
+    )
+
+    const wasServerBacked = isServerBacked(local)
+    const renamedTitle = await applyLocalRename(oldTitle, targetTitle)
+
+    await mutatePendingOps((ops) => {
+      const chainIdx = ops.findIndex((op) => op.type === 'rename' && op.newTitle === oldTitle)
+      let next = retargetPendingTitle(ops, oldTitle, renamedTitle)
+
+      if (wasServerBacked && chainIdx === -1) {
+        next = [...next, { type: 'rename', oldTitle, newTitle: renamedTitle }]
+      }
+
+      return next
     })
 
-    const payload = (await res.json()) as RenameResponse
-    resetWsFailuresAndReconnect()
+    if (online.value) {
+      void syncWithServer().catch(() => undefined)
+    }
 
-    const serverTitle = payload?.title?.trim()
-    if (!serverTitle) throw new Error(t('invalidServerTitle'))
-
-    const contentToPersist = payload?.content ?? currentContent.value
-    const updatedAt = normalizeTs(payload?.updatedAt || currentUpdatedAt.value || new Date().toISOString())
-
-    await deleteCachedNote(oldTitle)
-    await putCachedNote({ title: serverTitle, content: contentToPersist, updatedAt, dirty: false })
-
-    selectedTitle.value = serverTitle
-    currentContent.value = contentToPersist
-    currentUpdatedAt.value = updatedAt
-    dirty.value = false
-
-    await refreshStateFromCache()
-    return serverTitle
+    return renamedTitle
   }
 
   const deleteCurrent = async () => {
     if (!selectedTitle.value) throw new Error(t('noNoteSelected'))
     const titleToDelete = selectedTitle.value
+    const local = await getCachedNote(titleToDelete)
+    const likelyServerBacked = isServerBacked(local)
 
-    if (!online.value) throw new Error(t('mustBeOnlineDelete'))
-    if (dirty.value) await saveCurrent()
+    await queueWrite(async () => {
+      await deleteCachedNote(titleToDelete)
+    })
 
-    try {
-      await apiFetch(`/api/notes/${encodeURIComponent(titleToDelete)}`, {
-        method: 'DELETE'
-      })
-      resetWsFailuresAndReconnect()
-    } catch (err: unknown) {
-      if (!isNotFoundError(err)) throw err
-    }
-
-    await deleteCachedNote(titleToDelete)
-
-    selectedTitle.value = ''
-    currentContent.value = ''
-    currentUpdatedAt.value = null
-    dirty.value = false
-
+    clearCurrentSelection()
     await refreshStateFromCache()
+
+    await mutatePendingOps((ops) => {
+      let deleteTarget = titleToDelete
+      let shouldDeleteOnServer = likelyServerBacked
+
+      const next = ops.filter((op) => {
+        if (op.type === 'star' && op.title === titleToDelete) return false
+        return true
+      })
+
+      const renameToDeleted = next.find((op) => op.type === 'rename' && op.newTitle === titleToDelete)
+      let pruned = next
+
+      if (renameToDeleted && renameToDeleted.type === 'rename') {
+        deleteTarget = renameToDeleted.oldTitle
+        shouldDeleteOnServer = true
+        pruned = pruned.filter(
+          (op) => !(op.type === 'rename' && op.oldTitle === renameToDeleted.oldTitle && op.newTitle === renameToDeleted.newTitle)
+        )
+      }
+
+      pruned = pruned.filter((op) => {
+        if (op.type === 'star' && (op.title === deleteTarget || op.title === titleToDelete)) return false
+        if (op.type === 'delete' && (op.title === titleToDelete || op.title === deleteTarget)) return false
+        if (op.type === 'rename' && (op.oldTitle === titleToDelete || op.newTitle === titleToDelete)) return false
+        return true
+      })
+
+      if (shouldDeleteOnServer) {
+        pruned.push({ type: 'delete', title: deleteTarget })
+      }
+
+      return pruned
+    })
+
+    if (online.value) {
+      void syncWithServer().catch(() => undefined)
+    }
   }
 
   return {

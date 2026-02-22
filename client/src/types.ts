@@ -8,7 +8,16 @@ export interface NoteMeta {
 export interface CachedNote extends NoteMeta {
   content: string
   version?: number
+  // false means local-only note not yet confirmed on server
+  existsOnServer?: boolean
 }
+
+export type PendingOp =
+  | { type: 'rename'; oldTitle: string; newTitle: string }
+  | { type: 'delete'; title: string }
+  | { type: 'star'; title: string; starred: boolean }
+
+export type StoredPendingOp = PendingOp & { id: number }
 
 export interface NoteResponse {
   title: string
