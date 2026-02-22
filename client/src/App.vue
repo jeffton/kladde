@@ -41,18 +41,27 @@ function isUnauthorized(err: unknown): boolean {
   return (err as Error)?.message === 'UNAUTHORIZED'
 }
 
+function clearUiError() {
+  error.value = ''
+}
+
 function setUiError(err: unknown) {
   if (isUnauthorized(err)) {
     user.value = null
-    error.value = ''
+    clearUiError()
     return
   }
 
   if (isNetworkError(err)) {
-    error.value = ''
+    clearUiError()
     return
   }
+
   error.value = (err as Error)?.message || t('genericError')
+}
+
+function setUiErrorMessage(message: string) {
+  error.value = message || t('genericError')
 }
 
 async function loadMe() {
@@ -101,7 +110,7 @@ async function logout() {
     await fetch('/auth/logout', { method: 'POST' })
   } finally {
     user.value = null
-    error.value = ''
+    clearUiError()
     loginError.value = ''
   }
 }
@@ -123,7 +132,7 @@ function setMobileTransition(name: '' | 'slide-from-right' | 'slide-from-left') 
 async function selectNote(title: string, replace = false, withTransition = true) {
   try {
     await store.selectNote(title)
-    error.value = ''
+    clearUiError()
     const target = { name: 'note', params: { title } }
     if (withTransition) setMobileTransition('slide-from-right')
     if (replace) await router.replace(target)
@@ -136,7 +145,7 @@ async function selectNote(title: string, replace = false, withTransition = true)
 async function createNote() {
   try {
     const title = await store.createNote()
-    error.value = ''
+    clearUiError()
     setMobileTransition('slide-from-right')
     await router.push({ name: 'note', params: { title } })
   } catch (e) {
@@ -322,7 +331,12 @@ onUnmounted(() => {
   </div>
 
   <div v-else class="app-shell" :class="appShellClass">
-    <p v-if="error" class="error">{{ error }}</p>
+    <Transition name="error-overlay">
+      <div v-if="error" class="error-overlay" role="alert" aria-live="assertive">
+        <p class="error-overlay-text">{{ error }}</p>
+        <button class="error-overlay-close" type="button" :aria-label="t('dismissError')" @click="clearUiError">×</button>
+      </div>
+    </Transition>
 
     <template v-if="isMobile">
       <Transition :name="mobileTransitionName">
@@ -345,7 +359,8 @@ onUnmounted(() => {
           :show-back="true"
           @rename="onRename"
           @back="goBackToList"
-          @deleted="onDeleted" />
+          @deleted="onDeleted"
+          @ui-error="setUiErrorMessage" />
       </Transition>
     </template>
 
@@ -365,7 +380,8 @@ onUnmounted(() => {
         :show-back="false"
         @rename="onRename"
         @back="goBackToList"
-        @deleted="onDeleted" />
+        @deleted="onDeleted"
+        @ui-error="setUiErrorMessage" />
     </template>
   </div>
 </template>

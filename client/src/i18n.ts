@@ -14,6 +14,7 @@ export const intlLocale: string = uiLocale
 const messages = {
   da: {
     genericError: 'En fejl opstod',
+    dismissError: 'Luk fejlmeddelelse',
     couldNotLoadUser: 'Kunne ikke hente bruger',
     wrongCredentials: 'Forkert brugernavn eller adgangskode',
     couldNotLogin: 'Kunne ikke logge ind',
@@ -52,7 +53,7 @@ const messages = {
     confirmDelete: 'Er du sikker?',
     back: 'Tilbage',
     more: 'Mere',
-    deleteNote: 'Slet note',
+    deleteNote: 'Slet',
     editorToolbar: 'Editorværktøjslinje',
     heading1: 'Overskrift 1',
     heading2: 'Overskrift 2',
@@ -89,6 +90,7 @@ const messages = {
   },
   sv: {
     genericError: 'Ett fel uppstod',
+    dismissError: 'Stäng felmeddelande',
     couldNotLoadUser: 'Kunde inte hämta användare',
     wrongCredentials: 'Fel användarnamn eller lösenord',
     couldNotLogin: 'Kunde inte logga in',
@@ -127,7 +129,7 @@ const messages = {
     confirmDelete: 'Är du säker?',
     back: 'Tillbaka',
     more: 'Mer',
-    deleteNote: 'Ta bort anteckning',
+    deleteNote: 'Ta bort',
     editorToolbar: 'Redigeringsverktygsfält',
     heading1: 'Rubrik 1',
     heading2: 'Rubrik 2',
@@ -164,6 +166,7 @@ const messages = {
   },
   'en-US': {
     genericError: 'Something went wrong',
+    dismissError: 'Dismiss error message',
     couldNotLoadUser: 'Could not load user',
     wrongCredentials: 'Incorrect username or password',
     couldNotLogin: 'Could not log in',
@@ -202,7 +205,7 @@ const messages = {
     confirmDelete: 'Are you sure?',
     back: 'Back',
     more: 'More',
-    deleteNote: 'Delete note',
+    deleteNote: 'Delete',
     editorToolbar: 'Editor toolbar',
     heading1: 'Heading 1',
     heading2: 'Heading 2',
@@ -239,6 +242,7 @@ const messages = {
   },
   fr: {
     genericError: 'Une erreur est survenue',
+    dismissError: 'Fermer le message d’erreur',
     couldNotLoadUser: 'Impossible de charger l’utilisateur',
     wrongCredentials: 'Nom d’utilisateur ou mot de passe incorrect',
     couldNotLogin: 'Impossible de se connecter',
@@ -277,7 +281,7 @@ const messages = {
     confirmDelete: 'Êtes-vous sûr ?',
     back: 'Retour',
     more: 'Plus',
-    deleteNote: 'Supprimer la note',
+    deleteNote: 'Supprimer',
     editorToolbar: 'Barre d’outils de l’éditeur',
     heading1: 'Titre 1',
     heading2: 'Titre 2',

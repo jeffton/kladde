@@ -252,7 +252,7 @@ button:disabled {
   color: var(--muted);
   padding: .5rem .72rem .2rem;
   white-space: nowrap;
-  text-align: right;
+  text-align: left;
 }
 
 .user-menu-item {
@@ -564,7 +564,56 @@ button:disabled {
   transform: rotate(180deg);
 }
 
-.error { color: #ef4444; }
+.error-overlay {
+  position: fixed;
+  top: calc(max(.75rem, var(--safe-top)) + .2rem);
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(720px, calc(100vw - 1.4rem - var(--safe-left) - var(--safe-right)));
+  display: flex;
+  align-items: flex-start;
+  gap: .6rem;
+  padding: .7rem .75rem;
+  border-radius: .75rem;
+  background: color-mix(in srgb, #ef4444 84%, #1f0000 16%);
+  color: #fff4f4;
+  box-shadow: 0 10px 26px color-mix(in srgb, #000 28%, transparent);
+  z-index: 12000;
+}
+
+.error-overlay-text {
+  margin: 0;
+  flex: 1;
+  min-width: 0;
+  line-height: 1.35;
+  font-size: .9rem;
+}
+
+.error-overlay-close {
+  width: 2.2rem;
+  height: 2.2rem;
+  border-radius: .55rem;
+  color: inherit;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 1.4rem;
+  line-height: 1;
+  background: color-mix(in srgb, #ffffff 14%, transparent);
+}
+
+.error-overlay-enter-active,
+.error-overlay-leave-active {
+  transition: opacity .18s ease, transform .18s ease;
+}
+
+.error-overlay-enter-from,
+.error-overlay-leave-to {
+  opacity: 0;
+  transform: translate(-50%, -10px);
+}
 
 .status-indicator-wrap {
   position: relative;
@@ -896,6 +945,10 @@ button:disabled {
 
   .note-menu-delete:hover {
     background: color-mix(in srgb, #ef4444 18%, transparent);
+  }
+
+  .error-overlay-close:hover {
+    background: color-mix(in srgb, #ffffff 22%, transparent);
   }
 
   .user-menu-item:hover {

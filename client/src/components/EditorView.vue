@@ -39,10 +39,10 @@ const emit = defineEmits<{
   (e: 'rename', title: string): void
   (e: 'back'): void
   (e: 'deleted'): void
+  (e: 'ui-error', message: string): void
 }>()
 
 const editableTitle = ref('')
-const error = ref('')
 const showPlain = ref(false)
 const plainTextarea = ref<HTMLTextAreaElement | null>(null)
 const plainWrap = ref<HTMLElement | null>(null)
@@ -250,7 +250,7 @@ const editor = useEditor({
       if (props.store.selectedTitle !== titleAtSchedule) return
       if (nextMarkdown !== props.store.currentContent) {
         void props.store.setCurrentContent(nextMarkdown).catch((err: unknown) => {
-          error.value = (err as Error)?.message || t('couldNotSaveLocally')
+          emit('ui-error', (err as Error)?.message || t('couldNotSaveLocally'))
         })
       }
     }, 300)
@@ -428,10 +428,9 @@ async function commitTitleChange() {
   try {
     const renamedTitle = await props.store.renameCurrent(next)
     editableTitle.value = renamedTitle
-    error.value = ''
     emit('rename', renamedTitle)
   } catch (e) {
-    error.value = (e as Error).message
+    emit('ui-error', (e as Error).message || t('genericError'))
     editableTitle.value = props.store.selectedTitle
   }
 }
@@ -448,10 +447,9 @@ async function deleteCurrentNote() {
   try {
     await props.store.deleteCurrent()
     showNoteMenu.value = false
-    error.value = ''
     emit('deleted')
   } catch (e) {
-    error.value = (e as Error).message
+    emit('ui-error', (e as Error).message || t('genericError'))
   }
 }
 
@@ -608,7 +606,6 @@ onUnmounted(() => {
       @toggle-plain="showPlain = !showPlain"
       @plain-action="applyPlainAction" />
 
-    <p v-if="error" class="error">{{ error }}</p>
     <section v-if="showPlain" ref="plainWrap" class="plain-wrap">
       <textarea
         ref="plainTextarea"
