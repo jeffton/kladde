@@ -55,10 +55,6 @@ let updateDebounce: number | null = null
 // We serialize them as \u00A0 (nbsp), then strip on save.
 const NBSP = '\u00A0'
 
-// markdown-it-task-lists requires some content after `[ ]` / `[x]`.
-// Bare `- [ ]` is parsed as a plain list item with literal text.
-// Use a zero-width space to keep empty task items renderable after reload.
-// Ensure empty task items have trailing space for markdown-it parsing
 
 interface MarkdownSerializerState {
   write: (content: string) => void
@@ -94,19 +90,12 @@ const PreservingParagraph = Paragraph.extend({
   },
 })
 
-// markdown-it-task-lists requires at least one visible char after [ ]/[x].
-// We inject a temp char on load so it parses, and strip it on save so the file stays clean.
-const TASK_EMPTY_RE = /^(\s*[-*+]\s\[(?:\s|x|X)\])\s*$/gm
-const TASK_PLACEHOLDER = '\u2063' // invisible separator — parsed as content by markdown-it
-
 function editorToMd(md: string): string {
-  // Strip any placeholder chars on save — file stays clean
-  return md.replace(/\u2063/g, '').replace(TASK_EMPTY_RE, '$1')
+  return md
 }
 
 function mdToEditor(md: string): string {
-  // Inject placeholder so markdown-it parses empty tasks as checkboxes
-  return md.replace(TASK_EMPTY_RE, `$1 ${TASK_PLACEHOLDER}`)
+  return md
 }
 
 const showTooltip = ref(false)
