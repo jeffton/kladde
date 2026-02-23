@@ -129,15 +129,22 @@ function setMobileTransition(name: '' | 'slide-from-right' | 'slide-from-left') 
   mobileTransitionName.value = isMobile.value ? name : ''
 }
 
+let selectRequestId = 0
+
 async function selectNote(title: string, replace = false, withTransition = true) {
+  const requestId = ++selectRequestId
+
   try {
     await store.selectNote(title)
+    if (requestId !== selectRequestId) return
+
     clearUiError()
     const target = { name: 'note', params: { title } }
     if (withTransition) setMobileTransition('slide-from-right')
     if (replace) await router.replace(target)
     else await router.push(target)
   } catch (e) {
+    if (requestId !== selectRequestId) return
     setUiError(e)
   }
 }
