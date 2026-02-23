@@ -4,6 +4,14 @@ import { deleteCachedNote, getAllCachedNotes, getCachedNote, getPendingOps, putC
 import type { CachedNote, NoteMeta, NoteResponse, PendingOp, RenameResponse, SyncState } from '../types'
 import { t } from '../i18n'
 
+function makeClientOrigin(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID()
+  }
+  return `${Date.now()}-${Math.random().toString(36).slice(2)}`
+}
+
+const clientOrigin = makeClientOrigin()
 
 function normalizeTs(value?: string | null): string {
   if (!value) return ''
@@ -104,7 +112,20 @@ function isNotFoundError(err: unknown): boolean {
 }
 
 async function apiFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
-  const res = await fetch(input, init)
+  const method = ((init?.method || (input instanceof Request ? input.method : 'GET')) || 'GET').toUpperCase()
+  let requestInit = init
+
+  if (method !== 'GET' && method !== 'HEAD') {
+    const headers = new Headers(input instanceof Request ? input.headers : undefined)
+    if (init?.headers) {
+      const extra = new Headers(init.headers)
+      extra.forEach((value, key) => headers.set(key, value))
+    }
+    headers.set('X-Kladde-Origin', clientOrigin)
+    requestInit = { ...init, headers }
+  }
+
+  const res = await fetch(input, requestInit)
 
   if (res.status === 401) {
     throw new Error('UNAUTHORIZED')
@@ -144,6 +165,7 @@ export const useNotesStore = defineStore('notes', () => {
   const contentVersion = ref(0)
   const noteContents = ref<Record<string, string>>({})
   const pendingOps = ref<PendingOp[]>([])
+  const pendingLocalContentCommit = ref(false)
   let writeQueue: Promise<unknown> = Promise.resolve()
   let syncRetryTimer: number | null = null
   let syncRetryAttempt = 0
@@ -168,6 +190,10 @@ export const useNotesStore = defineStore('notes', () => {
       return tsMs(b.updatedAt) - tsMs(a.updatedAt)
     })
   })
+
+  const isActiveNoteLocallyDirty = (title: string) => {
+    return selectedTitle.value === title && (dirty.value || pendingLocalContentCommit.value)
+  }
 
   const updateSyncStatus = () => {
     switch (syncState.value) {
@@ -311,7 +337,7 @@ export const useNotesStore = defineStore('notes', () => {
     if (activeTitle) {
       const inMemoryActive = notes.value.find((n) => n.title === activeTitle)
       const cachedActive = cachedByTitle.get(activeTitle)
-      const isLocallyDirty = dirty.value || Boolean(inMemoryActive?.dirty)
+      const isLocallyDirty = pendingLocalContentCommit.value || dirty.value || Boolean(inMemoryActive?.dirty)
       const cachedUpdatedAt = normalizeTs(cachedActive?.updatedAt)
       const inMemoryUpdatedAt = normalizeTs(currentUpdatedAt.value)
 
@@ -342,7 +368,7 @@ export const useNotesStore = defineStore('notes', () => {
       selectedTitle.value = cached.sort((a, b) => tsMs(b.updatedAt) - tsMs(a.updatedAt))[0].title
     }
 
-    if (selectedTitle.value && !dirty.value) {
+    if (selectedTitle.value && !dirty.value && !pendingLocalContentCommit.value) {
       const selectedMeta = notes.value.find((n) => n.title === selectedTitle.value)
       currentContent.value = noteContents.value[selectedTitle.value] || ''
       currentUpdatedAt.value = selectedMeta?.updatedAt || null
@@ -352,7 +378,7 @@ export const useNotesStore = defineStore('notes', () => {
 
   const handleRemoteDelete = async (title: string) => {
     const local = await getCachedNote(title)
-    const isCurrentDirty = selectedTitle.value === title && dirty.value
+    const isCurrentDirty = isActiveNoteLocallyDirty(title)
     if (isCurrentDirty) return
     if (local && !isServerBacked(local)) return
 
@@ -363,6 +389,7 @@ export const useNotesStore = defineStore('notes', () => {
       selectedTitle.value = ''
       currentContent.value = ''
       currentUpdatedAt.value = null
+      pendingLocalContentCommit.value = false
       dirty.value = false
     }
     await refreshStateFromCache()
@@ -374,15 +401,16 @@ export const useNotesStore = defineStore('notes', () => {
       return
     }
 
-    const isCurrentDirty = selectedTitle.value === title && dirty.value
-    if (isCurrentDirty) return
+    if (isActiveNoteLocallyDirty(title)) return
 
     try {
       const noteRes = await apiFetch(`/api/notes/${encodeURIComponent(title)}`)
       const serverNote = (await noteRes.json()) as NoteResponse
 
+      if (isActiveNoteLocallyDirty(title)) return
+
       const local = await getCachedNote(title)
-      if (local?.dirty) return
+      if (local?.dirty || isActiveNoteLocallyDirty(title)) return
 
       await putCachedNote({
         title: serverNote.title,
@@ -480,8 +508,9 @@ export const useNotesStore = defineStore('notes', () => {
 
     ws.onmessage = (event) => {
       try {
-        const payload = JSON.parse(String(event.data)) as { type?: string; title?: string; action?: string }
+        const payload = JSON.parse(String(event.data)) as { type?: string; title?: string; action?: string; origin?: string }
         if (payload.type === 'note_changed' && payload.title && payload.action) {
+          if (payload.origin && payload.origin === clientOrigin) return
           queueRemoteChange(payload.title, payload.action)
         }
       } catch {
@@ -543,6 +572,7 @@ export const useNotesStore = defineStore('notes', () => {
 
   const selectNote = async (title: string) => {
     selectedTitle.value = title
+    pendingLocalContentCommit.value = false
     const cached = await getCachedNote(title)
     if (cached) {
       currentContent.value = cached.content || ''
@@ -572,7 +602,7 @@ export const useNotesStore = defineStore('notes', () => {
         })
       }
 
-      if (selectedTitle.value === title && !dirty.value) {
+      if (selectedTitle.value === title && !dirty.value && !pendingLocalContentCommit.value) {
         currentContent.value = serverNote.content || ''
         currentUpdatedAt.value = normalizeTs(serverNote.updatedAt)
         dirty.value = false
@@ -598,8 +628,10 @@ export const useNotesStore = defineStore('notes', () => {
   }
 
   const markCurrentDirty = () => {
-    if (dirty.value) return
-    dirty.value = true
+    pendingLocalContentCommit.value = true
+    if (!dirty.value) {
+      dirty.value = true
+    }
 
     if (!selectedTitle.value) return
     const selectedMeta = notes.value.find((n) => n.title === selectedTitle.value)
@@ -608,6 +640,7 @@ export const useNotesStore = defineStore('notes', () => {
 
   const setCurrentContent = async (content: string) => {
     currentContent.value = content
+    pendingLocalContentCommit.value = false
     dirty.value = true
     const nowIso = new Date().toISOString()
     currentUpdatedAt.value = nowIso
@@ -673,8 +706,13 @@ export const useNotesStore = defineStore('notes', () => {
 
     // Dirty until server has saved the exact content we currently hold locally.
     const current = await getCachedNote(title)
-    const stillDirty = Boolean(current?.dirty) && (current?.content ?? '') !== saved.content
-    const chosenContent = stillDirty ? (current?.content ?? local.content) : saved.content
+    const hasPendingActiveCommit = selectedTitle.value === title && pendingLocalContentCommit.value
+    const activeMemoryDiffers = selectedTitle.value === title && currentContent.value !== saved.content
+    const currentContentSnapshot = current?.content ?? local.content
+    const stillDirty = hasPendingActiveCommit || activeMemoryDiffers || currentContentSnapshot !== saved.content
+    const chosenContent = stillDirty
+      ? (activeMemoryDiffers ? currentContent.value : currentContentSnapshot)
+      : saved.content
     const chosenUpdatedAt = stillDirty
       ? normalizeTs(current?.updatedAt ?? local.updatedAt)
       : newerTs(current?.updatedAt ?? local.updatedAt, saved.updatedAt ?? local.updatedAt)
@@ -688,14 +726,14 @@ export const useNotesStore = defineStore('notes', () => {
       existsOnServer: true
     })
 
-    if (selectedTitle.value === title && !stillDirty) {
+    if (selectedTitle.value === title) {
       currentUpdatedAt.value = chosenUpdatedAt
-      dirty.value = false
+      dirty.value = stillDirty
 
       const selectedMeta = notes.value.find((n) => n.title === title)
       if (selectedMeta) {
         selectedMeta.updatedAt = chosenUpdatedAt
-        selectedMeta.dirty = false
+        selectedMeta.dirty = stillDirty
       }
     }
   }
@@ -736,6 +774,7 @@ export const useNotesStore = defineStore('notes', () => {
       selectedTitle.value = targetTitle
       currentContent.value = renamed.content || ''
       currentUpdatedAt.value = normalizeTs(renamed.updatedAt)
+      pendingLocalContentCommit.value = false
       dirty.value = Boolean(renamed.dirty)
     }
 
@@ -747,6 +786,7 @@ export const useNotesStore = defineStore('notes', () => {
     selectedTitle.value = ''
     currentContent.value = ''
     currentUpdatedAt.value = null
+    pendingLocalContentCommit.value = false
     dirty.value = false
   }
 
@@ -920,6 +960,7 @@ export const useNotesStore = defineStore('notes', () => {
             selectedTitle.value = ''
             currentContent.value = ''
             currentUpdatedAt.value = null
+            pendingLocalContentCommit.value = false
             dirty.value = false
           }
         }
@@ -928,7 +969,7 @@ export const useNotesStore = defineStore('notes', () => {
           const local = currentLocalMap.get(serverMeta.title)
           const serverTs = tsMs(serverMeta.updatedAt)
           const localTs = local ? tsMs(local.updatedAt) : 0
-          const isActiveAndDirty = serverMeta.title === selectedTitle.value && dirty.value
+          const isActiveAndDirty = isActiveNoteLocallyDirty(serverMeta.title)
           const shouldPull = !isActiveAndDirty && (!local || (!local.dirty && serverTs > localTs))
 
           if (local && local.starred !== serverMeta.starred) {

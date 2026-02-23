@@ -36,11 +36,12 @@ func main() {
 	}
 
 	s := &Server{
-		notesBaseDir: opts.Notes,
-		clientDir:    opts.Client,
-		usersFile:    opts.Users,
-		sessions:     make(map[string]Session),
-		hub:          NewHub(),
+		notesBaseDir:        opts.Notes,
+		clientDir:           opts.Client,
+		usersFile:           opts.Users,
+		sessions:            make(map[string]Session),
+		hub:                 NewHub(),
+		recentChangeOrigins: NewRecentChangeOrigins(),
 	}
 
 	if opts.GitBackup.Enabled {

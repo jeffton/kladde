@@ -31,6 +31,7 @@ func (s *Server) handleNotes(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	userDir := s.userNotesDir(session.User.Username)
+	origin := readChangeOrigin(r)
 	if err := os.MkdirAll(userDir, 0o755); err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
@@ -63,7 +64,8 @@ func (s *Server) handleNotes(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusInternalServerError, err)
 			return
 		}
-		s.hub.Broadcast(session.User.Username, NoteChangeEvent{Type: "note_changed", Title: note.Title, Action: action})
+		s.recordRecentChangeOrigin(session.User.Username, note.Title, origin)
+		s.hub.Broadcast(session.User.Username, NoteChangeEvent{Type: "note_changed", Title: note.Title, Action: action, Origin: origin})
 		writeJSON(w, http.StatusCreated, note)
 	default:
 		w.WriteHeader(http.StatusMethodNotAllowed)
@@ -76,6 +78,7 @@ func (s *Server) handleNoteByTitle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	userDir := s.userNotesDir(session.User.Username)
+	origin := readChangeOrigin(r)
 	if err := os.MkdirAll(userDir, 0o755); err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
@@ -125,8 +128,10 @@ func (s *Server) handleNoteByTitle(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		s.hub.Broadcast(session.User.Username, NoteChangeEvent{Type: "note_changed", Title: oldTitle, Action: "deleted"})
-		s.hub.Broadcast(session.User.Username, NoteChangeEvent{Type: "note_changed", Title: finalTitle, Action: "created"})
+		s.recordRecentChangeOrigin(session.User.Username, oldTitle, origin)
+		s.recordRecentChangeOrigin(session.User.Username, finalTitle, origin)
+		s.hub.Broadcast(session.User.Username, NoteChangeEvent{Type: "note_changed", Title: oldTitle, Action: "deleted", Origin: origin})
+		s.hub.Broadcast(session.User.Username, NoteChangeEvent{Type: "note_changed", Title: finalTitle, Action: "created", Origin: origin})
 		writeJSON(w, http.StatusOK, note)
 		return
 	}
@@ -213,7 +218,8 @@ func (s *Server) handleNoteByTitle(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusInternalServerError, err)
 			return
 		}
-		s.hub.Broadcast(session.User.Username, NoteChangeEvent{Type: "note_changed", Title: note.Title, Action: action})
+		s.recordRecentChangeOrigin(session.User.Username, note.Title, origin)
+		s.hub.Broadcast(session.User.Username, NoteChangeEvent{Type: "note_changed", Title: note.Title, Action: action, Origin: origin})
 		writeJSON(w, http.StatusOK, note)
 	case http.MethodDelete:
 		if err := s.deleteNote(userDir, title); err != nil {
@@ -224,7 +230,8 @@ func (s *Server) handleNoteByTitle(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusInternalServerError, err)
 			return
 		}
-		s.hub.Broadcast(session.User.Username, NoteChangeEvent{Type: "note_changed", Title: title, Action: "deleted"})
+		s.recordRecentChangeOrigin(session.User.Username, title, origin)
+		s.hub.Broadcast(session.User.Username, NoteChangeEvent{Type: "note_changed", Title: title, Action: "deleted", Origin: origin})
 		writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
 	default:
 		w.WriteHeader(http.StatusMethodNotAllowed)

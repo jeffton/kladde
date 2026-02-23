@@ -151,6 +151,9 @@ func (s *Server) startFileWatcher() error {
 					}
 					knownMu.Unlock()
 
+					if _, found := s.consumeRecentChangeOrigin(username, title); found {
+						return
+					}
 					s.hub.Broadcast(username, NoteChangeEvent{Type: "note_changed", Title: title, Action: finalAction})
 				})
 			case err, ok := <-watcher.Errors:

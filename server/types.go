@@ -45,6 +45,7 @@ type NoteChangeEvent struct {
 	Type   string `json:"type"`
 	Title  string `json:"title"`
 	Action string `json:"action"`
+	Origin string `json:"origin,omitempty"`
 }
 
 type Hub struct {
@@ -64,12 +65,13 @@ type debouncedEntry struct {
 }
 
 type Server struct {
-	notesBaseDir string
-	clientDir    string
-	usersFile    string
-	sessions     map[string]Session
-	sessionsMu   sync.RWMutex
-	usersMu      sync.Mutex
-	hub          *Hub
-	gitBackup    *GitBackup
+	notesBaseDir        string
+	clientDir           string
+	usersFile           string
+	sessions            map[string]Session
+	sessionsMu          sync.RWMutex
+	usersMu             sync.Mutex
+	hub                 *Hub
+	recentChangeOrigins *RecentChangeOrigins
+	gitBackup           *GitBackup
 }

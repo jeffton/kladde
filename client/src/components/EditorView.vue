@@ -240,8 +240,24 @@ const editor = useEditor({
 
 function setEditorMarkdown(markdown = '') {
   if (!editor.value) return
+
+  const wasFocused = editor.value.isFocused
+  const previousSelection = {
+    from: editor.value.state.selection.from,
+    to: editor.value.state.selection.to
+  }
+
   ignoreEditorChanges = true
   editor.value.commands.setContent(markdown || '', false)
+
+  const docMax = Math.max(1, editor.value.state.doc.content.size)
+  const from = Math.min(Math.max(previousSelection.from, 1), docMax)
+  const to = Math.min(Math.max(previousSelection.to, 1), docMax)
+
+  editor.value.commands.setTextSelection({ from: Math.min(from, to), to: Math.max(from, to) })
+  if (wasFocused) {
+    editor.value.commands.focus()
+  }
   ignoreEditorChanges = false
 }
 
