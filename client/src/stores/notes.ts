@@ -4,6 +4,7 @@ import { deleteCachedNote, getAllCachedNotes, getCachedNote, getPendingOps, putC
 import type { CachedNote, NoteMeta, NoteResponse, PendingOp, RenameResponse, SyncState } from '../types'
 import { t } from '../i18n'
 import { apiFetch, clientOrigin, isNotFoundError } from './notesApi'
+import { createNotesWebSocket } from './notesWebSocket'
 import { isNetworkError, toUserSyncError } from './notesErrors'
 import {
   isServerBacked,
@@ -46,14 +47,6 @@ export const useNotesStore = defineStore('notes', () => {
   let pushInFlight: Promise<void> | null = null
   let saveInFlight: Promise<void> | null = null
   const wsConnected = ref(false)
-  let ws: WebSocket | null = null
-  let wsReconnectTimer: number | null = null
-  let wsReconnectAttempt = 0
-  let wsConsecutiveFailures = 0
-  let wsReconnectDisabled = false
-  let lastMeUnauthorized = false
-  let pendingRemoteChanges: Map<string, string> = new Map()
-  let remoteChangeTimer: number | null = null
 
   const sortedNotes = computed(() => {
     return [...notes.value].sort((a, b) => {
@@ -158,12 +151,7 @@ export const useNotesStore = defineStore('notes', () => {
       return
     }
     clearSyncRetry()
-    wsConnected.value = false
-    if (ws) {
-      ws.close()
-      ws = null
-    }
-    clearWsReconnect()
+    disconnectWebSocket()
   }
 
   const togglePin = async (title: string) => {
@@ -249,186 +237,24 @@ export const useNotesStore = defineStore('notes', () => {
     }
   }
 
-  const handleRemoteDelete = async (title: string) => {
-    const local = await getCachedNote(title)
-    const isCurrentDirty = isActiveNoteLocallyDirty(title)
-    if (isCurrentDirty) return
-    if (local && !isServerBacked(local)) return
-
-    if (local && !local.dirty) {
-      await deleteCachedNote(title)
-    }
-    if (selectedTitle.value === title) {
-      selectedTitle.value = ''
-      currentContent.value = ''
-      currentUpdatedAt.value = null
-      dirty.value = false
-    }
-    await refreshStateFromCache()
-  }
-
-  const handleRemoteNoteChange = async (title: string, action: string) => {
-    if (action === 'deleted') {
-      await handleRemoteDelete(title)
-      return
-    }
-
-    if (isActiveNoteLocallyDirty(title)) return
-
-    try {
-      const noteRes = await apiFetch(`/api/notes/${encodeURIComponent(title)}`)
-      const serverNote = (await noteRes.json()) as NoteResponse
-
-      if (isActiveNoteLocallyDirty(title)) return
-
-      const local = await getCachedNote(title)
-      if (local?.dirty || isActiveNoteLocallyDirty(title)) return
-
-      await putCachedNote({
-        title: serverNote.title,
-        content: serverNote.content,
-        updatedAt: normalizeTs(serverNote.updatedAt),
-        dirty: false,
-        starred: Boolean(serverNote.starred),
-        existsOnServer: true
-      })
-    } catch {
-      // If note disappeared between event and fetch, reconcile via full sync.
-      if (action === 'created' || action === 'updated') {
-        void syncWithServer().catch(() => undefined)
-      }
-    }
-  }
-
-  const queueRemoteChange = (title: string, action: string) => {
-    pendingRemoteChanges.set(title, action)
-    if (remoteChangeTimer !== null) window.clearTimeout(remoteChangeTimer)
-    remoteChangeTimer = window.setTimeout(() => {
-      remoteChangeTimer = null
-      const changes = Array.from(pendingRemoteChanges.entries())
-      pendingRemoteChanges.clear()
-
-      void (async () => {
-        for (const [changedTitle, changedAction] of changes) {
-          await handleRemoteNoteChange(changedTitle, changedAction)
-        }
-        await refreshStateFromCache()
-      })().catch(() => {
-        void syncWithServer().catch(() => undefined)
-      })
-    }, 200)
-  }
-
-  const clearWsReconnect = () => {
-    if (wsReconnectTimer !== null) {
-      window.clearTimeout(wsReconnectTimer)
-      wsReconnectTimer = null
-    }
-  }
-
-  const resetWsFailuresAndReconnect = () => {
-    wsConsecutiveFailures = 0
-    wsReconnectDisabled = false
-    lastMeUnauthorized = false
-    wsReconnectAttempt = 0
-    clearWsReconnect()
-    if (online.value && !wsConnected.value) {
-      void connectWebSocket()
-    }
-  }
-
-  const scheduleWsReconnect = () => {
-    if (wsReconnectDisabled || wsReconnectTimer !== null) return
-    const delay = Math.min(30000, 1000 * 2 ** wsReconnectAttempt)
-    wsReconnectTimer = window.setTimeout(() => {
-      wsReconnectTimer = null
-      void connectWebSocket()
-    }, delay)
-    wsReconnectAttempt = Math.min(wsReconnectAttempt + 1, 5)
-  }
-
-  const connectWebSocket = async () => {
-    if (!online.value || wsReconnectDisabled) return
-    if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return
-
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const wsUrl = `${protocol}//${window.location.host}/api/ws`
-    let opened = false
-
-    try {
-      ws = new WebSocket(wsUrl)
-    } catch {
-      wsConsecutiveFailures += 1
-      if (wsConsecutiveFailures >= 5) {
-        wsReconnectDisabled = true
-        return
-      }
-      scheduleWsReconnect()
-      return
-    }
-
-    ws.onopen = () => {
-      opened = true
-      wsConnected.value = true
-      wsReconnectAttempt = 0
-      wsConsecutiveFailures = 0
-      wsReconnectDisabled = false
-      lastMeUnauthorized = false
-      clearWsReconnect()
-      void syncWithServer().catch(() => undefined)
-    }
-
-    ws.onmessage = (event) => {
-      try {
-        const payload = JSON.parse(String(event.data)) as { type?: string; title?: string; action?: string; origin?: string }
-        if (payload.type === 'note_changed' && payload.title && payload.action) {
-          if (payload.origin && payload.origin === clientOrigin) return
-          queueRemoteChange(payload.title, payload.action)
-        }
-      } catch {
-        // ignore malformed payloads
-      }
-    }
-
-    ws.onclose = (event) => {
-      wsConnected.value = false
-      ws = null
-
-      if (!opened) {
-        wsConsecutiveFailures += 1
-      }
-
-      if (event.code === 1008) {
-        wsReconnectDisabled = true
-        return
-      }
-
-      void (async () => {
-        try {
-          await apiFetch('/api/me')
-          lastMeUnauthorized = false
-        } catch (err: unknown) {
-          lastMeUnauthorized = (err as Error)?.message === 'UNAUTHORIZED'
-        }
-
-        if (lastMeUnauthorized) {
-          wsReconnectDisabled = true
-          return
-        }
-
-        if (wsConsecutiveFailures >= 5) {
-          wsReconnectDisabled = true
-          return
-        }
-
-        scheduleWsReconnect()
-      })()
-    }
-
-    ws.onerror = () => {
-      wsConnected.value = false
-    }
-  }
+  const { connectWebSocket, disconnectWebSocket, resetWsFailuresAndReconnect } = createNotesWebSocket({
+    online,
+    wsConnected,
+    clientOrigin,
+    selectedTitle,
+    currentContent,
+    currentUpdatedAt,
+    dirty,
+    apiFetch,
+    syncWithServer: () => syncWithServer(),
+    refreshStateFromCache,
+    getCachedNote,
+    putCachedNote,
+    deleteCachedNote,
+    normalizeTs,
+    isServerBacked,
+    isActiveNoteLocallyDirty
+  })
 
   const initialize = async () => {
     const storedOps = await getPendingOps()
