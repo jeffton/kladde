@@ -184,7 +184,9 @@ export const useNotesStore = defineStore('notes', () => {
   const contentVersion = ref(0)
   const noteContents = ref<Record<string, string>>({})
   const pendingOps = ref<PendingOp[]>([])
-  const pendingLocalContentCommit = ref(false)
+  const contentPersistDelayMs = 120
+  let pendingContentSnapshot: CachedNote | null = null
+  let contentPersistTimer: number | null = null
   let writeQueue: Promise<unknown> = Promise.resolve()
   let syncRetryTimer: number | null = null
   let syncRetryAttempt = 0
@@ -211,7 +213,7 @@ export const useNotesStore = defineStore('notes', () => {
   })
 
   const isActiveNoteLocallyDirty = (title: string) => {
-    return selectedTitle.value === title && (dirty.value || pendingLocalContentCommit.value)
+    return selectedTitle.value === title && dirty.value
   }
 
   const updateSyncStatus = () => {
@@ -356,7 +358,7 @@ export const useNotesStore = defineStore('notes', () => {
     if (activeTitle) {
       const inMemoryActive = notes.value.find((n) => n.title === activeTitle)
       const cachedActive = cachedByTitle.get(activeTitle)
-      const isLocallyDirty = pendingLocalContentCommit.value || dirty.value || Boolean(inMemoryActive?.dirty)
+      const isLocallyDirty = dirty.value || Boolean(inMemoryActive?.dirty)
       const cachedUpdatedAt = normalizeTs(cachedActive?.updatedAt)
       const inMemoryUpdatedAt = normalizeTs(currentUpdatedAt.value)
 
@@ -387,7 +389,7 @@ export const useNotesStore = defineStore('notes', () => {
       selectedTitle.value = cached.sort((a, b) => tsMs(b.updatedAt) - tsMs(a.updatedAt))[0].title
     }
 
-    if (selectedTitle.value && !dirty.value && !pendingLocalContentCommit.value) {
+    if (selectedTitle.value && !dirty.value) {
       const selectedMeta = notes.value.find((n) => n.title === selectedTitle.value)
       currentContent.value = noteContents.value[selectedTitle.value] || ''
       currentUpdatedAt.value = selectedMeta?.updatedAt || null
@@ -408,7 +410,6 @@ export const useNotesStore = defineStore('notes', () => {
       selectedTitle.value = ''
       currentContent.value = ''
       currentUpdatedAt.value = null
-      pendingLocalContentCommit.value = false
       dirty.value = false
     }
     await refreshStateFromCache()
@@ -590,8 +591,8 @@ export const useNotesStore = defineStore('notes', () => {
   }
 
   const selectNote = async (title: string) => {
+    await flushPendingWrites()
     selectedTitle.value = title
-    pendingLocalContentCommit.value = false
     const cached = await getCachedNote(title)
     if (cached) {
       currentContent.value = cached.content || ''
@@ -621,7 +622,7 @@ export const useNotesStore = defineStore('notes', () => {
         })
       }
 
-      if (selectedTitle.value === title && !dirty.value && !pendingLocalContentCommit.value) {
+      if (selectedTitle.value === title && !dirty.value) {
         currentContent.value = serverNote.content || ''
         currentUpdatedAt.value = normalizeTs(serverNote.updatedAt)
         dirty.value = false
@@ -642,24 +643,44 @@ export const useNotesStore = defineStore('notes', () => {
     return writeQueue
   }
 
-  const flushPendingWrites = async () => {
-    await writeQueue
+  const persistLatestContentSnapshot = async () => {
+    const snapshot = pendingContentSnapshot
+    if (!snapshot) return
+    pendingContentSnapshot = null
+
+    await queueWrite(async () => {
+      const existing = await getCachedNote(snapshot.title)
+      await putCachedNote({
+        ...snapshot,
+        existsOnServer: existing?.existsOnServer
+      })
+      if (selectedTitle.value === snapshot.title && contentVersion.value === snapshot.version) {
+        updateSyncStatus()
+      }
+    })
   }
 
-  const markCurrentDirty = () => {
-    pendingLocalContentCommit.value = true
-    if (!dirty.value) {
-      dirty.value = true
+  const scheduleContentPersist = () => {
+    if (contentPersistTimer !== null) return
+
+    contentPersistTimer = window.setTimeout(() => {
+      contentPersistTimer = null
+      void persistLatestContentSnapshot().catch(() => undefined)
+    }, contentPersistDelayMs)
+  }
+
+  const flushPendingWrites = async () => {
+    if (contentPersistTimer !== null) {
+      window.clearTimeout(contentPersistTimer)
+      contentPersistTimer = null
     }
 
-    if (!selectedTitle.value) return
-    const selectedMeta = notes.value.find((n) => n.title === selectedTitle.value)
-    if (selectedMeta) selectedMeta.dirty = true
+    await persistLatestContentSnapshot()
+    await writeQueue
   }
 
   const setCurrentContent = async (content: string) => {
     currentContent.value = content
-    pendingLocalContentCommit.value = false
     dirty.value = true
     const nowIso = new Date().toISOString()
     currentUpdatedAt.value = nowIso
@@ -677,7 +698,7 @@ export const useNotesStore = defineStore('notes', () => {
       [selectedTitle.value]: currentContent.value
     }
 
-    const snapshot: CachedNote = {
+    pendingContentSnapshot = {
       title: selectedTitle.value,
       content: currentContent.value,
       updatedAt: nowIso,
@@ -686,16 +707,7 @@ export const useNotesStore = defineStore('notes', () => {
       starred: selectedMeta?.starred
     }
 
-    await queueWrite(async () => {
-      const existing = await getCachedNote(snapshot.title)
-      await putCachedNote({
-        ...snapshot,
-        existsOnServer: existing?.existsOnServer
-      })
-      if (selectedTitle.value === snapshot.title && contentVersion.value === snapshot.version) {
-        updateSyncStatus()
-      }
-    })
+    scheduleContentPersist()
   }
 
   const pushDirtyNote = async (title: string) => {
@@ -725,10 +737,9 @@ export const useNotesStore = defineStore('notes', () => {
 
     // Dirty until server has saved the exact content we currently hold locally.
     const current = await getCachedNote(title)
-    const hasPendingActiveCommit = selectedTitle.value === title && pendingLocalContentCommit.value
     const activeMemoryDiffers = selectedTitle.value === title && currentContent.value !== saved.content
     const currentContentSnapshot = current?.content ?? local.content
-    const stillDirty = hasPendingActiveCommit || activeMemoryDiffers || currentContentSnapshot !== saved.content
+    const stillDirty = activeMemoryDiffers || currentContentSnapshot !== saved.content
     const chosenContent = stillDirty
       ? (activeMemoryDiffers ? currentContent.value : currentContentSnapshot)
       : saved.content
@@ -793,7 +804,6 @@ export const useNotesStore = defineStore('notes', () => {
       selectedTitle.value = targetTitle
       currentContent.value = renamed.content || ''
       currentUpdatedAt.value = normalizeTs(renamed.updatedAt)
-      pendingLocalContentCommit.value = false
       dirty.value = Boolean(renamed.dirty)
     }
 
@@ -805,7 +815,6 @@ export const useNotesStore = defineStore('notes', () => {
     selectedTitle.value = ''
     currentContent.value = ''
     currentUpdatedAt.value = null
-    pendingLocalContentCommit.value = false
     dirty.value = false
   }
 
@@ -979,7 +988,6 @@ export const useNotesStore = defineStore('notes', () => {
             selectedTitle.value = ''
             currentContent.value = ''
             currentUpdatedAt.value = null
-            pendingLocalContentCommit.value = false
             dirty.value = false
           }
         }
@@ -1066,6 +1074,7 @@ export const useNotesStore = defineStore('notes', () => {
   }
 
   const renameCurrent = async (newTitle: string) => {
+    await flushPendingWrites()
     if (!selectedTitle.value) throw new Error(t('noNoteSelected'))
     const oldTitle = selectedTitle.value
     const requestedTitle = (newTitle || '').trim()
@@ -1103,6 +1112,7 @@ export const useNotesStore = defineStore('notes', () => {
   }
 
   const deleteCurrent = async () => {
+    await flushPendingWrites()
     if (!selectedTitle.value) throw new Error(t('noNoteSelected'))
     const titleToDelete = selectedTitle.value
     const local = await getCachedNote(titleToDelete)
@@ -1173,7 +1183,6 @@ export const useNotesStore = defineStore('notes', () => {
     togglePin,
     initialize,
     selectNote,
-    markCurrentDirty,
     setCurrentContent,
     saveCurrent,
     syncWithServer,

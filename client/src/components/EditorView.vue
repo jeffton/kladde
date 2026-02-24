@@ -48,7 +48,6 @@ const plainTextarea = ref<HTMLTextAreaElement | null>(null)
 const plainWrap = ref<HTMLElement | null>(null)
 const wysiwygWrap = ref<HTMLElement | null>(null)
 let ignoreEditorChanges = false
-let updateDebounce: number | null = null
 
 // Preserve empty paragraphs through markdown round-trip.
 // ProseMirror's default serializer drops empty paragraphs.
@@ -222,19 +221,13 @@ const editor = useEditor({
   content: props.store.currentContent || '',
   onUpdate: ({ editor: tiptapEditor }) => {
     if (ignoreEditorChanges) return
-    props.store.markCurrentDirty()
-    const nextMarkdown = tiptapEditor.storage.markdown.getMarkdown()
-    const titleAtSchedule = props.store.selectedTitle
 
-    if (updateDebounce) window.clearTimeout(updateDebounce)
-    updateDebounce = window.setTimeout(() => {
-      if (props.store.selectedTitle !== titleAtSchedule) return
-      if (nextMarkdown !== props.store.currentContent) {
-        void props.store.setCurrentContent(nextMarkdown).catch((err: unknown) => {
-          emit('ui-error', (err as Error)?.message || t('couldNotSaveLocally'))
-        })
-      }
-    }, 300)
+    const nextMarkdown = tiptapEditor.storage.markdown.getMarkdown()
+    if (nextMarkdown === props.store.currentContent) return
+
+    void props.store.setCurrentContent(nextMarkdown).catch((err: unknown) => {
+      emit('ui-error', (err as Error)?.message || t('couldNotSaveLocally'))
+    })
   }
 })
 
@@ -524,10 +517,6 @@ watch(
 
 watch(() => props.store.currentContent, () => syncEditorFromStore())
 watch(() => props.store.selectedTitle, (title) => {
-  if (updateDebounce) {
-    window.clearTimeout(updateDebounce)
-    updateDebounce = null
-  }
   editableTitle.value = title || ''
   showNoteMenu.value = false
   syncEditorFromStore()
@@ -541,7 +530,6 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
-  if (updateDebounce) window.clearTimeout(updateDebounce)
   window.removeEventListener('resize', updateInputMode)
   window.removeEventListener('pointerdown', onGlobalPointerDown)
   editor.value?.destroy()
