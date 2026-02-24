@@ -3,11 +3,9 @@ import { defineStore } from 'pinia'
 import { deleteCachedNote, getAllCachedNotes, getCachedNote, getPendingOps, putCachedNote, replacePendingOps } from './notesDb'
 import type { CachedNote, NoteMeta, NoteResponse, PendingOp, RenameResponse, SyncState } from '../types'
 import { t } from '../i18n'
+import { apiFetch, clientOrigin, isNotFoundError } from './notesApi'
+import { isNetworkError, toUserSyncError } from './notesErrors'
 import {
-  apiFetch,
-  clientOrigin,
-  isNetworkError,
-  isNotFoundError,
   isServerBacked,
   newerTs,
   normalizeTs,
@@ -15,9 +13,8 @@ import {
   retargetPendingTitle,
   samePendingOp,
   toMeta,
-  toUserSyncError,
   tsMs
-} from './notesShared'
+} from './notesModel'
 
 export const useNotesStore = defineStore('notes', () => {
   const notes = ref<NoteMeta[]>([])
