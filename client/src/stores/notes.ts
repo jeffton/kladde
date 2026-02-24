@@ -1,11 +1,12 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
 import { deleteCachedNote, getAllCachedNotes, getCachedNote, getPendingOps, putCachedNote, replacePendingOps } from './notesDb'
-import type { CachedNote, NoteMeta, NoteResponse, PendingOp, RenameResponse, SyncState } from '../types'
+import type { CachedNote, NoteMeta, NoteResponse, PendingOp, SyncState } from '../types'
 import { t } from '../i18n'
 import { apiFetch, clientOrigin, isNotFoundError } from './notesApi'
 import { createNotesWebSocket } from './notesWebSocket'
 import { createNotesPersist } from './notesPersist'
+import { createNotesSync } from './notesSync'
 import { isNetworkError, toUserSyncError } from './notesErrors'
 import {
   isServerBacked,
@@ -40,9 +41,6 @@ export const useNotesStore = defineStore('notes', () => {
   const pendingOps = ref<PendingOp[]>([])
   let syncRetryTimer: number | null = null
   let syncRetryAttempt = 0
-  let syncInFlight: Promise<void> | null = null
-  let pushInFlight: Promise<void> | null = null
-  let saveInFlight: Promise<void> | null = null
   const wsConnected = ref(false)
 
   const sortedNotes = computed(() => {
@@ -132,24 +130,6 @@ export const useNotesStore = defineStore('notes', () => {
     putCachedNote,
     updateSyncStatus
   })
-
-  const mutatePendingOps = async (mutator: (ops: PendingOp[]) => PendingOp[]) => {
-    await queueWrite(async () => {
-      const nextOps = mutator([...pendingOps.value])
-      pendingOps.value = nextOps
-      await replacePendingOps(nextOps)
-    })
-  }
-
-  const removePendingOp = async (op: PendingOp) => {
-    await mutatePendingOps((ops) => {
-      const idx = ops.findIndex((candidate) => samePendingOp(candidate, op))
-      if (idx === -1) return ops
-      const next = [...ops]
-      next.splice(idx, 1)
-      return next
-    })
-  }
 
   const setOnline = (value: boolean) => {
     online.value = value
@@ -247,25 +227,6 @@ export const useNotesStore = defineStore('notes', () => {
     }
   }
 
-  const { connectWebSocket, disconnectWebSocket, resetWsFailuresAndReconnect } = createNotesWebSocket({
-    online,
-    wsConnected,
-    clientOrigin,
-    selectedTitle,
-    currentContent,
-    currentUpdatedAt,
-    dirty,
-    apiFetch,
-    syncWithServer: () => syncWithServer(),
-    refreshStateFromCache,
-    getCachedNote,
-    putCachedNote,
-    deleteCachedNote,
-    normalizeTs,
-    isServerBacked,
-    isActiveNoteLocallyDirty
-  })
-
   const initialize = async () => {
     const storedOps = await getPendingOps()
     pendingOps.value = storedOps.map(({ id: _id, ...op }) => op)
@@ -326,77 +287,6 @@ export const useNotesStore = defineStore('notes', () => {
     }
   }
 
-  const pushDirtyNote = async (title: string) => {
-    const local = await getCachedNote(title)
-    if (!local || !local.dirty) return
-
-    let res: Response
-    try {
-      res = await apiFetch(`/api/notes/${encodeURIComponent(title)}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: local.content })
-      })
-    } catch (err: unknown) {
-      if (!isNotFoundError(err)) throw err
-
-      // Note doesn't exist on server — create it instead of discarding
-      res = await apiFetch('/api/notes', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title, content: local.content })
-      })
-    }
-
-    const saved = (await res.json()) as NoteResponse
-    resetWsFailuresAndReconnect()
-
-    // Dirty until server has saved the exact content we currently hold locally.
-    const current = await getCachedNote(title)
-    const activeMemoryDiffers = selectedTitle.value === title && currentContent.value !== saved.content
-    const currentContentSnapshot = current?.content ?? local.content
-    const stillDirty = activeMemoryDiffers || currentContentSnapshot !== saved.content
-    const chosenContent = stillDirty
-      ? (activeMemoryDiffers ? currentContent.value : currentContentSnapshot)
-      : saved.content
-    const chosenUpdatedAt = stillDirty
-      ? normalizeTs(current?.updatedAt ?? local.updatedAt)
-      : newerTs(current?.updatedAt ?? local.updatedAt, saved.updatedAt ?? local.updatedAt)
-
-    await putCachedNote({
-      title: saved.title,
-      content: chosenContent,
-      updatedAt: chosenUpdatedAt,
-      dirty: stillDirty,
-      starred: Boolean(saved.starred),
-      existsOnServer: true
-    })
-
-    if (selectedTitle.value === title) {
-      currentUpdatedAt.value = chosenUpdatedAt
-      dirty.value = stillDirty
-
-      const selectedMeta = notes.value.find((n) => n.title === title)
-      if (selectedMeta) {
-        selectedMeta.updatedAt = chosenUpdatedAt
-        selectedMeta.dirty = stillDirty
-      }
-    }
-  }
-
-  const runPushDirtyNote = async (title: string) => {
-    if (pushInFlight) await pushInFlight
-
-    const task = pushDirtyNote(title)
-    pushInFlight = task
-
-    try {
-      await task
-    } finally {
-      if (pushInFlight === task) pushInFlight = null
-    }
-  }
-
   const applyLocalRename = async (oldTitle: string, desiredTitle: string) => {
     const local = await getCachedNote(oldTitle)
     if (!local) throw new Error(t('noNoteSelected'))
@@ -434,228 +324,61 @@ export const useNotesStore = defineStore('notes', () => {
     dirty.value = false
   }
 
-  const processPendingOps = async () => {
-    while (pendingOps.value.length > 0) {
-      const op = pendingOps.value[0]
+  let resetWsFailuresAndReconnect: () => void = () => undefined
 
-      if (op.type === 'delete') {
-        try {
-          await apiFetch(`/api/notes/${encodeURIComponent(op.title)}`, { method: 'DELETE' })
-        } catch (err: unknown) {
-          if (!isNotFoundError(err)) throw err
-        }
-        resetWsFailuresAndReconnect()
-        await removePendingOp(op)
-        continue
-      }
+  const { mutatePendingOps, saveCurrent, syncWithServer } = createNotesSync({
+    pendingOps,
+    selectedTitle,
+    currentContent,
+    currentUpdatedAt,
+    dirty,
+    notes,
+    online,
+    syncing,
+    getCachedNote,
+    getAllCachedNotes,
+    putCachedNote,
+    deleteCachedNote,
+    replacePendingOps,
+    queueWrite,
+    flushPendingWrites,
+    refreshStateFromCache,
+    isActiveNoteLocallyDirty,
+    isServerBacked,
+    samePendingOp,
+    retargetPendingTitle,
+    normalizeTs,
+    newerTs,
+    tsMs,
+    apiFetch,
+    isNotFoundError,
+    resetWsFailuresAndReconnect: () => resetWsFailuresAndReconnect(),
+    updateSyncStatus,
+    clearSyncRetry,
+    clearSyncError,
+    handleSyncFailure
+  })
 
-      if (op.type === 'star') {
-        await apiFetch(`/api/notes/${encodeURIComponent(op.title)}/star`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ starred: op.starred })
-        })
-        resetWsFailuresAndReconnect()
-        await removePendingOp(op)
-        continue
-      }
-
-      let res: Response
-      try {
-        res = await apiFetch(`/api/notes/${encodeURIComponent(op.oldTitle)}/rename`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ newTitle: op.newTitle })
-        })
-      } catch (err: unknown) {
-        if (!isNotFoundError(err)) throw err
-
-        const localMissingRename = await getCachedNote(op.newTitle)
-        if (localMissingRename) {
-          await queueWrite(async () => {
-            await putCachedNote({ ...localMissingRename, existsOnServer: false })
-          })
-        }
-
-        await removePendingOp(op)
-        continue
-      }
-      resetWsFailuresAndReconnect()
-
-      const payload = (await res.json()) as RenameResponse
-      const serverTitle = payload?.title?.trim()
-      if (!serverTitle) throw new Error(t('invalidServerTitle'))
-
-      const renamedLocal = await getCachedNote(op.newTitle)
-      if (renamedLocal) {
-        if (serverTitle !== op.newTitle) {
-          await queueWrite(async () => {
-            await deleteCachedNote(op.newTitle)
-            await putCachedNote({
-              ...renamedLocal,
-              title: serverTitle,
-              existsOnServer: true,
-              dirty: Boolean(renamedLocal.dirty)
-            })
-          })
-          if (selectedTitle.value === op.newTitle) {
-            selectedTitle.value = serverTitle
-          }
-        } else {
-          await queueWrite(async () => {
-            await putCachedNote({ ...renamedLocal, existsOnServer: true })
-          })
-        }
-      }
-
-      await mutatePendingOps((ops) => {
-        const idx = ops.findIndex((candidate) => samePendingOp(candidate, op))
-        if (idx === -1) return ops
-
-        const next = [...ops]
-        next.splice(idx, 1)
-
-        if (serverTitle !== op.newTitle) {
-          return retargetPendingTitle(next, op.newTitle, serverTitle)
-        }
-
-        return next
-      })
-    }
-  }
-
-  const saveCurrent = async () => {
-    if (!selectedTitle.value) return
-    if (saveInFlight) return saveInFlight
-
-    const titleAtStart = selectedTitle.value
-
-    saveInFlight = (async () => {
-      await flushPendingWrites()
-      const existing = await getCachedNote(titleAtStart)
-      await putCachedNote({
-        title: titleAtStart,
-        content: currentContent.value,
-        updatedAt: currentUpdatedAt.value || new Date().toISOString(),
-        dirty: true,
-        starred: existing?.starred,
-        existsOnServer: existing?.existsOnServer
-      })
-
-      if (!online.value) {
-        updateSyncStatus()
-        return
-      }
-
-      syncing.value = true
-      updateSyncStatus()
-      try {
-        await runPushDirtyNote(titleAtStart)
-        clearSyncError()
-      } catch (err: unknown) {
-        handleSyncFailure(err, t('couldNotSaveNote'))
-        throw err
-      } finally {
-        syncing.value = false
-        updateSyncStatus()
-      }
-    })()
-
-    try {
-      await saveInFlight
-    } finally {
-      saveInFlight = null
-    }
-  }
-
-  const syncWithServer = async () => {
-    if (syncInFlight) return syncInFlight
-
-    syncInFlight = (async () => {
-      if (!online.value) {
-        updateSyncStatus()
-        return
-      }
-
-      await flushPendingWrites()
-      syncing.value = true
-      updateSyncStatus()
-
-      try {
-        await processPendingOps()
-
-        const localNotes = await getAllCachedNotes()
-        for (const local of localNotes) {
-          if (!local.dirty) continue
-          await runPushDirtyNote(local.title)
-        }
-
-        const metaRes = await apiFetch('/api/notes')
-        const serverMetas = (await metaRes.json()) as NoteMeta[]
-        const currentLocalMap = new Map((await getAllCachedNotes()).map((n) => [n.title, n]))
-        const serverTitles = new Set(serverMetas.map((n) => n.title))
-
-        for (const local of currentLocalMap.values()) {
-          if (local.dirty || !isServerBacked(local) || serverTitles.has(local.title)) continue
-
-          await deleteCachedNote(local.title)
-
-          if (selectedTitle.value === local.title) {
-            selectedTitle.value = ''
-            currentContent.value = ''
-            currentUpdatedAt.value = null
-            dirty.value = false
-          }
-        }
-
-        for (const serverMeta of serverMetas) {
-          const local = currentLocalMap.get(serverMeta.title)
-          const serverTs = tsMs(serverMeta.updatedAt)
-          const localTs = local ? tsMs(local.updatedAt) : 0
-          const isActiveAndDirty = isActiveNoteLocallyDirty(serverMeta.title)
-          const shouldPull = !isActiveAndDirty && (!local || (!local.dirty && serverTs > localTs))
-
-          if (local && local.starred !== serverMeta.starred) {
-            await putCachedNote({ ...local, starred: Boolean(serverMeta.starred), existsOnServer: true })
-          }
-
-          if (!shouldPull) continue
-
-          let noteRes: Response
-          try {
-            noteRes = await apiFetch(`/api/notes/${encodeURIComponent(serverMeta.title)}`)
-          } catch {
-            continue
-          }
-          const serverNote = (await noteRes.json()) as NoteResponse
-          await putCachedNote({
-            title: serverNote.title,
-            content: serverNote.content,
-            updatedAt: normalizeTs(serverNote.updatedAt || serverMeta.updatedAt),
-            dirty: false,
-            starred: Boolean(serverNote.starred ?? serverMeta.starred),
-            existsOnServer: true
-          })
-        }
-
-        await refreshStateFromCache()
-        clearSyncRetry()
-        clearSyncError()
-      } catch (err: unknown) {
-        handleSyncFailure(err, t('couldNotSync'))
-        throw err
-      } finally {
-        syncing.value = false
-        updateSyncStatus()
-      }
-    })()
-
-    try {
-      await syncInFlight
-    } finally {
-      syncInFlight = null
-    }
-  }
+  const wsController = createNotesWebSocket({
+    online,
+    wsConnected,
+    clientOrigin,
+    selectedTitle,
+    currentContent,
+    currentUpdatedAt,
+    dirty,
+    apiFetch,
+    syncWithServer,
+    refreshStateFromCache,
+    getCachedNote,
+    putCachedNote,
+    deleteCachedNote,
+    normalizeTs,
+    isServerBacked,
+    isActiveNoteLocallyDirty
+  })
+  const { connectWebSocket, disconnectWebSocket } = wsController
+  resetWsFailuresAndReconnect = wsController.resetWsFailuresAndReconnect
 
   const generateDefaultTitle = (base = t('newNote')) => {
     const existing = new Set(notes.value.map((n) => n.title))
