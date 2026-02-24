@@ -5,6 +5,7 @@ import type { CachedNote, NoteMeta, NoteResponse, PendingOp, RenameResponse, Syn
 import { t } from '../i18n'
 import { apiFetch, clientOrigin, isNotFoundError } from './notesApi'
 import { createNotesWebSocket } from './notesWebSocket'
+import { createNotesPersist } from './notesPersist'
 import { isNetworkError, toUserSyncError } from './notesErrors'
 import {
   isServerBacked,
@@ -37,10 +38,6 @@ export const useNotesStore = defineStore('notes', () => {
   const contentVersion = ref(0)
   const noteContents = ref<Record<string, string>>({})
   const pendingOps = ref<PendingOp[]>([])
-  const contentPersistDelayMs = 120
-  let pendingContentSnapshot: CachedNote | null = null
-  let contentPersistTimer: number | null = null
-  let writeQueue: Promise<unknown> = Promise.resolve()
   let syncRetryTimer: number | null = null
   let syncRetryAttempt = 0
   let syncInFlight: Promise<void> | null = null
@@ -122,6 +119,19 @@ export const useNotesStore = defineStore('notes', () => {
 
     syncRetryAttempt = Math.min(syncRetryAttempt + 1, 8)
   }
+
+  const { queueWrite, flushPendingWrites, setCurrentContent } = createNotesPersist({
+    selectedTitle,
+    currentContent,
+    currentUpdatedAt,
+    dirty,
+    contentVersion,
+    notes,
+    noteContents,
+    getCachedNote,
+    putCachedNote,
+    updateSyncStatus
+  })
 
   const mutatePendingOps = async (mutator: (ops: PendingOp[]) => PendingOp[]) => {
     await queueWrite(async () => {
@@ -314,78 +324,6 @@ export const useNotesStore = defineStore('notes', () => {
       }
       void syncWithServer().catch(() => undefined)
     }
-  }
-
-  const queueWrite = (task: () => Promise<unknown>) => {
-    writeQueue = writeQueue.then(task).catch(() => undefined)
-    return writeQueue
-  }
-
-  const persistLatestContentSnapshot = async () => {
-    const snapshot = pendingContentSnapshot
-    if (!snapshot) return
-    pendingContentSnapshot = null
-
-    await queueWrite(async () => {
-      const existing = await getCachedNote(snapshot.title)
-      await putCachedNote({
-        ...snapshot,
-        existsOnServer: existing?.existsOnServer
-      })
-      if (selectedTitle.value === snapshot.title && contentVersion.value === snapshot.version) {
-        updateSyncStatus()
-      }
-    })
-  }
-
-  const scheduleContentPersist = () => {
-    if (contentPersistTimer !== null) return
-
-    contentPersistTimer = window.setTimeout(() => {
-      contentPersistTimer = null
-      void persistLatestContentSnapshot().catch(() => undefined)
-    }, contentPersistDelayMs)
-  }
-
-  const flushPendingWrites = async () => {
-    if (contentPersistTimer !== null) {
-      window.clearTimeout(contentPersistTimer)
-      contentPersistTimer = null
-    }
-
-    await persistLatestContentSnapshot()
-    await writeQueue
-  }
-
-  const setCurrentContent = async (content: string) => {
-    currentContent.value = content
-    dirty.value = true
-    const nowIso = new Date().toISOString()
-    currentUpdatedAt.value = nowIso
-    contentVersion.value += 1
-
-    if (!selectedTitle.value) return
-
-    const selectedMeta = notes.value.find((n) => n.title === selectedTitle.value)
-    if (selectedMeta) {
-      selectedMeta.dirty = true
-      selectedMeta.updatedAt = nowIso
-    }
-    noteContents.value = {
-      ...noteContents.value,
-      [selectedTitle.value]: currentContent.value
-    }
-
-    pendingContentSnapshot = {
-      title: selectedTitle.value,
-      content: currentContent.value,
-      updatedAt: nowIso,
-      dirty: true,
-      version: contentVersion.value,
-      starred: selectedMeta?.starred
-    }
-
-    scheduleContentPersist()
   }
 
   const pushDirtyNote = async (title: string) => {
