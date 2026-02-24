@@ -91,9 +91,28 @@ function isNetworkError(err: unknown): boolean {
   )
 }
 
+function isIndexedDbRuntimeError(err: unknown): boolean {
+  if (!err) return false
+
+  const name = (err as DOMException)?.name || ''
+  if (name === 'UnknownError' || name === 'InvalidStateError' || name === 'TransactionInactiveError' || name === 'AbortError') {
+    return true
+  }
+
+  const message = ((err as Error)?.message || '').toLowerCase()
+  return (
+    message.includes('without an in-progress transaction') ||
+    message.includes('transaction is inactive or finished') ||
+    message.includes('connection to indexed database server lost') ||
+    message.includes('internal error was encountered in the indexed database server') ||
+    message.includes('database connection is closing')
+  )
+}
+
 function toUserSyncError(err: unknown, fallback: string): string {
   if ((err as Error)?.message === 'UNAUTHORIZED') return 'UNAUTHORIZED'
   if (isNetworkError(err)) return t('temporaryConnectionIssue')
+  if (isIndexedDbRuntimeError(err)) return t('couldNotSaveLocally')
   return (err as Error)?.message || fallback
 }
 
