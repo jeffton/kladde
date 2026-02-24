@@ -22,6 +22,51 @@ const password = ref('')
 const loginError = ref('')
 const loggingIn = ref(false)
 
+const AUTH_USER_STORAGE_KEY = 'kladde.auth.user'
+const ME_REQUEST_TIMEOUT_MS = 2000
+
+function readCachedAuthUser(): AuthUser | null {
+  try {
+    const raw = window.localStorage.getItem(AUTH_USER_STORAGE_KEY)
+    if (!raw) return null
+
+    const parsed = JSON.parse(raw) as Partial<AuthUser>
+    const usernameValue = typeof parsed?.username === 'string' ? parsed.username : ''
+    const displayNameValue = typeof parsed?.displayName === 'string' ? parsed.displayName : ''
+
+    if (!usernameValue && !displayNameValue) return null
+
+    return {
+      username: usernameValue,
+      displayName: displayNameValue
+    }
+  } catch {
+    return null
+  }
+}
+
+function writeCachedAuthUser(nextUser: AuthUser | null) {
+  try {
+    if (!nextUser) {
+      window.localStorage.removeItem(AUTH_USER_STORAGE_KEY)
+      return
+    }
+
+    window.localStorage.setItem(AUTH_USER_STORAGE_KEY, JSON.stringify(nextUser))
+  } catch {
+    // Ignore storage failures.
+  }
+}
+
+const cachedAuthUser = readCachedAuthUser()
+if (cachedAuthUser) {
+  user.value = cachedAuthUser
+}
+
+function isAbortError(err: unknown): boolean {
+  return err instanceof DOMException && err.name === 'AbortError'
+}
+
 function isNetworkError(err: unknown): boolean {
   if (!err) return false
   if (typeof navigator !== 'undefined' && navigator.onLine === false) return true
@@ -48,6 +93,7 @@ function clearUiError() {
 function setUiError(err: unknown) {
   if (isUnauthorized(err)) {
     user.value = null
+    writeCachedAuthUser(null)
     clearUiError()
     return
   }
@@ -64,17 +110,42 @@ function setUiErrorMessage(message: string) {
   error.value = message || t('genericError')
 }
 
-async function loadMe() {
+async function loadMe(background = false) {
   try {
-    const res = await fetch('/api/me')
+    const controller = new AbortController()
+    const timer = window.setTimeout(() => controller.abort(), ME_REQUEST_TIMEOUT_MS)
+
+    let res: Response
+    try {
+      res = await fetch('/api/me', { signal: controller.signal })
+    } finally {
+      window.clearTimeout(timer)
+    }
+
     if (res.status === 401) {
       user.value = null
+      writeCachedAuthUser(null)
       return
     }
+
     if (!res.ok) throw new Error(t('couldNotLoadUser'))
-    user.value = (await res.json()) as AuthUser
+
+    const me = (await res.json()) as AuthUser
+    user.value = me
+    writeCachedAuthUser(me)
+  } catch (err: unknown) {
+    if (isAbortError(err) || isNetworkError(err)) {
+      return
+    }
+
+    if (!user.value) {
+      user.value = null
+      writeCachedAuthUser(null)
+    }
   } finally {
-    authChecked.value = true
+    if (!background) {
+      authChecked.value = true
+    }
   }
 }
 
@@ -96,6 +167,7 @@ async function login() {
     if (!res.ok) throw new Error(t('couldNotLogin'))
 
     user.value = (await res.json()) as AuthUser
+    writeCachedAuthUser(user.value)
     password.value = ''
     await store.initialize()
   } catch {
@@ -110,6 +182,7 @@ async function logout() {
     await fetch('/auth/logout', { method: 'POST' })
   } finally {
     user.value = null
+    writeCachedAuthUser(null)
     clearUiError()
     loginError.value = ''
   }
@@ -258,22 +331,35 @@ function updateIOSViewportHeight() {
   window.scrollTo(0, 0)
 }
 
-onMounted(async () => {
-  await loadMe()
+let storeInitialized = false
 
-  if (isAuthenticated.value) {
-    try {
-      await store.initialize()
+async function initializeAuthenticatedSession() {
+  if (!isAuthenticated.value || storeInitialized) return
 
-      const title = typeof route.params.title === 'string' ? route.params.title : ''
-      if (title) {
-        await selectNote(title, true, false)
-      } else if (!isMobile.value && store.selectedTitle) {
-        await router.replace({ name: 'note', params: { title: store.selectedTitle } })
-      }
-    } catch (e) {
-      setUiError(e)
+  try {
+    storeInitialized = true
+    await store.initialize()
+
+    const title = typeof route.params.title === 'string' ? route.params.title : ''
+    if (title) {
+      await selectNote(title, true, false)
+    } else if (!isMobile.value && store.selectedTitle) {
+      await router.replace({ name: 'note', params: { title: store.selectedTitle } })
     }
+  } catch (e) {
+    storeInitialized = false
+    setUiError(e)
+  }
+}
+
+onMounted(async () => {
+  if (isAuthenticated.value) {
+    authChecked.value = true
+    await initializeAuthenticatedSession()
+    void loadMe(true)
+  } else {
+    await loadMe()
+    await initializeAuthenticatedSession()
   }
 
   media = window.matchMedia('(max-width: 900px)')
