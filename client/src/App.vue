@@ -331,7 +331,7 @@ onUnmounted(() => {
           autocomplete="current-password"
           :placeholder="t('password')"
           required />
-        <p v-if="loginError" class="login-error">{{ loginError }}</p>
+        <p v-if="loginError" class="login-error" role="alert" aria-live="assertive">{{ loginError }}</p>
         <button class="login-button" type="submit" :disabled="loggingIn">{{ t('login') }}</button>
       </form>
     </div>

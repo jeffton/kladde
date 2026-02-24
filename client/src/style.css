@@ -369,8 +369,14 @@ button:disabled {
 
 .login-error {
   margin: 0;
-  font-size: .85rem;
-  color: #ef4444;
+  width: 100%;
+  padding: .65rem .75rem;
+  border-radius: .7rem;
+  font-size: .88rem;
+  line-height: 1.35;
+  color: #fff4f4;
+  background: color-mix(in srgb, #ef4444 82%, #1f0000 18%);
+  box-shadow: 0 8px 18px color-mix(in srgb, #000 16%, transparent);
 }
 
 .note-list-move {
