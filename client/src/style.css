@@ -876,6 +876,7 @@ button:disabled {
   height: 16px;
   margin: 0;
   accent-color: var(--accent);
+  color: color-mix(in srgb, var(--muted) 72%, var(--accent) 28%);
   cursor: pointer;
   flex-shrink: 0;
 }
@@ -884,6 +885,10 @@ button:disabled {
   color: var(--muted);
   text-decoration: line-through;
   text-decoration-thickness: 1px;
+}
+
+[data-theme="summer"] .tiptap-root .ProseMirror ul[data-type='taskList'] li input[type='checkbox'] {
+  color: color-mix(in srgb, var(--accent) 44%, var(--muted) 56%);
 }
 
 .tiptap-root .ProseMirror code {
