@@ -84,9 +84,7 @@ const messages = {
     newNote: 'Ny note',
     titleRequired: 'Titel er påkrævet',
     noNoteSelected: 'Ingen note valgt',
-    mustBeOnlineRename: 'Du skal være online for at omdøbe noter',
     invalidServerTitle: 'Server returnerede ugyldig titel',
-    mustBeOnlineDelete: 'Du skal være online for at slette noter',
     summerTheme: 'Sommertema',
     defaultTheme: 'Standardtema'
   },
@@ -162,9 +160,7 @@ const messages = {
     newNote: 'Ny anteckning',
     titleRequired: 'Titel krävs',
     noNoteSelected: 'Ingen anteckning vald',
-    mustBeOnlineRename: 'Du måste vara online för att byta namn på anteckningar',
     invalidServerTitle: 'Servern returnerade ogiltig titel',
-    mustBeOnlineDelete: 'Du måste vara online för att ta bort anteckningar',
     summerTheme: 'Sommartema',
     defaultTheme: 'Standardtema'
   },
@@ -240,9 +236,7 @@ const messages = {
     newNote: 'New note',
     titleRequired: 'Title is required',
     noNoteSelected: 'No note selected',
-    mustBeOnlineRename: 'You must be online to rename notes',
     invalidServerTitle: 'Server returned an invalid title',
-    mustBeOnlineDelete: 'You must be online to delete notes',
     summerTheme: 'Summer theme',
     defaultTheme: 'Default theme'
   },
@@ -318,9 +312,7 @@ const messages = {
     newNote: 'Nouvelle note',
     titleRequired: 'Le titre est requis',
     noNoteSelected: 'Aucune note sélectionnée',
-    mustBeOnlineRename: 'Vous devez être en ligne pour renommer les notes',
     invalidServerTitle: 'Le serveur a renvoyé un titre invalide',
-    mustBeOnlineDelete: 'Vous devez être en ligne pour supprimer des notes',
     summerTheme: 'Thème été',
     defaultTheme: 'Thème par défaut'
   }
