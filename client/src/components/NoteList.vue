@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { TransitionGroup, computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import { FileText, KeyRound, LogOut, Plus, Search, Star, User, X } from 'lucide-vue-next'
+import { FileText, KeyRound, LogOut, Palette, Plus, Search, Star, Sun, User, X } from 'lucide-vue-next'
 import type { NoteMeta } from '../types'
 import { t } from '../i18n'
+import { currentTheme, setTheme } from '../theme'
 
 interface Props {
   notes: NoteMeta[]
@@ -87,6 +88,10 @@ onBeforeUnmount(() => {
   document.removeEventListener('click', onDocumentClick)
 })
 
+function toggleTheme() {
+  setTheme(currentTheme.value === 'default' ? 'summer' : 'default')
+}
+
 function togglePasswordForm() {
   showPasswordForm.value = !showPasswordForm.value
   passwordError.value = ''
@@ -152,6 +157,10 @@ async function submitPasswordChange() {
         </div>
         <div v-if="userLabel && showUserMenu" class="user-menu-dropdown">
             <div class="user-menu-label">{{ userLabel }}</div>
+            <button class="user-menu-item" @click="toggleTheme">
+              <Sun :size="18" />
+              {{ currentTheme === 'default' ? t('summerTheme') : t('defaultTheme') }}
+            </button>
             <button class="user-menu-item" @click="togglePasswordForm">
               <KeyRound :size="18" />
               {{ t('changePassword') }}

@@ -71,6 +71,32 @@
   }
 }
 
+[data-theme="summer"] {
+  --bg: #faf0e4;
+  --panel: #fff5eb;
+  --text: #3d2517;
+  --muted: #a07050;
+  --border: #e8ccb0;
+  --accent: #d4764e;
+  --surface-soft: color-mix(in srgb, var(--panel) 80%, var(--bg));
+  --surface-hover: color-mix(in srgb, var(--accent) 12%, var(--panel));
+  --surface-active: color-mix(in srgb, var(--accent) 20%, var(--panel));
+}
+
+@media (prefers-color-scheme: dark) {
+  [data-theme="summer"] {
+    --bg: #1e1510;
+    --panel: #2a1e18;
+    --text: #f0dcc8;
+    --muted: #c09878;
+    --border: #4a3528;
+    --accent: #e8845a;
+    --surface-soft: color-mix(in srgb, var(--panel) 88%, var(--bg));
+    --surface-hover: color-mix(in srgb, var(--accent) 14%, var(--panel));
+    --surface-active: color-mix(in srgb, var(--accent) 22%, var(--panel));
+  }
+}
+
 * { box-sizing: border-box; }
 html, body, #app {
   height: 100%;
@@ -922,6 +948,16 @@ button:disabled {
 @media (prefers-color-scheme: dark) {
   .tiptap-root .ProseMirror a {
     color: #60a5fa;
+  }
+}
+
+[data-theme="summer"] .tiptap-root .ProseMirror a {
+  color: #c44d20;
+}
+
+@media (prefers-color-scheme: dark) {
+  [data-theme="summer"] .tiptap-root .ProseMirror a {
+    color: #f0a070;
   }
 }
 
