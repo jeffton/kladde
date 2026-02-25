@@ -89,11 +89,104 @@ const PreservingParagraph = Paragraph.extend({
   },
 })
 
+// Task item extension without forced focus on checkbox toggle.
+// The upstream extension calls chain().focus() on change, which triggers
+// virtual keyboard popup on touch devices when editor is currently blurred.
+const FocusSafeTaskItem = TaskItem.extend({
+  addNodeView() {
+    return ({ node, HTMLAttributes, getPos, editor }) => {
+      const listItem = document.createElement('li')
+      const checkboxWrapper = document.createElement('label')
+      const checkboxStyler = document.createElement('span')
+      const checkbox = document.createElement('input')
+      const content = document.createElement('div')
+
+      const updateA11Y = () => {
+        checkbox.ariaLabel = this.options.a11y?.checkboxLabel?.(node, checkbox.checked)
+          || `Task item checkbox for ${node.textContent || 'empty task item'}`
+      }
+
+      updateA11Y()
+
+      checkboxWrapper.contentEditable = 'false'
+      checkbox.type = 'checkbox'
+      checkbox.addEventListener('mousedown', (event) => event.preventDefault())
+      checkbox.addEventListener('change', (event) => {
+        if (!editor.isEditable && !this.options.onReadOnlyChecked) {
+          checkbox.checked = !checkbox.checked
+          return
+        }
+
+        const { checked } = event.target as HTMLInputElement
+
+        if (editor.isEditable && typeof getPos === 'function') {
+          editor
+            .chain()
+            .command(({ tr }) => {
+              const position = getPos()
+
+              if (typeof position !== 'number') {
+                return false
+              }
+
+              const currentNode = tr.doc.nodeAt(position)
+
+              tr.setNodeMarkup(position, undefined, {
+                ...currentNode?.attrs,
+                checked,
+              })
+
+              return true
+            })
+            .run()
+        }
+
+        if (!editor.isEditable && this.options.onReadOnlyChecked) {
+          if (!this.options.onReadOnlyChecked(node, checked)) {
+            checkbox.checked = !checkbox.checked
+          }
+        }
+      })
+
+      Object.entries(this.options.HTMLAttributes).forEach(([key, value]) => {
+        listItem.setAttribute(key, value)
+      })
+
+      listItem.dataset.checked = String(node.attrs.checked)
+      checkbox.checked = Boolean(node.attrs.checked)
+
+      checkboxWrapper.append(checkbox, checkboxStyler)
+      listItem.append(checkboxWrapper, content)
+
+      Object.entries(HTMLAttributes).forEach(([key, value]) => {
+        listItem.setAttribute(key, value)
+      })
+
+      return {
+        dom: listItem,
+        contentDOM: content,
+        update: (updatedNode) => {
+          if (updatedNode.type !== this.type) {
+            return false
+          }
+
+          listItem.dataset.checked = String(updatedNode.attrs.checked)
+          checkbox.checked = Boolean(updatedNode.attrs.checked)
+          updateA11Y()
+
+          return true
+        },
+      }
+    }
+  },
+})
+
 const showTooltip = ref(false)
 const isTouchLike = ref(false)
 const showNoteMenu = ref(false)
 const lastSyncTime = ref('')
 const noteMenuWrap = ref<HTMLElement | null>(null)
+let shouldBlurAfterTaskCheckboxTap = false
 
 function capitalize(text = '') {
   return text ? text.charAt(0).toUpperCase() + text.slice(1) : text
@@ -104,6 +197,51 @@ function isSameDay(a: Date, b: Date) {
 }
 
 const locale = intlLocale
+
+function isTouchDevice(): boolean {
+  if (typeof window === 'undefined' || typeof navigator === 'undefined') return false
+
+  return (
+    navigator.maxTouchPoints > 0 ||
+    window.matchMedia('(hover: none), (pointer: coarse)').matches
+  )
+}
+
+const touchDevice = isTouchDevice()
+
+function isTaskCheckboxTarget(target: EventTarget | null): target is HTMLInputElement {
+  if (!(target instanceof HTMLInputElement)) return false
+  if (target.type !== 'checkbox') return false
+  return Boolean(target.closest("ul[data-type='taskList'] li input[type='checkbox']"))
+}
+
+function handleTaskCheckboxPointerStart(event: Event): boolean {
+  if (!touchDevice) return false
+  if (!isTaskCheckboxTarget(event.target)) {
+    shouldBlurAfterTaskCheckboxTap = false
+    return false
+  }
+
+  shouldBlurAfterTaskCheckboxTap = !editor.value?.isFocused
+  event.preventDefault()
+  return true
+}
+
+function handleTaskCheckboxClick(event: Event): boolean {
+  if (!touchDevice) return false
+  if (!isTaskCheckboxTarget(event.target)) return false
+
+  if (shouldBlurAfterTaskCheckboxTap) {
+    requestAnimationFrame(() => {
+      editor.value?.commands.blur()
+      const active = document.activeElement as HTMLElement | null
+      if (active && active !== document.body) active.blur()
+    })
+  }
+
+  shouldBlurAfterTaskCheckboxTap = false
+  return false
+}
 
 function firstDayOfWeek(): number {
   try {
@@ -199,7 +337,7 @@ const editor = useEditor({
     Strike,
     CodeBlock,
     TaskList,
-    TaskItem.configure({ nested: true }),
+    FocusSafeTaskItem.configure({ nested: true }),
     Table.configure({ resizable: false }),
     TableRow,
     TableHeader,
@@ -216,6 +354,12 @@ const editor = useEditor({
     clipboardTextSerializer: (slice) => {
       const defaultText = slice.content.textBetween(0, slice.content.size, '\n\n')
       return defaultText.replace(new RegExp(NBSP, 'g'), '')
+    },
+    handleDOMEvents: {
+      pointerdown: (_view, event) => handleTaskCheckboxPointerStart(event),
+      touchstart: (_view, event) => handleTaskCheckboxPointerStart(event),
+      mousedown: (_view, event) => handleTaskCheckboxPointerStart(event),
+      click: (_view, event) => handleTaskCheckboxClick(event)
     }
   },
   content: props.store.currentContent || '',
