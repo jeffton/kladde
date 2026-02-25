@@ -10,3 +10,4 @@ server/dist/
 *.log
 tmp/
 .vscode/
+.claude/
