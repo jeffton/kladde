@@ -49,6 +49,7 @@
   --surface-soft: color-mix(in srgb, var(--panel) 80%, var(--bg));
   --surface-hover: color-mix(in srgb, var(--accent) 12%, var(--panel));
   --surface-active: color-mix(in srgb, var(--accent) 20%, var(--panel));
+  --code-bg: color-mix(in srgb, var(--panel) 82%, var(--muted) 18%);
   --safe-top: env(safe-area-inset-top);
   --safe-right: env(safe-area-inset-right);
   --safe-bottom: env(safe-area-inset-bottom);
@@ -68,6 +69,7 @@
     --surface-soft: color-mix(in srgb, var(--panel) 88%, var(--bg));
     --surface-hover: color-mix(in srgb, var(--accent) 14%, var(--panel));
     --surface-active: color-mix(in srgb, var(--accent) 22%, var(--panel));
+    --code-bg: color-mix(in srgb, var(--panel) 80%, var(--muted) 20%);
   }
 }
 
@@ -81,6 +83,7 @@
   --surface-soft: color-mix(in srgb, var(--panel) 80%, var(--bg));
   --surface-hover: color-mix(in srgb, var(--accent) 12%, var(--panel));
   --surface-active: color-mix(in srgb, var(--accent) 20%, var(--panel));
+  --code-bg: color-mix(in srgb, var(--panel) 84%, var(--accent) 16%);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -94,6 +97,7 @@
     --surface-soft: color-mix(in srgb, var(--panel) 88%, var(--bg));
     --surface-hover: color-mix(in srgb, var(--accent) 14%, var(--panel));
     --surface-active: color-mix(in srgb, var(--accent) 22%, var(--panel));
+    --code-bg: color-mix(in srgb, var(--panel) 82%, var(--accent) 18%);
   }
 }
 
@@ -885,14 +889,14 @@ button:disabled {
 .tiptap-root .ProseMirror code {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
   font-size: .92em;
-  background: color-mix(in srgb, var(--panel) 78%, #6b7280 22%);
+  background: var(--code-bg);
   padding: .1rem .3rem;
   border-radius: .3rem;
 }
 
 .tiptap-root .ProseMirror pre {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
-  background: color-mix(in srgb, var(--panel) 78%, #6b7280 22%);
+  background: var(--code-bg);
   padding: .75rem;
   border-radius: .45rem;
   overflow-x: auto;
