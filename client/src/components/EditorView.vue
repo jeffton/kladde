@@ -105,6 +105,31 @@ function isSameDay(a: Date, b: Date) {
 
 const locale = intlLocale
 
+function isTouchDevice(): boolean {
+  if (typeof window === 'undefined' || typeof navigator === 'undefined') return false
+
+  return (
+    navigator.maxTouchPoints > 0 ||
+    window.matchMedia('(hover: none), (pointer: coarse)').matches
+  )
+}
+
+const touchDevice = isTouchDevice()
+
+function isTaskCheckboxTarget(target: EventTarget | null): target is HTMLInputElement {
+  if (!(target instanceof HTMLInputElement)) return false
+  if (target.type !== 'checkbox') return false
+  return Boolean(target.closest("ul[data-type='taskList'] li input[type='checkbox']"))
+}
+
+function preventTouchCheckboxFocus(event: Event): boolean {
+  if (!touchDevice) return false
+  if (!isTaskCheckboxTarget(event.target)) return false
+
+  event.preventDefault()
+  return true
+}
+
 function firstDayOfWeek(): number {
   try {
     const localeInfo = new Intl.Locale(locale) as Intl.Locale & { weekInfo?: { firstDay?: number } }
@@ -216,6 +241,9 @@ const editor = useEditor({
     clipboardTextSerializer: (slice) => {
       const defaultText = slice.content.textBetween(0, slice.content.size, '\n\n')
       return defaultText.replace(new RegExp(NBSP, 'g'), '')
+    },
+    handleDOMEvents: {
+      mousedown: (_view, event) => preventTouchCheckboxFocus(event)
     }
   },
   content: props.store.currentContent || '',
