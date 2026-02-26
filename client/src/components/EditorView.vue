@@ -19,8 +19,8 @@ import {
   ChevronLeft,
   CloudCheck,
   CloudOff,
+  FolderPlus,
   MoreVertical,
-  Plus,
   RefreshCw,
   Trash2
 } from 'lucide-vue-next'
@@ -788,7 +788,7 @@ onUnmounted(() => {
 
           <button class="note-menu-item" role="menuitem" @click="createCollectionAndMove">
             <span class="note-menu-leading" aria-hidden="true">
-              <Plus :size="16" />
+              <FolderPlus :size="16" />
             </span>
             <span class="note-menu-label">{{ t('newCollection') }}</span>
           </button>
