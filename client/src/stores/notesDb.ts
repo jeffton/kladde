@@ -1,8 +1,9 @@
 import { openDB } from 'idb'
 import type { CachedNote, PendingOp, StoredPendingOp } from '../types'
+import { buildNoteKey, normalizeCollection } from './notesModel'
 
 const DB_NAME = 'kladde-db'
-const DB_VERSION = 2
+const DB_VERSION = 3
 const NOTES_STORE = 'notes'
 const OPS_STORE = 'ops'
 const MAX_IDB_RETRIES = 2
@@ -57,11 +58,24 @@ async function closeAndResetDb(): Promise<void> {
 
 function createDbPromise() {
   return openDB<NoteAppDb>(DB_NAME, DB_VERSION, {
-    upgrade(database) {
+    upgrade(database, oldVersion) {
       if (!database.objectStoreNames.contains(NOTES_STORE)) {
-        database.createObjectStore(NOTES_STORE, { keyPath: 'title' })
+        database.createObjectStore(NOTES_STORE, { keyPath: 'key' })
       }
       if (!database.objectStoreNames.contains(OPS_STORE)) {
+        database.createObjectStore(OPS_STORE, { keyPath: 'id', autoIncrement: true })
+      }
+
+      // v3: switch note identity from title -> key and reset incompatible pending ops.
+      if (oldVersion < 3) {
+        if (database.objectStoreNames.contains(NOTES_STORE)) {
+          database.deleteObjectStore(NOTES_STORE)
+        }
+        database.createObjectStore(NOTES_STORE, { keyPath: 'key' })
+
+        if (database.objectStoreNames.contains(OPS_STORE)) {
+          database.deleteObjectStore(OPS_STORE)
+        }
         database.createObjectStore(OPS_STORE, { keyPath: 'id', autoIncrement: true })
       }
     },
@@ -100,20 +114,41 @@ async function runWithIdbRetry<T>(operation: () => Promise<T>): Promise<T> {
   }
 }
 
-export async function getAllCachedNotes(): Promise<CachedNote[]> {
-  return runWithIdbRetry(async () => (await db()).getAll(NOTES_STORE))
+function normalizeCachedNote(note: CachedNote): CachedNote {
+  const normalizedCollection = normalizeCollection(note.collection)
+  const normalizedTitle = (note.title || '').trim()
+  const normalizedKey = (note.key || '').trim() || buildNoteKey(normalizedTitle, normalizedCollection)
+
+  return {
+    ...note,
+    key: normalizedKey,
+    title: normalizedTitle,
+    collection: normalizedCollection
+  }
 }
 
-export async function getCachedNote(title: string): Promise<CachedNote | undefined> {
-  return runWithIdbRetry(async () => (await db()).get(NOTES_STORE, title))
+export async function getAllCachedNotes(): Promise<CachedNote[]> {
+  return runWithIdbRetry(async () => {
+    const all = await (await db()).getAll(NOTES_STORE)
+    return all.map(normalizeCachedNote)
+  })
+}
+
+export async function getCachedNote(key: string): Promise<CachedNote | undefined> {
+  return runWithIdbRetry(async () => {
+    const note = await (await db()).get(NOTES_STORE, key)
+    if (!note) return undefined
+    return normalizeCachedNote(note)
+  })
 }
 
 export async function putCachedNote(note: CachedNote): Promise<IDBValidKey> {
-  return runWithIdbRetry(async () => (await db()).put(NOTES_STORE, note))
+  const normalized = normalizeCachedNote(note)
+  return runWithIdbRetry(async () => (await db()).put(NOTES_STORE, normalized))
 }
 
-export async function deleteCachedNote(title: string): Promise<void> {
-  await runWithIdbRetry(async () => (await db()).delete(NOTES_STORE, title))
+export async function deleteCachedNote(key: string): Promise<void> {
+  await runWithIdbRetry(async () => (await db()).delete(NOTES_STORE, key))
 }
 
 export async function getPendingOps(): Promise<StoredPendingOp[]> {

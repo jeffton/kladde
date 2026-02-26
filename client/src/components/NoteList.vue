@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { TransitionGroup, computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { TransitionGroup, computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { KeyRound, LogOut, Plus, Search, Star, Sun, User, X } from 'lucide-vue-next'
 import type { NoteMeta } from '../types'
 import { t } from '../i18n'
@@ -7,19 +7,19 @@ import { currentTheme, setTheme } from '../theme'
 
 interface Props {
   notes: NoteMeta[]
-  selectedTitle?: string
+  selectedKey?: string
   noteContents: Record<string, string>
   userLabel?: string
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  selectedTitle: ''
+  selectedKey: ''
 })
 
 const emit = defineEmits<{
-  (e: 'create'): void
-  (e: 'select', title: string): void
-  (e: 'toggle-pin', title: string): void
+  (e: 'create', collection: string): void
+  (e: 'select', key: string): void
+  (e: 'toggle-pin', key: string): void
   (e: 'logout'): void
 }>()
 
@@ -34,21 +34,49 @@ const passwordError = ref('')
 const passwordSuccess = ref('')
 const changingPassword = ref(false)
 
+const COLLECTION_FILTER_ALL = '__all__'
+const COLLECTION_FILTER_NONE = '__none__'
+const collectionFilter = ref<string>(COLLECTION_FILTER_ALL)
+
+const locale = typeof navigator !== 'undefined' ? navigator.language : 'en-US'
+const collator = new Intl.Collator(locale, { sensitivity: 'base' })
+
+const availableCollections = computed(() => {
+  const values = Array.from(new Set(props.notes.map((note) => note.collection).filter(Boolean)))
+  values.sort((a, b) => collator.compare(a, b))
+  return values
+})
+
+watch(availableCollections, (allCollections) => {
+  if (collectionFilter.value === COLLECTION_FILTER_ALL || collectionFilter.value === COLLECTION_FILTER_NONE) return
+  if (!allCollections.includes(collectionFilter.value)) {
+    collectionFilter.value = COLLECTION_FILTER_ALL
+  }
+})
+
 const filteredNotes = computed(() => {
   const term = query.value.trim().toLowerCase()
-  if (!term) return props.notes
+
+  let base = props.notes
+  if (collectionFilter.value === COLLECTION_FILTER_NONE) {
+    base = base.filter((note) => !note.collection)
+  } else if (collectionFilter.value !== COLLECTION_FILTER_ALL) {
+    base = base.filter((note) => note.collection === collectionFilter.value)
+  }
+
+  if (!term) return base
 
   const titleMatches: NoteMeta[] = []
   const contentMatches: NoteMeta[] = []
 
-  for (const note of props.notes) {
+  for (const note of base) {
     const titleMatch = note.title.toLowerCase().includes(term)
     if (titleMatch) {
       titleMatches.push(note)
       continue
     }
 
-    const content = props.noteContents[note.title] || ''
+    const content = props.noteContents[note.key] || ''
     if (content.toLowerCase().includes(term)) {
       contentMatches.push(note)
     }
@@ -65,8 +93,16 @@ function onKeydown(event: KeyboardEvent) {
   if (event.key === 'Escape') clearQuery()
 }
 
-function onSelect(title: string) {
-  emit('select', title)
+function onSelect(key: string) {
+  emit('select', key)
+}
+
+function createInCurrentFilter() {
+  if (collectionFilter.value === COLLECTION_FILTER_ALL || collectionFilter.value === COLLECTION_FILTER_NONE) {
+    emit('create', '')
+    return
+  }
+  emit('create', collectionFilter.value)
 }
 
 function toggleUserMenu() {
@@ -156,31 +192,31 @@ async function submitPasswordChange() {
           </button>
         </div>
         <div v-if="userLabel && showUserMenu" class="user-menu-dropdown">
-            <div class="user-menu-label">{{ userLabel }}</div>
-            <button class="user-menu-item" @click="toggleTheme">
-              <Sun :size="18" />
-              {{ currentTheme === 'default' ? t('summerTheme') : t('defaultTheme') }}
-            </button>
-            <button class="user-menu-item" @click="togglePasswordForm">
-              <KeyRound :size="18" />
-              {{ t('changePassword') }}
-            </button>
-            <button class="user-menu-item" @click="emit('logout')">
-              <LogOut :size="18" />
-              {{ t('logout') }}
-            </button>
+          <div class="user-menu-label">{{ userLabel }}</div>
+          <button class="user-menu-item" @click="toggleTheme">
+            <Sun :size="18" />
+            {{ currentTheme === 'default' ? t('summerTheme') : t('defaultTheme') }}
+          </button>
+          <button class="user-menu-item" @click="togglePasswordForm">
+            <KeyRound :size="18" />
+            {{ t('changePassword') }}
+          </button>
+          <button class="user-menu-item" @click="emit('logout')">
+            <LogOut :size="18" />
+            {{ t('logout') }}
+          </button>
 
-            <form v-if="showPasswordForm" class="password-form" @submit.prevent="submitPasswordChange">
-              <input v-model="currentPassword" class="password-input" type="password" autocomplete="current-password" :placeholder="t('currentPassword')" required />
-              <input v-model="newPassword" class="password-input" type="password" autocomplete="new-password" :placeholder="t('newPassword')" required />
-              <input v-model="confirmPassword" class="password-input" type="password" autocomplete="new-password" :placeholder="t('confirmNewPassword')" required />
-              <p v-if="passwordError" class="password-error">{{ passwordError }}</p>
-              <p v-if="passwordSuccess" class="password-success">{{ passwordSuccess }}</p>
-              <button class="password-submit" type="submit" :disabled="changingPassword">{{ t('updatePassword') }}</button>
-            </form>
+          <form v-if="showPasswordForm" class="password-form" @submit.prevent="submitPasswordChange">
+            <input v-model="currentPassword" class="password-input" type="password" autocomplete="current-password" :placeholder="t('currentPassword')" required />
+            <input v-model="newPassword" class="password-input" type="password" autocomplete="new-password" :placeholder="t('newPassword')" required />
+            <input v-model="confirmPassword" class="password-input" type="password" autocomplete="new-password" :placeholder="t('confirmNewPassword')" required />
+            <p v-if="passwordError" class="password-error">{{ passwordError }}</p>
+            <p v-if="passwordSuccess" class="password-success">{{ passwordSuccess }}</p>
+            <button class="password-submit" type="submit" :disabled="changingPassword">{{ t('updatePassword') }}</button>
+          </form>
         </div>
 
-        <button class="create-fab" @click="emit('create')" :aria-label="t('createNewNote')">
+        <button class="create-fab" @click="createInCurrentFilter" :aria-label="t('createNewNote')">
           <Plus :size="20" />
         </button>
       </div>
@@ -199,27 +235,35 @@ async function submitPasswordChange() {
       </button>
     </div>
 
+    <div class="collection-filter-wrap">
+      <select v-model="collectionFilter" class="collection-filter-select" :aria-label="t('filterByCollection')">
+        <option :value="COLLECTION_FILTER_ALL">{{ t('allCollections') }}</option>
+        <option :value="COLLECTION_FILTER_NONE">{{ t('noCollection') }}</option>
+        <option v-for="collection in availableCollections" :key="collection" :value="collection">{{ collection }}</option>
+      </select>
+    </div>
+
     <TransitionGroup name="note-list" tag="div" class="list">
       <button
         v-for="note in filteredNotes"
-        :key="note.title"
+        :key="note.key"
         class="note-item"
-        :class="{ active: note.title === selectedTitle }"
-        @click="onSelect(note.title)">
+        :class="{ active: note.key === selectedKey }"
+        @click="onSelect(note.key)">
         <div>
           <strong>
             <span class="note-title-text">{{ note.title }}</span>
+            <span v-if="note.collection" class="note-collection-chip">{{ note.collection }}</span>
           </strong>
         </div>
         <button
           class="pin"
           type="button"
           :aria-label="note.starred ? t('unpinNote') : t('pinNote')"
-          @click.stop="emit('toggle-pin', note.title)">
+          @click.stop="emit('toggle-pin', note.key)">
           <Star :size="18" :fill="note.starred ? 'currentColor' : 'none'" />
         </button>
       </button>
     </TransitionGroup>
-
   </aside>
 </template>

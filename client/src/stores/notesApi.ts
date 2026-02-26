@@ -23,6 +23,26 @@ export function isNotFoundError(err: unknown): boolean {
   return err instanceof ApiError && err.status === 404
 }
 
+function withCollectionQuery(path: string, collection?: string | null): string {
+  const normalizedCollection = (collection || '').trim()
+  if (!normalizedCollection) return path
+
+  const separator = path.includes('?') ? '&' : '?'
+  return `${path}${separator}collection=${encodeURIComponent(normalizedCollection)}`
+}
+
+export function notePathApi(title: string, collection?: string | null): string {
+  return withCollectionQuery(`/api/notes/${encodeURIComponent(title)}`, collection)
+}
+
+export function renameNotePathApi(title: string, collection?: string | null): string {
+  return withCollectionQuery(`/api/notes/${encodeURIComponent(title)}/rename`, collection)
+}
+
+export function starNotePathApi(title: string, collection?: string | null): string {
+  return withCollectionQuery(`/api/notes/${encodeURIComponent(title)}/star`, collection)
+}
+
 export async function apiFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
   const method = ((init?.method || (input instanceof Request ? input.method : 'GET')) || 'GET').toUpperCase()
   let requestInit = init

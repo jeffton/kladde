@@ -7,9 +7,40 @@ export function normalizeTs(value?: string | null): string {
   return new Date(ms).toISOString()
 }
 
+export function normalizeCollection(value?: string | null): string {
+  return (value || '').trim()
+}
+
+export function buildNoteKey(title: string, collection?: string | null): string {
+  const normalizedCollection = normalizeCollection(collection)
+  return normalizedCollection ? `${normalizedCollection}/${title}` : title
+}
+
+export function splitNoteKey(key: string): { title: string; collection: string } {
+  const normalized = (key || '').trim()
+  if (!normalized) return { title: '', collection: '' }
+
+  const slashIdx = normalized.indexOf('/')
+  if (slashIdx === -1) {
+    return { title: normalized, collection: '' }
+  }
+
+  return {
+    collection: normalized.slice(0, slashIdx),
+    title: normalized.slice(slashIdx + 1)
+  }
+}
+
+export function normalizeNoteKey(note: Pick<NoteMeta, 'key' | 'title' | 'collection'>): string {
+  if (note.key) return note.key
+  return buildNoteKey(note.title, note.collection)
+}
+
 export function toMeta(note: CachedNote): NoteMeta {
   return {
+    key: normalizeNoteKey(note),
     title: note.title,
+    collection: normalizeCollection(note.collection),
     updatedAt: normalizeTs(note.updatedAt),
     dirty: Boolean(note.dirty),
     starred: Boolean(note.starred)
@@ -32,27 +63,27 @@ export function isServerBacked(note?: CachedNote | null): boolean {
 
 export function samePendingOp(a: PendingOp, b: PendingOp): boolean {
   if (a.type !== b.type) return false
-  if (a.type === 'rename' && b.type === 'rename') return a.oldTitle === b.oldTitle && a.newTitle === b.newTitle
-  if (a.type === 'delete' && b.type === 'delete') return a.title === b.title
-  if (a.type === 'star' && b.type === 'star') return a.title === b.title && a.starred === b.starred
+  if (a.type === 'rename' && b.type === 'rename') return a.oldKey === b.oldKey && a.newKey === b.newKey
+  if (a.type === 'delete' && b.type === 'delete') return a.key === b.key
+  if (a.type === 'star' && b.type === 'star') return a.key === b.key && a.starred === b.starred
   return false
 }
 
-export function retargetPendingTitle(ops: PendingOp[], fromTitle: string, toTitle: string): PendingOp[] {
+export function retargetPendingKey(ops: PendingOp[], fromKey: string, toKey: string): PendingOp[] {
   return ops.map((op) => {
     if (op.type === 'rename') {
       return {
         ...op,
-        oldTitle: op.oldTitle === fromTitle ? toTitle : op.oldTitle,
-        newTitle: op.newTitle === fromTitle ? toTitle : op.newTitle
+        oldKey: op.oldKey === fromKey ? toKey : op.oldKey,
+        newKey: op.newKey === fromKey ? toKey : op.newKey
       }
     }
 
     if (op.type === 'delete') {
-      return { ...op, title: op.title === fromTitle ? toTitle : op.title }
+      return { ...op, key: op.key === fromKey ? toKey : op.key }
     }
 
-    return { ...op, title: op.title === fromTitle ? toTitle : op.title }
+    return { ...op, key: op.key === fromKey ? toKey : op.key }
   })
 }
 

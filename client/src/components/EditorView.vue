@@ -15,6 +15,7 @@ import TableCell from '@tiptap/extension-table-cell'
 import { Markdown } from 'tiptap-markdown'
 import {
   AlertTriangle,
+  Check,
   ChevronLeft,
   CloudCheck,
   CloudOff,
@@ -36,7 +37,7 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 const emit = defineEmits<{
-  (e: 'rename', title: string): void
+  (e: 'rename', key: string): void
   (e: 'back'): void
   (e: 'deleted'): void
   (e: 'ui-error', message: string): void
@@ -186,6 +187,8 @@ const isTouchLike = ref(false)
 const showNoteMenu = ref(false)
 const lastSyncTime = ref('')
 const noteMenuWrap = ref<HTMLElement | null>(null)
+const availableCollections = computed(() => props.store.collections)
+const selectedCollection = computed(() => props.store.selectedCollection || '')
 let shouldBlurAfterTaskCheckboxTap = false
 
 function capitalize(text = '') {
@@ -296,7 +299,7 @@ function formatUpdatedAt(value: string) {
 
 const statusMeta = computed(() => {
   const syncState = props.store.syncState
-  const modifiedRaw = props.store.currentUpdatedAt || props.store.notes.find((n) => n.title === props.store.selectedTitle)?.updatedAt || ''
+  const modifiedRaw = props.store.currentUpdatedAt || props.store.notes.find((n) => n.key === props.store.selectedKey)?.updatedAt || ''
   const modifiedText = modifiedRaw ? formatUpdatedAt(modifiedRaw) : ''
   const modifiedLine = modifiedText ? `${t('modified')} ${modifiedText}` : ''
 
@@ -551,7 +554,7 @@ function applyPlainAction(action: string) {
 }
 
 async function commitTitleChange() {
-  if (!props.store.selectedTitle) return
+  if (!props.store.selectedKey) return
   const next = editableTitle.value.trim()
 
   if (!next) {
@@ -560,9 +563,9 @@ async function commitTitleChange() {
   }
 
   try {
-    const renamedTitle = await props.store.renameCurrent(next)
-    editableTitle.value = renamedTitle
-    emit('rename', renamedTitle)
+    const renamedKey = await props.store.renameCurrent(next)
+    editableTitle.value = props.store.selectedTitle
+    emit('rename', renamedKey)
   } catch (e) {
     emit('ui-error', (e as Error).message || t('genericError'))
     editableTitle.value = props.store.selectedTitle
@@ -573,8 +576,47 @@ function toggleNoteMenu() {
   showNoteMenu.value = !showNoteMenu.value
 }
 
+function isValidCollectionName(value: string): boolean {
+  if (!value) return false
+  if (value.includes('/') || value.includes('\\') || value.includes('..')) return false
+  for (const char of value) {
+    const code = char.charCodeAt(0)
+    if (code < 32 || code === 127) return false
+  }
+  return true
+}
+
+async function moveCurrentToCollection(collection: string) {
+  if (!props.store.selectedKey) return
+
+  const targetCollection = selectedCollection.value === collection ? '' : collection
+
+  try {
+    const renamedKey = await props.store.moveCurrentToCollection(targetCollection)
+    showNoteMenu.value = false
+    emit('rename', renamedKey)
+  } catch (e) {
+    emit('ui-error', (e as Error).message || t('genericError'))
+  }
+}
+
+async function createCollectionAndMove() {
+  if (!props.store.selectedKey) return
+
+  const candidate = window.prompt(t('newCollectionPrompt'))
+  if (candidate === null) return
+
+  const nextCollection = candidate.trim()
+  if (!isValidCollectionName(nextCollection)) {
+    emit('ui-error', t('invalidCollectionName'))
+    return
+  }
+
+  await moveCurrentToCollection(nextCollection)
+}
+
 async function deleteCurrentNote() {
-  if (!props.store.selectedTitle) return
+  if (!props.store.selectedKey) return
   const confirmed = window.confirm(t('confirmDelete'))
   if (!confirmed) return
 
@@ -660,8 +702,8 @@ watch(
 )
 
 watch(() => props.store.currentContent, () => syncEditorFromStore())
-watch(() => props.store.selectedTitle, (title) => {
-  editableTitle.value = title || ''
+watch(() => props.store.selectedKey, () => {
+  editableTitle.value = props.store.selectedTitle || ''
   showNoteMenu.value = false
   syncEditorFromStore()
   nextTick(() => resetEditorScrollPosition())
@@ -682,7 +724,7 @@ onUnmounted(() => {
 
 <template>
   <main class="editor-area">
-    <div class="note-title-wrap" v-if="store.selectedTitle">
+    <div class="note-title-wrap" v-if="store.selectedKey">
       <button v-if="showBack" class="mobile-title-back" @click="emit('back')" :aria-label="t('back')">
         <ChevronLeft :size="20" />
       </button>
@@ -721,6 +763,28 @@ onUnmounted(() => {
           <MoreVertical :size="20" />
         </button>
         <div v-if="showNoteMenu" class="note-menu-dropdown" role="menu">
+          <button class="note-menu-item" role="menuitemradio" :aria-checked="!selectedCollection" @click="moveCurrentToCollection('')">
+            <Check v-if="!selectedCollection" :size="16" />
+            <span>{{ t('noCollection') }}</span>
+          </button>
+
+          <div class="note-menu-collections" role="group" :aria-label="t('collections')">
+            <button
+              v-for="collection in availableCollections"
+              :key="collection"
+              class="note-menu-item"
+              role="menuitemradio"
+              :aria-checked="selectedCollection === collection"
+              @click="moveCurrentToCollection(collection)">
+              <Check v-if="selectedCollection === collection" :size="16" />
+              <span>{{ collection }}</span>
+            </button>
+          </div>
+
+          <button class="note-menu-item" role="menuitem" @click="createCollectionAndMove">
+            <span>{{ t('newCollection') }}</span>
+          </button>
+
           <button class="note-menu-delete" role="menuitem" @click="deleteCurrentNote">
             <Trash2 :size="18" />
             <span>{{ t('deleteNote') }}</span>
