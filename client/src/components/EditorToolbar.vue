@@ -75,106 +75,125 @@ function convertListSelection(target: 'bullet' | 'ordered' | 'task'): boolean {
 
   const isListNodeName = (name: string) => name === 'bulletList' || name === 'orderedList' || name === 'taskList'
 
-  const outerListBounds = ($pos: typeof selection.$from) => {
-    for (let depth = 1; depth <= $pos.depth; depth++) {
+  const findNearestListRoot = ($pos: typeof selection.$from): number | null => {
+    for (let depth = $pos.depth; depth >= 1; depth--) {
       const node = $pos.node(depth)
       if (!isListNodeName(node.type.name)) continue
-      const start = $pos.before(depth)
-      return { from: start, to: start + node.nodeSize }
+      return $pos.before(depth)
     }
     return null
   }
 
-  let from = selection.from
-  let to = selection.to
-
-  const fromBounds = outerListBounds(selection.$from)
-  const toBounds = outerListBounds(selection.$to)
-
-  if (fromBounds) from = Math.min(from, fromBounds.from)
-  if (toBounds) from = Math.min(from, toBounds.from)
-  if (fromBounds) to = Math.max(to, fromBounds.to)
-  if (toBounds) to = Math.max(to, toBounds.to)
-
-  const listRoots: Array<{ pos: number; nodeSize: number; node: ProseMirrorNode }> = []
-  const addRootAt = (pos: number) => {
+  const listRoots: number[] = []
+  const addListRoot = (pos: number | null) => {
+    if (typeof pos !== 'number') return
     const node = state.doc.nodeAt(pos)
     if (!node || !isListNodeName(node.type.name)) return
-    if (listRoots.some((root) => root.pos === pos)) return
-    listRoots.push({ pos, nodeSize: node.nodeSize, node })
+    if (listRoots.includes(pos)) return
+    listRoots.push(pos)
   }
 
-  if (fromBounds) addRootAt(fromBounds.from)
-  if (toBounds) addRootAt(toBounds.from)
+  addListRoot(findNearestListRoot(selection.$from))
+  addListRoot(findNearestListRoot(selection.$to))
 
-  state.doc.nodesBetween(from, to, (node, pos) => {
-    if (!isListNodeName(node.type.name)) return
-    if (listRoots.some((root) => root.pos === pos)) return
-
-    const insideExistingRoot = listRoots.some((root) => pos > root.pos && pos < root.pos + root.nodeSize)
-    if (insideExistingRoot) return
-
-    listRoots.push({ pos, nodeSize: node.nodeSize, node })
-  })
+  if (!selection.empty && listRoots.length === 0) {
+    state.doc.nodesBetween(selection.from, selection.to, (node, pos) => {
+      if (!isListNodeName(node.type.name)) return
+      if (listRoots.includes(pos)) return
+      listRoots.push(pos)
+    })
+  }
 
   if (listRoots.length === 0) return false
 
   const targetNodeName = target === 'bullet' ? 'bulletList' : target === 'ordered' ? 'orderedList' : 'taskList'
+  const targetListType = target === 'bullet' ? bulletList : target === 'ordered' ? orderedList : taskList
 
-  const unwrapListRoot = (root: ProseMirrorNode): Fragment => {
-    const unwrapped: ProseMirrorNode[] = []
-
-    root.forEach((item) => {
-      item.forEach((child) => {
-        unwrapped.push(child)
-      })
-    })
-
-    return Fragment.fromArray(unwrapped)
-  }
-
-  const convertNode = (node: ProseMirrorNode): ProseMirrorNode => {
-    const childNodes: ProseMirrorNode[] = []
-    node.forEach((child) => {
-      childNodes.push(convertNode(child))
-    })
-    const nextContent = Fragment.fromArray(childNodes)
-
-    const nodeName = node.type.name
-
-    if (target === 'bullet') {
-      if (nodeName === 'taskList' || nodeName === 'orderedList') return bulletList.create(node.attrs, nextContent)
-      if (nodeName === 'taskItem') return listItem.create(null, nextContent)
-      return node.copy(nextContent)
+  const convertSelectedItem = (item: ProseMirrorNode): ProseMirrorNode => {
+    if (target === 'task') {
+      if (item.type.name === 'taskItem') return item
+      return taskItem.create({ checked: false }, item.content)
     }
 
-    if (target === 'ordered') {
-      if (nodeName === 'taskList' || nodeName === 'bulletList') return orderedList.create(node.attrs, nextContent)
-      if (nodeName === 'taskItem') return listItem.create(null, nextContent)
-      return node.copy(nextContent)
-    }
-
-    if (nodeName === 'bulletList' || nodeName === 'orderedList') return taskList.create(node.attrs, nextContent)
-    if (nodeName === 'listItem') return taskItem.create({ checked: false }, nextContent)
-
-    return node.copy(nextContent)
+    if (item.type.name === 'listItem') return item
+    return listItem.create(null, item.content)
   }
 
   let tr = state.tr
   listRoots
-    .sort((a, b) => b.pos - a.pos)
-    .forEach((root) => {
-      const mappedPos = tr.mapping.map(root.pos)
-      const currentRoot = tr.doc.nodeAt(mappedPos)
-      if (!currentRoot) return
+    .sort((a, b) => b - a)
+    .forEach((rootPos) => {
+      const mappedRootPos = tr.mapping.map(rootPos)
+      const currentRoot = tr.doc.nodeAt(mappedRootPos)
+      if (!currentRoot || !isListNodeName(currentRoot.type.name)) return
 
-      if (currentRoot.type.name === targetNodeName) {
-        tr = tr.replaceWith(mappedPos, mappedPos + currentRoot.nodeSize, unwrapListRoot(currentRoot))
-        return
+      const mappedFrom = tr.mapping.map(selection.from)
+      const mappedTo = tr.mapping.map(selection.to)
+      const collapsed = selection.empty
+
+      const replacementNodes: ProseMirrorNode[] = []
+      let bufferedMode: 'unchanged' | 'converted' | null = null
+      let bufferedItems: ProseMirrorNode[] = []
+      let hasSelectedItems = false
+
+      const flushBufferedItems = () => {
+        if (!bufferedMode || bufferedItems.length === 0) return
+
+        const content = Fragment.fromArray(bufferedItems)
+        if (bufferedMode === 'unchanged') {
+          replacementNodes.push(currentRoot.type.create(currentRoot.attrs, content))
+        } else {
+          replacementNodes.push(targetListType.create(currentRoot.attrs, content))
+        }
+
+        bufferedMode = null
+        bufferedItems = []
       }
 
-      const converted = convertNode(currentRoot)
-      tr = tr.replaceWith(mappedPos, mappedPos + currentRoot.nodeSize, converted)
+      currentRoot.forEach((item, offset) => {
+        const itemFrom = mappedRootPos + 1 + offset
+        const itemTo = itemFrom + item.nodeSize
+
+        const isSelected = collapsed
+          ? mappedFrom >= itemFrom && mappedFrom <= itemTo
+          : itemTo > mappedFrom && itemFrom < mappedTo
+
+        if (!isSelected) {
+          if (bufferedMode !== 'unchanged') {
+            flushBufferedItems()
+            bufferedMode = 'unchanged'
+          }
+          bufferedItems.push(item)
+          return
+        }
+
+        hasSelectedItems = true
+
+        if (currentRoot.type.name === targetNodeName) {
+          flushBufferedItems()
+          item.forEach((child) => {
+            replacementNodes.push(child)
+          })
+          return
+        }
+
+        if (bufferedMode !== 'converted') {
+          flushBufferedItems()
+          bufferedMode = 'converted'
+        }
+
+        bufferedItems.push(convertSelectedItem(item))
+      })
+
+      flushBufferedItems()
+
+      if (!hasSelectedItems) return
+
+      tr = tr.replaceWith(
+        mappedRootPos,
+        mappedRootPos + currentRoot.nodeSize,
+        Fragment.fromArray(replacementNodes)
+      )
     })
 
   if (!tr.docChanged) return false
