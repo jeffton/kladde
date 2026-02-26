@@ -244,9 +244,31 @@ function convertListSelection(target: ListTarget): boolean {
   return true
 }
 
+function syncEditorSelectionFromDom() {
+  if (!props.editor) return
+
+  const domSelection = window.getSelection()
+  if (!domSelection?.anchorNode || !domSelection.focusNode) return
+
+  const root = props.editor.view.dom as HTMLElement
+  if (!root.contains(domSelection.anchorNode) || !root.contains(domSelection.focusNode)) return
+
+  try {
+    const anchor = props.editor.view.posAtDOM(domSelection.anchorNode, domSelection.anchorOffset)
+    const head = props.editor.view.posAtDOM(domSelection.focusNode, domSelection.focusOffset)
+    props.editor.commands.setTextSelection({
+      from: Math.min(anchor, head),
+      to: Math.max(anchor, head)
+    })
+  } catch {
+    // Ignore unresolvable DOM selection nodes.
+  }
+}
+
 function applyRichListType(target: ListTarget) {
   if (!props.editor) return
 
+  syncEditorSelectionFromDom()
   props.editor.chain().focus().run()
 
   if (convertListSelection(target)) return
@@ -259,6 +281,7 @@ function applyRichListType(target: ListTarget) {
 function indentRich() {
   if (!props.editor) return
 
+  syncEditorSelectionFromDom()
   if (props.editor.chain().focus().sinkListItem('taskItem').run()) return
   props.editor.chain().focus().sinkListItem('listItem').run()
 }
@@ -266,6 +289,7 @@ function indentRich() {
 function outdentRich() {
   if (!props.editor) return
 
+  syncEditorSelectionFromDom()
   if (props.editor.chain().focus().liftListItem('taskItem').run()) return
   props.editor.chain().focus().liftListItem('listItem').run()
 }
