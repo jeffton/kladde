@@ -45,6 +45,7 @@ const emit = defineEmits<{
 }>()
 
 const editableTitle = ref('')
+const titleInput = ref<HTMLInputElement | null>(null)
 const showPlain = ref(false)
 const plainTextarea = ref<HTMLTextAreaElement | null>(null)
 const plainWrap = ref<HTMLElement | null>(null)
@@ -702,13 +703,32 @@ watch(
   { immediate: true }
 )
 
+function fallbackTitleFromKey(key: string): string {
+  if (!key) return ''
+  const slashIndex = key.indexOf('/')
+  if (slashIndex === -1) return key
+  return key.slice(slashIndex + 1)
+}
+
 watch(() => props.store.currentContent, () => syncEditorFromStore())
 watch(() => props.store.selectedKey, () => {
-  editableTitle.value = props.store.selectedTitle || ''
+  if (!(document.activeElement === titleInput.value && editableTitle.value.trim() !== '')) {
+    editableTitle.value = props.store.selectedTitle || fallbackTitleFromKey(props.store.selectedKey)
+  }
   showNoteMenu.value = false
   syncEditorFromStore()
   nextTick(() => resetEditorScrollPosition())
 }, { immediate: true })
+
+watch(() => props.store.selectedTitle, (title) => {
+  if (!props.store.selectedKey) {
+    editableTitle.value = ''
+    return
+  }
+  if (!title) return
+  if (document.activeElement === titleInput.value) return
+  editableTitle.value = title
+})
 
 onMounted(() => {
   updateInputMode()
@@ -730,6 +750,7 @@ onUnmounted(() => {
         <ChevronLeft :size="20" />
       </button>
       <input
+        ref="titleInput"
         v-model="editableTitle"
         class="note-title-input"
         type="text"
