@@ -28,6 +28,8 @@ interface Props {
   isPlain?: boolean
 }
 
+type ListTarget = 'bullet' | 'ordered' | 'task'
+
 const props = withDefaults(defineProps<Props>(), {
   editor: null,
   isPlain: false
@@ -42,7 +44,6 @@ const isMobile = ref(window.matchMedia('(max-width: 900px)').matches)
 const showMobileMore = ref(false)
 let media: MediaQueryList | null = null
 let mediaListener: ((event: MediaQueryListEvent) => void) | null = null
-let lastListSelectionText: string | null = null
 
 function run(action: string, richAction?: () => void) {
   if (props.isPlain) {
@@ -60,7 +61,7 @@ function toggleMore() {
   showMobileMore.value = !showMobileMore.value
 }
 
-function convertListSelection(target: 'bullet' | 'ordered' | 'task'): boolean {
+function convertListSelection(target: ListTarget): boolean {
   if (!props.editor) return false
 
   const editor = props.editor
@@ -77,28 +78,25 @@ function convertListSelection(target: 'bullet' | 'ordered' | 'task'): boolean {
 
   const isListNodeName = (name: string) => name === 'bulletList' || name === 'orderedList' || name === 'taskList'
 
-  const findNearestListRoot = ($pos: typeof selection.$from): number | null => {
+  const targetNodeName = target === 'bullet' ? 'bulletList' : target === 'ordered' ? 'orderedList' : 'taskList'
+  const targetListType = target === 'bullet' ? bulletList : target === 'ordered' ? orderedList : taskList
+
+  const addNearestListRoot = ($pos: typeof selection.$from, roots: number[]) => {
     for (let depth = $pos.depth; depth >= 1; depth--) {
       const node = $pos.node(depth)
       if (!isListNodeName(node.type.name)) continue
-      return $pos.before(depth)
+      const listPos = $pos.before(depth)
+      if (!roots.includes(listPos)) roots.push(listPos)
+      return
     }
-    return null
   }
 
   const listRoots: number[] = []
-  const addListRoot = (pos: number | null) => {
-    if (typeof pos !== 'number') return
-    const node = state.doc.nodeAt(pos)
-    if (!node || !isListNodeName(node.type.name)) return
-    if (listRoots.includes(pos)) return
-    listRoots.push(pos)
-  }
 
-  addListRoot(findNearestListRoot(selection.$from))
-  addListRoot(findNearestListRoot(selection.$to))
+  addNearestListRoot(selection.$from, listRoots)
+  addNearestListRoot(selection.$to, listRoots)
 
-  if (!selection.empty && listRoots.length === 0) {
+  if (!selection.empty) {
     state.doc.nodesBetween(selection.from, selection.to, (node, pos) => {
       if (!isListNodeName(node.type.name)) return
       if (listRoots.includes(pos)) return
@@ -107,9 +105,6 @@ function convertListSelection(target: 'bullet' | 'ordered' | 'task'): boolean {
   }
 
   if (listRoots.length === 0) return false
-
-  const targetNodeName = target === 'bullet' ? 'bulletList' : target === 'ordered' ? 'orderedList' : 'taskList'
-  const targetListType = target === 'bullet' ? bulletList : target === 'ordered' ? orderedList : taskList
 
   const convertSelectedItem = (item: ProseMirrorNode): ProseMirrorNode => {
     if (target === 'task') {
@@ -249,83 +244,29 @@ function convertListSelection(target: 'bullet' | 'ordered' | 'task'): boolean {
   return true
 }
 
-function captureSelectionParagraphText(): string | null {
-  if (!props.editor || !props.editor.state.selection.empty) return null
-
-  const domSelection = window.getSelection()
-  const anchorNode = domSelection?.anchorNode
-  if (!anchorNode) return null
-
-  const anchorElement = anchorNode.nodeType === Node.ELEMENT_NODE
-    ? (anchorNode as Element)
-    : anchorNode.parentElement
-
-  const paragraph = anchorElement?.closest('p')
-  const text = paragraph?.textContent?.trim() || ''
-  return text || null
-}
-
-function restoreSelectionParagraphText(text: string | null) {
-  if (!props.editor || !text) return
-
-  const root = props.editor.view.dom as HTMLElement
-  const target = Array.from(root.querySelectorAll('p')).find((node) => (node.textContent || '').trim() === text)
-  if (!target) return
-
-  const targetNode = target.firstChild || target
-  const offset = targetNode.nodeType === Node.TEXT_NODE ? (targetNode.textContent?.length || 0) : 0
-  const targetPos = props.editor.view.posAtDOM(targetNode, offset)
-
-  try {
-    const tr = props.editor.state.tr.setSelection(TextSelection.create(props.editor.state.doc, targetPos))
-    props.editor.view.dispatch(tr)
-  } catch {
-    const fallback = TextSelection.near(props.editor.state.doc.resolve(Math.max(1, targetPos)), 1)
-    props.editor.view.dispatch(props.editor.state.tr.setSelection(fallback))
-  }
-}
-
-function applyRichListType(target: 'bullet' | 'ordered' | 'task') {
+function applyRichListType(target: ListTarget) {
   if (!props.editor) return
-
-  const selectionText = captureSelectionParagraphText() || lastListSelectionText
-  if (selectionText) restoreSelectionParagraphText(selectionText)
 
   props.editor.chain().focus().run()
 
-  const changed = convertListSelection(target)
-  if (changed) {
-    lastListSelectionText = selectionText
-    restoreSelectionParagraphText(selectionText)
-    return
-  }
+  if (convertListSelection(target)) return
 
   if (target === 'bullet') props.editor.chain().focus().toggleBulletList().run()
   if (target === 'ordered') props.editor.chain().focus().toggleOrderedList().run()
   if (target === 'task') props.editor.chain().focus().toggleTaskList().run()
-
-  lastListSelectionText = selectionText
 }
 
 function indentRich() {
   if (!props.editor) return
 
-  if (props.editor.isActive('taskItem')) {
-    props.editor.chain().focus().sinkListItem('taskItem').run()
-    return
-  }
-
+  if (props.editor.chain().focus().sinkListItem('taskItem').run()) return
   props.editor.chain().focus().sinkListItem('listItem').run()
 }
 
 function outdentRich() {
   if (!props.editor) return
 
-  if (props.editor.isActive('taskItem')) {
-    props.editor.chain().focus().liftListItem('taskItem').run()
-    return
-  }
-
+  if (props.editor.chain().focus().liftListItem('taskItem').run()) return
   props.editor.chain().focus().liftListItem('listItem').run()
 }
 

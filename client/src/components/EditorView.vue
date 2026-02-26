@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { EditorContent, useEditor } from '@tiptap/vue-3'
+import type { Editor as TiptapEditor } from '@tiptap/core'
 import StarterKit from '@tiptap/starter-kit'
 import TaskList from '@tiptap/extension-task-list'
 import TaskItem from '@tiptap/extension-task-item'
@@ -246,6 +247,75 @@ function handleTaskCheckboxClick(event: Event): boolean {
 
   shouldBlurAfterTaskCheckboxTap = false
   return false
+}
+
+function selectionTouchesListItems(tiptap: TiptapEditor): boolean {
+  const { selection, doc } = tiptap.state
+
+  const inListItemAt = ($pos: typeof selection.$from): boolean => {
+    for (let depth = $pos.depth; depth >= 0; depth--) {
+      const node = $pos.node(depth)
+      if (node.type.name === 'taskItem' || node.type.name === 'listItem') return true
+    }
+    return false
+  }
+
+  if (inListItemAt(selection.$from) || inListItemAt(selection.$to)) return true
+  if (selection.empty) return false
+
+  let hasListItems = false
+  doc.nodesBetween(selection.from, selection.to, (node) => {
+    if (node.type.name !== 'taskItem' && node.type.name !== 'listItem') return
+    hasListItems = true
+    return false
+  })
+
+  return hasListItems
+}
+
+function adjustListItemIndent(tiptap: TiptapEditor, outdent: boolean): boolean {
+  if (outdent) {
+    if (tiptap.chain().focus().liftListItem('taskItem').run()) return true
+    return tiptap.chain().focus().liftListItem('listItem').run()
+  }
+
+  if (tiptap.chain().focus().sinkListItem('taskItem').run()) return true
+  return tiptap.chain().focus().sinkListItem('listItem').run()
+}
+
+function syncEditorSelectionFromDom(tiptap: TiptapEditor) {
+  const domSelection = window.getSelection()
+  if (!domSelection?.anchorNode || !domSelection.focusNode) return
+
+  const root = tiptap.view.dom as HTMLElement
+  if (!root.contains(domSelection.anchorNode) || !root.contains(domSelection.focusNode)) return
+
+  try {
+    const anchor = tiptap.view.posAtDOM(domSelection.anchorNode, domSelection.anchorOffset)
+    const head = tiptap.view.posAtDOM(domSelection.focusNode, domSelection.focusOffset)
+    tiptap.commands.setTextSelection({
+      from: Math.min(anchor, head),
+      to: Math.max(anchor, head)
+    })
+  } catch {
+    // Ignore unresolvable DOM selection nodes.
+  }
+}
+
+function handleGlobalTabKeyDown(event: KeyboardEvent) {
+  if (event.key !== 'Tab') return
+  if (!editor.value) return
+
+  const root = editor.value.view.dom as HTMLElement
+  const active = document.activeElement as HTMLElement | null
+  const inEditor = active === root || (active != null && root.contains(active))
+  if (!inEditor) return
+
+  syncEditorSelectionFromDom(editor.value)
+  if (!selectionTouchesListItems(editor.value)) return
+
+  event.preventDefault()
+  adjustListItemIndent(editor.value, event.shiftKey)
 }
 
 function firstDayOfWeek(): number {
@@ -734,11 +804,13 @@ onMounted(() => {
   updateInputMode()
   window.addEventListener('resize', updateInputMode)
   window.addEventListener('pointerdown', onGlobalPointerDown)
+  window.addEventListener('keydown', handleGlobalTabKeyDown, true)
 })
 
 onUnmounted(() => {
   window.removeEventListener('resize', updateInputMode)
   window.removeEventListener('pointerdown', onGlobalPointerDown)
+  window.removeEventListener('keydown', handleGlobalTabKeyDown, true)
   editor.value?.destroy()
 })
 </script>
