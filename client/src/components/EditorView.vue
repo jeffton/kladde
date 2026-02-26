@@ -20,6 +20,7 @@ import {
   CloudCheck,
   CloudOff,
   MoreVertical,
+  Plus,
   RefreshCw,
   Trash2
 } from 'lucide-vue-next'
@@ -764,8 +765,10 @@ onUnmounted(() => {
         </button>
         <div v-if="showNoteMenu" class="note-menu-dropdown" role="menu">
           <button class="note-menu-item" role="menuitemradio" :aria-checked="!selectedCollection" @click="moveCurrentToCollection('')">
-            <Check v-if="!selectedCollection" :size="16" />
-            <span>{{ t('noCollection') }}</span>
+            <span class="note-menu-leading" aria-hidden="true">
+              <Check :size="16" :class="{ 'is-hidden': selectedCollection }" />
+            </span>
+            <span class="note-menu-label">{{ t('noCollection') }}</span>
           </button>
 
           <div class="note-menu-collections" role="group" :aria-label="t('collections')">
@@ -776,18 +779,25 @@ onUnmounted(() => {
               role="menuitemradio"
               :aria-checked="selectedCollection === collection"
               @click="moveCurrentToCollection(collection)">
-              <Check v-if="selectedCollection === collection" :size="16" />
-              <span>{{ collection }}</span>
+              <span class="note-menu-leading" aria-hidden="true">
+                <Check :size="16" :class="{ 'is-hidden': selectedCollection !== collection }" />
+              </span>
+              <span class="note-menu-label">{{ collection }}</span>
             </button>
           </div>
 
           <button class="note-menu-item" role="menuitem" @click="createCollectionAndMove">
-            <span>{{ t('newCollection') }}</span>
+            <span class="note-menu-leading" aria-hidden="true">
+              <Plus :size="16" />
+            </span>
+            <span class="note-menu-label">{{ t('newCollection') }}</span>
           </button>
 
           <button class="note-menu-delete" role="menuitem" @click="deleteCurrentNote">
-            <Trash2 :size="18" />
-            <span>{{ t('deleteNote') }}</span>
+            <span class="note-menu-leading" aria-hidden="true">
+              <Trash2 :size="16" />
+            </span>
+            <span class="note-menu-label">{{ t('deleteNote') }}</span>
           </button>
         </div>
       </div>

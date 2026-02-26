@@ -222,25 +222,27 @@ async function submitPasswordChange() {
       </div>
     </div>
 
-    <div class="search-wrap">
-      <Search class="search-icon" :size="18" />
-      <input
-        v-model="query"
-        class="search-input"
-        type="text"
-        :placeholder="t('search')"
-        @keydown="onKeydown" />
-      <button v-if="query" class="search-clear" :aria-label="t('clearSearch')" @click="clearQuery">
-        <X :size="18" />
-      </button>
-    </div>
+    <div class="search-controls">
+      <div class="search-wrap">
+        <Search class="search-icon" :size="18" />
+        <input
+          v-model="query"
+          class="search-input"
+          type="text"
+          :placeholder="t('search')"
+          @keydown="onKeydown" />
+        <button v-if="query" class="search-clear" :aria-label="t('clearSearch')" @click="clearQuery">
+          <X :size="18" />
+        </button>
+      </div>
 
-    <div class="collection-filter-wrap">
-      <select v-model="collectionFilter" class="collection-filter-select" :aria-label="t('filterByCollection')">
-        <option :value="COLLECTION_FILTER_ALL">{{ t('allCollections') }}</option>
-        <option :value="COLLECTION_FILTER_NONE">{{ t('noCollection') }}</option>
-        <option v-for="collection in availableCollections" :key="collection" :value="collection">{{ collection }}</option>
-      </select>
+      <div class="collection-filter-wrap">
+        <select v-model="collectionFilter" class="collection-filter-select" :aria-label="t('filterByCollection')">
+          <option :value="COLLECTION_FILTER_ALL">{{ t('allCollections') }}</option>
+          <option :value="COLLECTION_FILTER_NONE">{{ t('noCollection') }}</option>
+          <option v-for="collection in availableCollections" :key="collection" :value="collection">{{ collection }}</option>
+        </select>
+      </div>
     </div>
 
     <TransitionGroup name="note-list" tag="div" class="list">
@@ -250,19 +252,22 @@ async function submitPasswordChange() {
         class="note-item"
         :class="{ active: note.key === selectedKey }"
         @click="onSelect(note.key)">
-        <div>
+        <div class="note-item-main">
           <strong>
             <span class="note-title-text">{{ note.title }}</span>
-            <span v-if="note.collection" class="note-collection-chip">{{ note.collection }}</span>
           </strong>
         </div>
-        <button
-          class="pin"
-          type="button"
-          :aria-label="note.starred ? t('unpinNote') : t('pinNote')"
-          @click.stop="emit('toggle-pin', note.key)">
-          <Star :size="18" :fill="note.starred ? 'currentColor' : 'none'" />
-        </button>
+
+        <div class="note-item-right">
+          <span v-if="note.collection" class="note-collection-chip">{{ note.collection }}</span>
+          <button
+            class="pin"
+            type="button"
+            :aria-label="note.starred ? t('unpinNote') : t('pinNote')"
+            @click.stop="emit('toggle-pin', note.key)">
+            <Star :size="18" :fill="note.starred ? 'currentColor' : 'none'" />
+          </button>
+        </div>
       </button>
     </TransitionGroup>
   </aside>
