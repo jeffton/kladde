@@ -109,6 +109,7 @@ function convertListSelection(target: 'bullet' | 'ordered' | 'task'): boolean {
 
   state.doc.nodesBetween(from, to, (node, pos) => {
     if (!isListNodeName(node.type.name)) return
+    if (listRoots.some((root) => root.pos === pos)) return
 
     const insideExistingRoot = listRoots.some((root) => pos > root.pos && pos < root.pos + root.nodeSize)
     if (insideExistingRoot) return
