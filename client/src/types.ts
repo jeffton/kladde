@@ -39,6 +39,19 @@ export interface AuthUser {
   displayName: string
 }
 
+export type ShareMode = 'view' | 'edit'
+
+export interface ShareLink {
+  enabled: boolean
+  token?: string
+  url?: string
+}
+
+export interface ShareLinksResponse {
+  view: ShareLink
+  edit: ShareLink
+}
+
 export type SyncState = 'offline' | 'syncing' | 'error' | 'synced'
 
 export interface NotesState {

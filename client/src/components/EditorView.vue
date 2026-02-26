@@ -23,10 +23,13 @@ import {
   FolderPlus,
   MoreVertical,
   RefreshCw,
+  Share2,
   Trash2
 } from 'lucide-vue-next'
 import EditorToolbar from './EditorToolbar.vue'
 import type { NotesStore } from '../stores/notes'
+import { apiFetch, shareNotePathApi } from '../stores/notesApi'
+import type { ShareLinksResponse, ShareMode } from '../types'
 import { intlLocale, t } from '../i18n'
 
 interface Props {
@@ -188,6 +191,14 @@ const FocusSafeTaskItem = TaskItem.extend({
 const showTooltip = ref(false)
 const isTouchLike = ref(false)
 const showNoteMenu = ref(false)
+const showShareDialog = ref(false)
+const shareLinks = ref<ShareLinksResponse>({
+  view: { enabled: false },
+  edit: { enabled: false }
+})
+const shareBusyMode = ref<ShareMode | ''>('')
+const shareCopyMode = ref<ShareMode | ''>('')
+const shareLoading = ref(false)
 const lastSyncTime = ref('')
 const noteMenuWrap = ref<HTMLElement | null>(null)
 const availableCollections = computed(() => props.store.collections)
@@ -712,6 +723,72 @@ async function createCollectionAndMove() {
   await moveCurrentToCollection(nextCollection)
 }
 
+async function loadShareLinks() {
+  if (!props.store.selectedTitle) return
+  shareLoading.value = true
+
+  try {
+    const response = await apiFetch(shareNotePathApi(props.store.selectedTitle, props.store.selectedCollection))
+    shareLinks.value = (await response.json()) as ShareLinksResponse
+  } catch (err) {
+    emit('ui-error', (err as Error).message || t('genericError'))
+  } finally {
+    shareLoading.value = false
+  }
+}
+
+function openShareDialog() {
+  showNoteMenu.value = false
+  showShareDialog.value = true
+  shareCopyMode.value = ''
+  void loadShareLinks()
+}
+
+function closeShareDialog() {
+  showShareDialog.value = false
+  shareBusyMode.value = ''
+  shareCopyMode.value = ''
+}
+
+async function toggleShareLink(mode: ShareMode) {
+  if (!props.store.selectedTitle) return
+  if (shareBusyMode.value) return
+
+  shareBusyMode.value = mode
+  shareCopyMode.value = ''
+
+  try {
+    const link = shareLinks.value[mode]
+    const response = link.enabled
+      ? await apiFetch(shareNotePathApi(props.store.selectedTitle, props.store.selectedCollection, mode), {
+          method: 'DELETE'
+        })
+      : await apiFetch(shareNotePathApi(props.store.selectedTitle, props.store.selectedCollection), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mode })
+        })
+
+    shareLinks.value = (await response.json()) as ShareLinksResponse
+  } catch (err) {
+    emit('ui-error', (err as Error).message || t('genericError'))
+  } finally {
+    shareBusyMode.value = ''
+  }
+}
+
+async function copyShareLink(mode: ShareMode) {
+  const url = shareLinks.value[mode].url
+  if (!url) return
+
+  try {
+    await navigator.clipboard.writeText(url)
+    shareCopyMode.value = mode
+  } catch {
+    emit('ui-error', t('couldNotCopyLink'))
+  }
+}
+
 async function deleteCurrentNote() {
   if (!props.store.selectedKey) return
   const confirmed = window.confirm(t('confirmDelete'))
@@ -811,6 +888,7 @@ watch(() => props.store.selectedKey, () => {
     editableTitle.value = props.store.selectedTitle || fallbackTitleFromKey(props.store.selectedKey)
   }
   showNoteMenu.value = false
+  showShareDialog.value = false
   syncEditorFromStore()
   nextTick(() => resetEditorScrollPosition())
 }, { immediate: true })
@@ -911,6 +989,13 @@ onUnmounted(() => {
             <span class="note-menu-label">{{ t('newCollection') }}</span>
           </button>
 
+          <button class="note-menu-item" role="menuitem" @click="openShareDialog">
+            <span class="note-menu-leading" aria-hidden="true">
+              <Share2 :size="16" />
+            </span>
+            <span class="note-menu-label">{{ t('shareNote') }}</span>
+          </button>
+
           <button class="note-menu-delete" role="menuitem" @click="deleteCurrentNote">
             <span class="note-menu-leading" aria-hidden="true">
               <Trash2 :size="16" />
@@ -920,6 +1005,44 @@ onUnmounted(() => {
         </div>
       </div>
     </div>
+
+    <Teleport to="body">
+      <div v-if="showShareDialog" class="share-dialog-backdrop" @click.self="closeShareDialog">
+        <div class="share-dialog" role="dialog" aria-modal="true" :aria-label="t('shareNote')">
+          <h2 class="share-dialog-title">{{ t('shareNote') }}</h2>
+
+          <div class="share-link-row">
+            <div class="share-link-copy-wrap">
+              <div class="share-link-label">{{ t('shareReadonly') }}</div>
+              <div class="share-link-url">{{ shareLinks.view.url || t('shareOff') }}</div>
+            </div>
+            <button class="share-link-toggle" :disabled="shareBusyMode === 'view' || shareLoading" @click="toggleShareLink('view')">
+              {{ shareLinks.view.enabled ? t('shareDisable') : t('shareEnable') }}
+            </button>
+            <button class="share-link-copy" :disabled="!shareLinks.view.url" @click="copyShareLink('view')">
+              {{ shareCopyMode === 'view' ? t('copied') : t('copyLink') }}
+            </button>
+          </div>
+
+          <div class="share-link-row">
+            <div class="share-link-copy-wrap">
+              <div class="share-link-label">{{ t('shareCollaborative') }}</div>
+              <div class="share-link-url">{{ shareLinks.edit.url || t('shareOff') }}</div>
+            </div>
+            <button class="share-link-toggle" :disabled="shareBusyMode === 'edit' || shareLoading" @click="toggleShareLink('edit')">
+              {{ shareLinks.edit.enabled ? t('shareDisable') : t('shareEnable') }}
+            </button>
+            <button class="share-link-copy" :disabled="!shareLinks.edit.url" @click="copyShareLink('edit')">
+              {{ shareCopyMode === 'edit' ? t('copied') : t('copyLink') }}
+            </button>
+          </div>
+
+          <div class="share-dialog-actions">
+            <button class="share-dialog-close" type="button" @click="closeShareDialog">{{ t('close') }}</button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
 
     <EditorToolbar
       :editor="editor || null"

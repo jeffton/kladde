@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useNotesStore } from './stores/notes'
 import NoteList from './components/NoteList.vue'
 import EditorView from './components/EditorView.vue'
+import ShareEditorPage from './components/ShareEditorPage.vue'
 import { useAutosave } from './composables/useAutosave'
 import type { AuthUser } from './types'
 import { t } from './i18n'
@@ -11,6 +12,7 @@ import { t } from './i18n'
 const store = useNotesStore()
 const route = useRoute()
 const router = useRouter()
+const isShareRoute = computed(() => route.name === 'share')
 const error = ref('')
 const authChecked = ref(false)
 const user = ref<AuthUser | null>(null)
@@ -380,6 +382,11 @@ async function initializeAuthenticatedSession() {
 }
 
 onMounted(async () => {
+  if (isShareRoute.value) {
+    authChecked.value = true
+    return
+  }
+
   if (isAuthenticated.value) {
     authChecked.value = true
     await initializeAuthenticatedSession()
@@ -426,7 +433,11 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div v-if="!authChecked" class="login-shell">
+  <div v-if="isShareRoute" class="app-shell share-shell">
+    <ShareEditorPage />
+  </div>
+
+  <div v-else-if="!authChecked" class="login-shell">
     <div class="login-card">
       <h1 class="app-logo">kladde</h1>
     </div>

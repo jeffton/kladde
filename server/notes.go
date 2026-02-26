@@ -132,7 +132,7 @@ func (s *Server) handleNotes(w http.ResponseWriter, r *http.Request) {
 		}
 
 		s.recordRecentChangeOrigin(session.User.Username, note.Collection, note.Title, origin)
-		s.hub.Broadcast(session.User.Username, NoteChangeEvent{
+		s.broadcastNoteChange(session.User.Username, NoteChangeEvent{
 			Type:       "note_changed",
 			Key:        note.Key,
 			Title:      note.Title,
@@ -219,9 +219,16 @@ func (s *Server) handleNoteByTitle(w http.ResponseWriter, r *http.Request) {
 		}
 
 		oldKey := noteStorageKey(oldTitle, oldCollection)
+		oldFile := shareFileRef(session.User.Username, oldTitle, oldCollection)
+		newFile := shareFileRef(session.User.Username, note.Title, note.Collection)
+		if err := s.retargetSharesForFile(oldFile, newFile); err != nil {
+			writeError(w, http.StatusInternalServerError, err)
+			return
+		}
+
 		s.recordRecentChangeOrigin(session.User.Username, oldCollection, oldTitle, origin)
 		s.recordRecentChangeOrigin(session.User.Username, note.Collection, note.Title, origin)
-		s.hub.Broadcast(session.User.Username, NoteChangeEvent{
+		s.broadcastNoteChange(session.User.Username, NoteChangeEvent{
 			Type:       "note_changed",
 			Key:        oldKey,
 			Title:      oldTitle,
@@ -229,7 +236,7 @@ func (s *Server) handleNoteByTitle(w http.ResponseWriter, r *http.Request) {
 			Action:     "deleted",
 			Origin:     origin,
 		})
-		s.hub.Broadcast(session.User.Username, NoteChangeEvent{
+		s.broadcastNoteChange(session.User.Username, NoteChangeEvent{
 			Type:       "note_changed",
 			Key:        note.Key,
 			Title:      note.Title,
@@ -238,6 +245,22 @@ func (s *Server) handleNoteByTitle(w http.ResponseWriter, r *http.Request) {
 			Origin:     origin,
 		})
 		writeJSON(w, http.StatusOK, note)
+		return
+	}
+
+	if len(parts) == 2 && parts[1] == "share" {
+		title, err := url.PathUnescape(parts[0])
+		if err != nil {
+			writeError(w, http.StatusBadRequest, errors.New("invalid note path encoding"))
+			return
+		}
+		title = strings.TrimSpace(title)
+		if err := validateTitle(title); err != nil {
+			writeError(w, http.StatusBadRequest, err)
+			return
+		}
+
+		s.handleNoteShare(w, r, session.User.Username, title, oldCollection)
 		return
 	}
 
@@ -332,7 +355,7 @@ func (s *Server) handleNoteByTitle(w http.ResponseWriter, r *http.Request) {
 		}
 
 		s.recordRecentChangeOrigin(session.User.Username, note.Collection, note.Title, origin)
-		s.hub.Broadcast(session.User.Username, NoteChangeEvent{
+		s.broadcastNoteChange(session.User.Username, NoteChangeEvent{
 			Type:       "note_changed",
 			Key:        note.Key,
 			Title:      note.Title,
@@ -351,9 +374,14 @@ func (s *Server) handleNoteByTitle(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		if err := s.revokeSharesForFile(shareFileRef(session.User.Username, title, oldCollection)); err != nil {
+			writeError(w, http.StatusInternalServerError, err)
+			return
+		}
+
 		key := noteStorageKey(title, oldCollection)
 		s.recordRecentChangeOrigin(session.User.Username, oldCollection, title, origin)
-		s.hub.Broadcast(session.User.Username, NoteChangeEvent{
+		s.broadcastNoteChange(session.User.Username, NoteChangeEvent{
 			Type:       "note_changed",
 			Key:        key,
 			Title:      title,

@@ -26,13 +26,15 @@ import { t } from '../i18n'
 interface Props {
   editor: Editor | null
   isPlain?: boolean
+  showModeToggle?: boolean
 }
 
 type ListTarget = 'bullet' | 'ordered' | 'task'
 
 const props = withDefaults(defineProps<Props>(), {
   editor: null,
-  isPlain: false
+  isPlain: false,
+  showModeToggle: true
 })
 
 const emit = defineEmits<{
@@ -342,7 +344,7 @@ onUnmounted(() => {
 
       <button :title="t('codeBlock')" :disabled="isDisabled()" :class="{ active: !isPlain && editor?.isActive('codeBlock') }" @click="run('codeBlock', () => editor?.chain().focus().toggleCodeBlock().run())"><FileCode :size="18" /></button>
 
-      <button v-if="!isMobile" class="mode-toggle" :title="t('toggleMarkdownWysiwyg')" :class="{ active: isPlain }" @click="emit('toggle-plain')">
+      <button v-if="showModeToggle && !isMobile" class="mode-toggle" :title="t('toggleMarkdownWysiwyg')" :class="{ active: isPlain }" @click="emit('toggle-plain')">
         <FileText :size="18" />
       </button>
     </div>

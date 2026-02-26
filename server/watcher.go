@@ -175,7 +175,7 @@ func (s *Server) startFileWatcher() error {
 					if _, found := s.consumeRecentChangeOrigin(username, collection, title); found {
 						return
 					}
-					s.hub.Broadcast(username, NoteChangeEvent{
+					s.broadcastNoteChange(username, NoteChangeEvent{
 						Type:       "note_changed",
 						Key:        key,
 						Title:      title,
