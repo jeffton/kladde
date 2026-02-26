@@ -1,4 +1,4 @@
-import { test } from '@playwright/test'
+import { test, expect } from '@playwright/test'
 import {
   createNote,
   editor,
@@ -35,5 +35,20 @@ test.describe('List type switching on touch input', () => {
     expectEntry(entries, { text: 'alpha', kind: 'task', depth: 1 })
     expectEntry(entries, { text: 'beta', kind: 'ordered', depth: 2 })
     expectEntry(entries, { text: 'gamma', kind: 'task', depth: 1 })
+
+    const nestedOrderedStyle = await editor(page).evaluate((root) => {
+      const item = root.querySelector("ol li") as HTMLElement | null
+      if (!item) return null
+      const style = window.getComputedStyle(item)
+      return {
+        display: style.display,
+        listStyleType: style.listStyleType,
+      }
+    })
+
+    expect(nestedOrderedStyle).toEqual({
+      display: 'list-item',
+      listStyleType: 'decimal',
+    })
   })
 })

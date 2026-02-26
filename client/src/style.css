@@ -945,7 +945,7 @@ button:disabled {
   margin: 0;
 }
 
-.tiptap-root .ProseMirror ul[data-type='taskList'] li {
+.tiptap-root .ProseMirror ul[data-type='taskList'] > li {
   display: flex;
   gap: .4rem;
   align-items: flex-start;
