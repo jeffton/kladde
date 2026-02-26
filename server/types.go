@@ -9,20 +9,25 @@ import (
 
 const maxJSONBodySize = 1 << 20 // 1MB
 const maxTitleLength = 200
+const maxCollectionLength = 120
 
 const sessionCookieName = "kladde_session"
 
 type NoteMeta struct {
-	Title     string    `json:"title"`
-	UpdatedAt time.Time `json:"updatedAt"`
-	Starred   bool      `json:"starred"`
+	Key        string    `json:"key"`
+	Title      string    `json:"title"`
+	Collection string    `json:"collection,omitempty"`
+	UpdatedAt  time.Time `json:"updatedAt"`
+	Starred    bool      `json:"starred"`
 }
 
 type Note struct {
-	Title     string    `json:"title"`
-	Content   string    `json:"content"`
-	UpdatedAt time.Time `json:"updatedAt"`
-	Starred   bool      `json:"starred"`
+	Key        string    `json:"key"`
+	Title      string    `json:"title"`
+	Collection string    `json:"collection,omitempty"`
+	Content    string    `json:"content"`
+	UpdatedAt  time.Time `json:"updatedAt"`
+	Starred    bool      `json:"starred"`
 }
 
 type SessionUser struct {
@@ -42,10 +47,12 @@ type Session struct {
 }
 
 type NoteChangeEvent struct {
-	Type   string `json:"type"`
-	Title  string `json:"title"`
-	Action string `json:"action"`
-	Origin string `json:"origin,omitempty"`
+	Type       string `json:"type"`
+	Key        string `json:"key"`
+	Title      string `json:"title"`
+	Collection string `json:"collection,omitempty"`
+	Action     string `json:"action"`
+	Origin     string `json:"origin,omitempty"`
 }
 
 type Hub struct {

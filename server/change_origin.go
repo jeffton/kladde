@@ -27,16 +27,16 @@ func NewRecentChangeOrigins() *RecentChangeOrigins {
 	}
 }
 
-func (r *RecentChangeOrigins) key(username, title string) string {
-	return username + "\x00" + title
+func (r *RecentChangeOrigins) key(username, collection, title string) string {
+	return username + "\x00" + collection + "\x00" + title
 }
 
-func (r *RecentChangeOrigins) Record(username, title, origin string) {
+func (r *RecentChangeOrigins) Record(username, collection, title, origin string) {
 	if username == "" || title == "" {
 		return
 	}
 	now := time.Now()
-	k := r.key(username, title)
+	k := r.key(username, collection, title)
 
 	r.mu.Lock()
 	r.entries[k] = recentOriginEntry{origin: origin, expiresAt: now.Add(r.ttl)}
@@ -48,12 +48,12 @@ func (r *RecentChangeOrigins) Record(username, title, origin string) {
 	r.mu.Unlock()
 }
 
-func (r *RecentChangeOrigins) Consume(username, title string) (string, bool) {
+func (r *RecentChangeOrigins) Consume(username, collection, title string) (string, bool) {
 	if username == "" || title == "" {
 		return "", false
 	}
 	now := time.Now()
-	k := r.key(username, title)
+	k := r.key(username, collection, title)
 
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -69,18 +69,18 @@ func (r *RecentChangeOrigins) Consume(username, title string) (string, bool) {
 	return entry.origin, true
 }
 
-func (s *Server) recordRecentChangeOrigin(username, title, origin string) {
+func (s *Server) recordRecentChangeOrigin(username, collection, title, origin string) {
 	if s.recentChangeOrigins == nil {
 		return
 	}
-	s.recentChangeOrigins.Record(username, title, origin)
+	s.recentChangeOrigins.Record(username, collection, title, origin)
 }
 
-func (s *Server) consumeRecentChangeOrigin(username, title string) (string, bool) {
+func (s *Server) consumeRecentChangeOrigin(username, collection, title string) (string, bool) {
 	if s.recentChangeOrigins == nil {
 		return "", false
 	}
-	return s.recentChangeOrigins.Consume(username, title)
+	return s.recentChangeOrigins.Consume(username, collection, title)
 }
 
 func readChangeOrigin(r *http.Request) string {

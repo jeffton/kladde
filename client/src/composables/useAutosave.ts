@@ -11,7 +11,7 @@ export function useAutosave({ store, onError }: UseAutosaveOptions) {
   let syncTimer: number | null = null
 
   const flush = () => {
-    if (!store.selectedTitle || !store.dirty) return
+    if (!store.selectedKey || !store.dirty) return
     void store.saveCurrent().catch((err) => onError?.(err))
   }
 

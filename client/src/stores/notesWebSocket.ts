@@ -1,23 +1,42 @@
 import type { Ref } from 'vue'
 import type { CachedNote, NoteResponse } from '../types'
+import { buildNoteKey, normalizeCollection, splitNoteKey } from './notesModel'
+import { notePathApi } from './notesApi'
 
 interface NotesWebSocketDeps {
   online: Ref<boolean>
   wsConnected: Ref<boolean>
   clientOrigin: string
-  selectedTitle: Ref<string>
+  selectedKey: Ref<string>
   currentContent: Ref<string>
   currentUpdatedAt: Ref<string | null>
   dirty: Ref<boolean>
   apiFetch: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>
   syncWithServer: () => Promise<void>
   refreshStateFromCache: () => Promise<void>
-  getCachedNote: (title: string) => Promise<CachedNote | undefined>
+  getCachedNote: (key: string) => Promise<CachedNote | undefined>
   putCachedNote: (note: CachedNote) => Promise<IDBValidKey>
-  deleteCachedNote: (title: string) => Promise<void>
+  deleteCachedNote: (key: string) => Promise<void>
   normalizeTs: (value?: string | null) => string
   isServerBacked: (note?: CachedNote | null) => boolean
-  isActiveNoteLocallyDirty: (title: string) => boolean
+  isActiveNoteLocallyDirty: (key: string) => boolean
+}
+
+function normalizeServerNote(note: NoteResponse): CachedNote {
+  const collection = normalizeCollection(note.collection)
+  const title = (note.title || '').trim()
+  const key = (note.key || '').trim() || buildNoteKey(title, collection)
+
+  return {
+    key,
+    title,
+    collection,
+    content: note.content || '',
+    updatedAt: note.updatedAt,
+    dirty: false,
+    starred: Boolean(note.starred),
+    existsOnServer: true
+  }
 }
 
 export function createNotesWebSocket(deps: NotesWebSocketDeps) {
@@ -27,7 +46,7 @@ export function createNotesWebSocket(deps: NotesWebSocketDeps) {
   let wsConsecutiveFailures = 0
   let wsReconnectDisabled = false
   let lastMeUnauthorized = false
-  let pendingRemoteChanges: Map<string, string> = new Map()
+  const pendingRemoteChanges = new Map<string, { title: string; collection: string; action: string }>()
   let remoteChangeTimer: number | null = null
 
   const clearWsReconnect = () => {
@@ -37,17 +56,17 @@ export function createNotesWebSocket(deps: NotesWebSocketDeps) {
     }
   }
 
-  const handleRemoteDelete = async (title: string) => {
-    const local = await deps.getCachedNote(title)
-    const isCurrentDirty = deps.isActiveNoteLocallyDirty(title)
+  const handleRemoteDelete = async (key: string) => {
+    const local = await deps.getCachedNote(key)
+    const isCurrentDirty = deps.isActiveNoteLocallyDirty(key)
     if (isCurrentDirty) return
     if (local && !deps.isServerBacked(local)) return
 
     if (local && !local.dirty) {
-      await deps.deleteCachedNote(title)
+      await deps.deleteCachedNote(key)
     }
-    if (deps.selectedTitle.value === title) {
-      deps.selectedTitle.value = ''
+    if (deps.selectedKey.value === key) {
+      deps.selectedKey.value = ''
       deps.currentContent.value = ''
       deps.currentUpdatedAt.value = null
       deps.dirty.value = false
@@ -55,26 +74,29 @@ export function createNotesWebSocket(deps: NotesWebSocketDeps) {
     await deps.refreshStateFromCache()
   }
 
-  const handleRemoteNoteChange = async (title: string, action: string) => {
+  const handleRemoteNoteChange = async (key: string, title: string, collection: string, action: string) => {
     if (action === 'deleted') {
-      await handleRemoteDelete(title)
+      await handleRemoteDelete(key)
       return
     }
 
-    if (deps.isActiveNoteLocallyDirty(title)) return
+    if (deps.isActiveNoteLocallyDirty(key)) return
 
     try {
-      const noteRes = await deps.apiFetch(`/api/notes/${encodeURIComponent(title)}`)
-      const serverNote = (await noteRes.json()) as NoteResponse
+      const noteRes = await deps.apiFetch(notePathApi(title, collection))
+      const serverNote = normalizeServerNote((await noteRes.json()) as NoteResponse)
 
-      if (deps.isActiveNoteLocallyDirty(title)) return
+      if (deps.isActiveNoteLocallyDirty(key)) return
 
-      const local = await deps.getCachedNote(title)
-      if (local?.dirty || deps.isActiveNoteLocallyDirty(title)) return
+      const local = await deps.getCachedNote(key)
+      if (local?.dirty || deps.isActiveNoteLocallyDirty(key)) return
+
+      if (serverNote.key !== key) {
+        await deps.deleteCachedNote(key)
+      }
 
       await deps.putCachedNote({
-        title: serverNote.title,
-        content: serverNote.content,
+        ...serverNote,
         updatedAt: deps.normalizeTs(serverNote.updatedAt),
         dirty: false,
         starred: Boolean(serverNote.starred),
@@ -88,8 +110,8 @@ export function createNotesWebSocket(deps: NotesWebSocketDeps) {
     }
   }
 
-  const queueRemoteChange = (title: string, action: string) => {
-    pendingRemoteChanges.set(title, action)
+  const queueRemoteChange = (key: string, title: string, collection: string, action: string) => {
+    pendingRemoteChanges.set(key, { title, collection, action })
     if (remoteChangeTimer !== null) window.clearTimeout(remoteChangeTimer)
     remoteChangeTimer = window.setTimeout(() => {
       remoteChangeTimer = null
@@ -97,8 +119,8 @@ export function createNotesWebSocket(deps: NotesWebSocketDeps) {
       pendingRemoteChanges.clear()
 
       void (async () => {
-        for (const [changedTitle, changedAction] of changes) {
-          await handleRemoteNoteChange(changedTitle, changedAction)
+        for (const [changedKey, changed] of changes) {
+          await handleRemoteNoteChange(changedKey, changed.title, changed.collection, changed.action)
         }
         await deps.refreshStateFromCache()
       })().catch(() => {
@@ -150,10 +172,23 @@ export function createNotesWebSocket(deps: NotesWebSocketDeps) {
 
     ws.onmessage = (event) => {
       try {
-        const payload = JSON.parse(String(event.data)) as { type?: string; title?: string; action?: string; origin?: string }
-        if (payload.type === 'note_changed' && payload.title && payload.action) {
+        const payload = JSON.parse(String(event.data)) as {
+          type?: string
+          key?: string
+          title?: string
+          collection?: string
+          action?: string
+          origin?: string
+        }
+        if (payload.type === 'note_changed' && payload.action) {
           if (payload.origin && payload.origin === deps.clientOrigin) return
-          queueRemoteChange(payload.title, payload.action)
+
+          const collection = normalizeCollection(payload.collection)
+          const title = payload.title || splitNoteKey(payload.key || '').title
+          if (!title) return
+
+          const key = payload.key || buildNoteKey(title, collection)
+          queueRemoteChange(key, title, collection, payload.action)
         }
       } catch {
         // ignore malformed payloads

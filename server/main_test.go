@@ -41,7 +41,7 @@ func TestNotePathStaysInsideNotesDir(t *testing.T) {
 	dir := t.TempDir()
 	s := &Server{}
 
-	p, err := s.notePath(dir, "normal-title")
+	p, err := s.notePath(dir, "normal-title", "")
 	if err != nil {
 		t.Fatalf("notePath returned unexpected error: %v", err)
 	}
@@ -51,6 +51,80 @@ func TestNotePathStaysInsideNotesDir(t *testing.T) {
 	}
 	if filepath.Base(p) != "normal-title.md" {
 		t.Fatalf("unexpected file name: %q", filepath.Base(p))
+	}
+}
+
+func TestValidateCollection(t *testing.T) {
+	cases := []struct {
+		name       string
+		collection string
+		wantErr    bool
+	}{
+		{name: "empty", collection: "", wantErr: false},
+		{name: "valid", collection: "opskrifter", wantErr: false},
+		{name: "slash", collection: "mad/pasta", wantErr: true},
+		{name: "dotdot", collection: "..", wantErr: true},
+		{name: "control", collection: "rejser\n", wantErr: true},
+		{name: "too long", collection: strings.Repeat("a", maxCollectionLength+1), wantErr: true},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := validateCollection(tc.collection)
+			if tc.wantErr && err == nil {
+				t.Fatalf("expected error, got nil")
+			}
+			if !tc.wantErr && err != nil {
+				t.Fatalf("expected no error, got %v", err)
+			}
+		})
+	}
+}
+
+func TestParseUserNoteRelPath(t *testing.T) {
+	title, collection, ok := parseUserNoteRelPath(filepath.Join("opskrifter", "pasta.md"))
+	if !ok {
+		t.Fatal("expected collection note path to parse")
+	}
+	if title != "pasta" || collection != "opskrifter" {
+		t.Fatalf("unexpected parse result: title=%q collection=%q", title, collection)
+	}
+
+	title, collection, ok = parseUserNoteRelPath("rodniveau.md")
+	if !ok {
+		t.Fatal("expected root note path to parse")
+	}
+	if title != "rodniveau" || collection != "" {
+		t.Fatalf("unexpected parse result for root note: title=%q collection=%q", title, collection)
+	}
+}
+
+func TestCreateNoteAutoAppendsWithinCollection(t *testing.T) {
+	dir := t.TempDir()
+	s := &Server{}
+
+	first, err := s.createNote(dir, "Pasta", "opskrifter", "første")
+	if err != nil {
+		t.Fatalf("createNote first failed: %v", err)
+	}
+	if first.Title != "Pasta" {
+		t.Fatalf("unexpected first title: %q", first.Title)
+	}
+
+	second, err := s.createNote(dir, "Pasta", "opskrifter", "anden")
+	if err != nil {
+		t.Fatalf("createNote second failed: %v", err)
+	}
+	if second.Title != "Pasta (2)" {
+		t.Fatalf("expected deduplicated title, got %q", second.Title)
+	}
+
+	root, err := s.createNote(dir, "Pasta", "", "rod")
+	if err != nil {
+		t.Fatalf("createNote root failed: %v", err)
+	}
+	if root.Title != "Pasta" || root.Collection != "" {
+		t.Fatalf("expected root-level Pasta note, got title=%q collection=%q", root.Title, root.Collection)
 	}
 }
 

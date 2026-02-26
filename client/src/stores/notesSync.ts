@@ -1,28 +1,30 @@
 import type { Ref } from 'vue'
 import type { CachedNote, NoteMeta, NoteResponse, PendingOp, RenameResponse } from '../types'
 import { t } from '../i18n'
+import { buildNoteKey, normalizeCollection, normalizeTs, splitNoteKey } from './notesModel'
+import { notePathApi, renameNotePathApi, starNotePathApi } from './notesApi'
 
 interface NotesSyncDeps {
   pendingOps: Ref<PendingOp[]>
-  selectedTitle: Ref<string>
+  selectedKey: Ref<string>
   currentContent: Ref<string>
   currentUpdatedAt: Ref<string | null>
   dirty: Ref<boolean>
   notes: Ref<NoteMeta[]>
   online: Ref<boolean>
   syncing: Ref<boolean>
-  getCachedNote: (title: string) => Promise<CachedNote | undefined>
+  getCachedNote: (key: string) => Promise<CachedNote | undefined>
   getAllCachedNotes: () => Promise<CachedNote[]>
   putCachedNote: (note: CachedNote) => Promise<IDBValidKey>
-  deleteCachedNote: (title: string) => Promise<void>
+  deleteCachedNote: (key: string) => Promise<void>
   replacePendingOps: (ops: PendingOp[]) => Promise<void>
   queueWrite: (task: () => Promise<unknown>) => Promise<unknown>
   flushPendingWrites: () => Promise<void>
   refreshStateFromCache: () => Promise<void>
-  isActiveNoteLocallyDirty: (title: string) => boolean
+  isActiveNoteLocallyDirty: (key: string) => boolean
   isServerBacked: (note?: CachedNote | null) => boolean
   samePendingOp: (a: PendingOp, b: PendingOp) => boolean
-  retargetPendingTitle: (ops: PendingOp[], fromTitle: string, toTitle: string) => PendingOp[]
+  retargetPendingKey: (ops: PendingOp[], fromKey: string, toKey: string) => PendingOp[]
   normalizeTs: (value?: string | null) => string
   newerTs: (a?: string | null, b?: string | null) => string
   tsMs: (value?: string | null) => number
@@ -33,6 +35,46 @@ interface NotesSyncDeps {
   clearSyncRetry: () => void
   clearSyncError: () => void
   handleSyncFailure: (err: unknown, fallback: string) => void
+}
+
+interface ServerNoteMeta {
+  key?: string
+  title: string
+  collection?: string
+  updatedAt: string
+  starred?: boolean
+}
+
+function normalizeServerNote(note: NoteResponse): CachedNote {
+  const collection = normalizeCollection(note.collection)
+  const title = (note.title || '').trim()
+  const key = (note.key || '').trim() || buildNoteKey(title, collection)
+
+  return {
+    key,
+    title,
+    collection,
+    content: note.content || '',
+    updatedAt: normalizeTs(note.updatedAt),
+    dirty: false,
+    starred: Boolean(note.starred),
+    existsOnServer: true
+  }
+}
+
+function normalizeServerMeta(meta: ServerNoteMeta): NoteMeta {
+  const collection = normalizeCollection(meta.collection)
+  const title = (meta.title || '').trim()
+  const key = (meta.key || '').trim() || buildNoteKey(title, collection)
+
+  return {
+    key,
+    title,
+    collection,
+    updatedAt: normalizeTs(meta.updatedAt),
+    dirty: false,
+    starred: Boolean(meta.starred)
+  }
 }
 
 export function createNotesSync(deps: NotesSyncDeps) {
@@ -58,35 +100,50 @@ export function createNotesSync(deps: NotesSyncDeps) {
     })
   }
 
-  const pushDirtyNote = async (title: string) => {
-    const local = await deps.getCachedNote(title)
+  const pushDirtyNote = async (key: string) => {
+    const local = await deps.getCachedNote(key)
     if (!local || !local.dirty) return
 
-    let res: Response
-    try {
-      res = await deps.apiFetch(`/api/notes/${encodeURIComponent(title)}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: local.content })
-      })
-    } catch (err: unknown) {
-      if (!deps.isNotFoundError(err)) throw err
+    const localTitle = local.title || splitNoteKey(local.key).title
+    const localCollection = local.collection || splitNoteKey(local.key).collection
 
-      // Note doesn't exist on server — create it instead of discarding
+    let res: Response
+
+    if (local.existsOnServer === false) {
       res = await deps.apiFetch('/api/notes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title, content: local.content })
+        body: JSON.stringify({ title: localTitle, collection: localCollection, content: local.content })
       })
+    } else {
+      try {
+        res = await deps.apiFetch(notePathApi(localTitle, localCollection), {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ content: local.content })
+        })
+      } catch (err: unknown) {
+        if (!deps.isNotFoundError(err)) throw err
+
+        // Note doesn't exist on server — create it instead of discarding.
+        res = await deps.apiFetch('/api/notes', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ title: localTitle, collection: localCollection, content: local.content })
+        })
+      }
     }
 
-    const saved = (await res.json()) as NoteResponse
+    const saved = normalizeServerNote((await res.json()) as NoteResponse)
     deps.resetWsFailuresAndReconnect()
 
-    // Dirty until server has saved the exact content we currently hold locally.
-    const current = await deps.getCachedNote(title)
-    const activeMemoryDiffers = deps.selectedTitle.value === title && deps.currentContent.value !== saved.content
+    const originalKey = local.key
+    const savedKey = saved.key
+    const current = await deps.getCachedNote(originalKey)
+    const isActiveOriginal = deps.selectedKey.value === originalKey
+    const activeMemoryDiffers = isActiveOriginal && deps.currentContent.value !== saved.content
     const currentContentSnapshot = current?.content ?? local.content
+
     const stillDirty = activeMemoryDiffers || currentContentSnapshot !== saved.content
     const chosenContent = stillDirty
       ? (activeMemoryDiffers ? deps.currentContent.value : currentContentSnapshot)
@@ -95,31 +152,45 @@ export function createNotesSync(deps: NotesSyncDeps) {
       ? deps.normalizeTs(current?.updatedAt ?? local.updatedAt)
       : deps.newerTs(current?.updatedAt ?? local.updatedAt, saved.updatedAt ?? local.updatedAt)
 
-    await deps.putCachedNote({
-      title: saved.title,
-      content: chosenContent,
-      updatedAt: chosenUpdatedAt,
-      dirty: stillDirty,
-      starred: Boolean(saved.starred),
-      existsOnServer: true
+    await deps.queueWrite(async () => {
+      if (savedKey !== originalKey) {
+        await deps.deleteCachedNote(originalKey)
+      }
+
+      await deps.putCachedNote({
+        ...saved,
+        content: chosenContent,
+        updatedAt: chosenUpdatedAt,
+        dirty: stillDirty,
+        starred: Boolean(saved.starred)
+      })
     })
 
-    if (deps.selectedTitle.value === title) {
+    if (isActiveOriginal) {
+      deps.selectedKey.value = savedKey
       deps.currentUpdatedAt.value = chosenUpdatedAt
       deps.dirty.value = stillDirty
+    }
 
-      const selectedMeta = deps.notes.value.find((n) => n.title === title)
-      if (selectedMeta) {
-        selectedMeta.updatedAt = chosenUpdatedAt
-        selectedMeta.dirty = stillDirty
-      }
+    const selectedMeta = deps.notes.value.find((n) => n.key === savedKey || n.key === originalKey)
+    if (selectedMeta) {
+      selectedMeta.key = savedKey
+      selectedMeta.title = saved.title
+      selectedMeta.collection = saved.collection
+      selectedMeta.updatedAt = chosenUpdatedAt
+      selectedMeta.dirty = stillDirty
+      selectedMeta.starred = Boolean(saved.starred)
+    }
+
+    if (savedKey !== originalKey) {
+      await mutatePendingOps((ops) => deps.retargetPendingKey(ops, originalKey, savedKey))
     }
   }
 
-  const runPushDirtyNote = async (title: string) => {
+  const runPushDirtyNote = async (key: string) => {
     if (pushInFlight) await pushInFlight
 
-    const task = pushDirtyNote(title)
+    const task = pushDirtyNote(key)
     pushInFlight = task
 
     try {
@@ -134,8 +205,9 @@ export function createNotesSync(deps: NotesSyncDeps) {
       const op = deps.pendingOps.value[0]
 
       if (op.type === 'delete') {
+        const { title, collection } = splitNoteKey(op.key)
         try {
-          await deps.apiFetch(`/api/notes/${encodeURIComponent(op.title)}`, { method: 'DELETE' })
+          await deps.apiFetch(notePathApi(title, collection), { method: 'DELETE' })
         } catch (err: unknown) {
           if (!deps.isNotFoundError(err)) throw err
         }
@@ -145,7 +217,8 @@ export function createNotesSync(deps: NotesSyncDeps) {
       }
 
       if (op.type === 'star') {
-        await deps.apiFetch(`/api/notes/${encodeURIComponent(op.title)}/star`, {
+        const { title, collection } = splitNoteKey(op.key)
+        await deps.apiFetch(starNotePathApi(title, collection), {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ starred: op.starred })
@@ -155,17 +228,20 @@ export function createNotesSync(deps: NotesSyncDeps) {
         continue
       }
 
+      const oldRef = splitNoteKey(op.oldKey)
+      const newRef = splitNoteKey(op.newKey)
+
       let res: Response
       try {
-        res = await deps.apiFetch(`/api/notes/${encodeURIComponent(op.oldTitle)}/rename`, {
+        res = await deps.apiFetch(renameNotePathApi(oldRef.title, oldRef.collection), {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ newTitle: op.newTitle })
+          body: JSON.stringify({ newTitle: newRef.title, newCollection: newRef.collection })
         })
       } catch (err: unknown) {
         if (!deps.isNotFoundError(err)) throw err
 
-        const localMissingRename = await deps.getCachedNote(op.newTitle)
+        const localMissingRename = await deps.getCachedNote(op.newKey)
         if (localMissingRename) {
           await deps.queueWrite(async () => {
             await deps.putCachedNote({ ...localMissingRename, existsOnServer: false })
@@ -177,28 +253,35 @@ export function createNotesSync(deps: NotesSyncDeps) {
       }
       deps.resetWsFailuresAndReconnect()
 
-      const payload = (await res.json()) as RenameResponse
-      const serverTitle = payload?.title?.trim()
-      if (!serverTitle) throw new Error(t('invalidServerTitle'))
+      const payload = normalizeServerNote((await res.json()) as RenameResponse)
+      const serverKey = payload.key
+      if (!serverKey) throw new Error(t('invalidServerTitle'))
 
-      const renamedLocal = await deps.getCachedNote(op.newTitle)
+      const renamedLocal = await deps.getCachedNote(op.newKey)
       if (renamedLocal) {
-        if (serverTitle !== op.newTitle) {
+        if (serverKey !== op.newKey) {
           await deps.queueWrite(async () => {
-            await deps.deleteCachedNote(op.newTitle)
+            await deps.deleteCachedNote(op.newKey)
             await deps.putCachedNote({
               ...renamedLocal,
-              title: serverTitle,
+              key: serverKey,
+              title: payload.title,
+              collection: payload.collection,
               existsOnServer: true,
               dirty: Boolean(renamedLocal.dirty)
             })
           })
-          if (deps.selectedTitle.value === op.newTitle) {
-            deps.selectedTitle.value = serverTitle
+          if (deps.selectedKey.value === op.newKey) {
+            deps.selectedKey.value = serverKey
           }
         } else {
           await deps.queueWrite(async () => {
-            await deps.putCachedNote({ ...renamedLocal, existsOnServer: true })
+            await deps.putCachedNote({
+              ...renamedLocal,
+              title: payload.title,
+              collection: payload.collection,
+              existsOnServer: true
+            })
           })
         }
       }
@@ -210,8 +293,8 @@ export function createNotesSync(deps: NotesSyncDeps) {
         const next = [...ops]
         next.splice(idx, 1)
 
-        if (serverTitle !== op.newTitle) {
-          return deps.retargetPendingTitle(next, op.newTitle, serverTitle)
+        if (serverKey !== op.newKey) {
+          return deps.retargetPendingKey(next, op.newKey, serverKey)
         }
 
         return next
@@ -220,16 +303,20 @@ export function createNotesSync(deps: NotesSyncDeps) {
   }
 
   const saveCurrent = async () => {
-    if (!deps.selectedTitle.value) return
+    if (!deps.selectedKey.value) return
     if (saveInFlight) return saveInFlight
 
-    const titleAtStart = deps.selectedTitle.value
+    const keyAtStart = deps.selectedKey.value
 
     saveInFlight = (async () => {
       await deps.flushPendingWrites()
-      const existing = await deps.getCachedNote(titleAtStart)
+      const existing = await deps.getCachedNote(keyAtStart)
+      const { title, collection } = existing || splitNoteKey(keyAtStart)
+
       await deps.putCachedNote({
-        title: titleAtStart,
+        key: keyAtStart,
+        title,
+        collection,
         content: deps.currentContent.value,
         updatedAt: deps.currentUpdatedAt.value || new Date().toISOString(),
         dirty: true,
@@ -245,7 +332,7 @@ export function createNotesSync(deps: NotesSyncDeps) {
       deps.syncing.value = true
       deps.updateSyncStatus()
       try {
-        await runPushDirtyNote(titleAtStart)
+        await runPushDirtyNote(keyAtStart)
         deps.clearSyncError()
       } catch (err: unknown) {
         deps.handleSyncFailure(err, t('couldNotSaveNote'))
@@ -282,21 +369,21 @@ export function createNotesSync(deps: NotesSyncDeps) {
         const localNotes = await deps.getAllCachedNotes()
         for (const local of localNotes) {
           if (!local.dirty) continue
-          await runPushDirtyNote(local.title)
+          await runPushDirtyNote(local.key)
         }
 
         const metaRes = await deps.apiFetch('/api/notes')
-        const serverMetas = (await metaRes.json()) as NoteMeta[]
-        const currentLocalMap = new Map((await deps.getAllCachedNotes()).map((n) => [n.title, n]))
-        const serverTitles = new Set(serverMetas.map((n) => n.title))
+        const serverMetas = ((await metaRes.json()) as ServerNoteMeta[]).map(normalizeServerMeta)
+        const currentLocalMap = new Map((await deps.getAllCachedNotes()).map((n) => [n.key, n]))
+        const serverKeys = new Set(serverMetas.map((n) => n.key))
 
         for (const local of currentLocalMap.values()) {
-          if (local.dirty || !deps.isServerBacked(local) || serverTitles.has(local.title)) continue
+          if (local.dirty || !deps.isServerBacked(local) || serverKeys.has(local.key)) continue
 
-          await deps.deleteCachedNote(local.title)
+          await deps.deleteCachedNote(local.key)
 
-          if (deps.selectedTitle.value === local.title) {
-            deps.selectedTitle.value = ''
+          if (deps.selectedKey.value === local.key) {
+            deps.selectedKey.value = ''
             deps.currentContent.value = ''
             deps.currentUpdatedAt.value = null
             deps.dirty.value = false
@@ -304,10 +391,10 @@ export function createNotesSync(deps: NotesSyncDeps) {
         }
 
         for (const serverMeta of serverMetas) {
-          const local = currentLocalMap.get(serverMeta.title)
+          const local = currentLocalMap.get(serverMeta.key)
           const serverTs = deps.tsMs(serverMeta.updatedAt)
           const localTs = local ? deps.tsMs(local.updatedAt) : 0
-          const isActiveAndDirty = deps.isActiveNoteLocallyDirty(serverMeta.title)
+          const isActiveAndDirty = deps.isActiveNoteLocallyDirty(serverMeta.key)
           const shouldPull = !isActiveAndDirty && (!local || (!local.dirty && serverTs > localTs))
 
           if (local && local.starred !== serverMeta.starred) {
@@ -318,14 +405,13 @@ export function createNotesSync(deps: NotesSyncDeps) {
 
           let noteRes: Response
           try {
-            noteRes = await deps.apiFetch(`/api/notes/${encodeURIComponent(serverMeta.title)}`)
+            noteRes = await deps.apiFetch(notePathApi(serverMeta.title, serverMeta.collection))
           } catch {
             continue
           }
-          const serverNote = (await noteRes.json()) as NoteResponse
+          const serverNote = normalizeServerNote((await noteRes.json()) as NoteResponse)
           await deps.putCachedNote({
-            title: serverNote.title,
-            content: serverNote.content,
+            ...serverNote,
             updatedAt: deps.normalizeTs(serverNote.updatedAt || serverMeta.updatedAt),
             dirty: false,
             starred: Boolean(serverNote.starred ?? serverMeta.starred),

@@ -5,7 +5,7 @@ const EmptyView = { template: '<div />' }
 
 const routes: RouteRecordRaw[] = [
   { path: '/', name: 'list', component: EmptyView },
-  { path: '/note/:title', name: 'note', component: EmptyView }
+  { path: '/note/:key', name: 'note', component: EmptyView }
 ]
 
 const router = createRouter({

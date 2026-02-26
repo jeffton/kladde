@@ -12,6 +12,31 @@ import (
 	"github.com/fsnotify/fsnotify"
 )
 
+func parseWatcherNoteRelPath(rel string) (username, title, collection, key string, ok bool) {
+	rel = strings.TrimSpace(rel)
+	if rel == "" {
+		return "", "", "", "", false
+	}
+
+	parts := strings.Split(rel, string(os.PathSeparator))
+	if len(parts) < 2 || len(parts) > 3 {
+		return "", "", "", "", false
+	}
+
+	username = strings.TrimSpace(parts[0])
+	if username == "" {
+		return "", "", "", "", false
+	}
+
+	userRel := strings.Join(parts[1:], string(os.PathSeparator))
+	title, collection, parsed := parseUserNoteRelPath(userRel)
+	if !parsed {
+		return "", "", "", "", false
+	}
+
+	return username, title, collection, noteStorageKey(title, collection), true
+}
+
 func (s *Server) startFileWatcher() error {
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
@@ -49,11 +74,11 @@ func (s *Server) startFileWatcher() error {
 		if err != nil || d.IsDir() {
 			return nil
 		}
-		if strings.HasPrefix(d.Name(), ".") || filepath.Ext(d.Name()) != ".md" {
-			return nil
-		}
 		rel, relErr := filepath.Rel(s.notesBaseDir, path)
 		if relErr != nil {
+			return nil
+		}
+		if _, _, _, _, ok := parseWatcherNoteRelPath(rel); !ok {
 			return nil
 		}
 		knownMu.Lock()
@@ -101,22 +126,18 @@ func (s *Server) startFileWatcher() error {
 				if err != nil {
 					continue
 				}
-				parts := strings.Split(rel, string(os.PathSeparator))
-				if len(parts) < 2 {
-					continue
-				}
-				username := parts[0]
 
 				if base == ".stars.json" {
 					s.triggerGitBackup("filesystem change")
 					continue
 				}
 
-				if strings.HasPrefix(base, ".") || filepath.Ext(base) != ".md" {
+				username, title, collection, key, ok := parseWatcherNoteRelPath(rel)
+				if !ok {
 					continue
 				}
+
 				s.triggerGitBackup("filesystem change")
-				title := strings.TrimSuffix(base, ".md")
 
 				action := "updated"
 				switch {
@@ -151,10 +172,16 @@ func (s *Server) startFileWatcher() error {
 					}
 					knownMu.Unlock()
 
-					if _, found := s.consumeRecentChangeOrigin(username, title); found {
+					if _, found := s.consumeRecentChangeOrigin(username, collection, title); found {
 						return
 					}
-					s.hub.Broadcast(username, NoteChangeEvent{Type: "note_changed", Title: title, Action: finalAction})
+					s.hub.Broadcast(username, NoteChangeEvent{
+						Type:       "note_changed",
+						Key:        key,
+						Title:      title,
+						Collection: collection,
+						Action:     finalAction,
+					})
 				})
 			case err, ok := <-watcher.Errors:
 				if !ok {

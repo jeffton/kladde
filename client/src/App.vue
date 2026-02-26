@@ -231,15 +231,15 @@ function setMobileTransition(name: '' | 'slide-from-right' | 'slide-from-left') 
 
 let selectRequestId = 0
 
-async function selectNote(title: string, replace = false, withTransition = true) {
+async function selectNote(key: string, replace = false, withTransition = true) {
   const requestId = ++selectRequestId
 
   try {
-    await store.selectNote(title)
+    await store.selectNote(key)
     if (requestId !== selectRequestId) return
 
     clearUiError()
-    const target = { name: 'note', params: { title } }
+    const target = { name: 'note', params: { key } }
     if (withTransition) setMobileTransition('slide-from-right')
     if (replace) await router.replace(target)
     else await router.push(target)
@@ -249,19 +249,19 @@ async function selectNote(title: string, replace = false, withTransition = true)
   }
 }
 
-async function createNote() {
+async function createNote(collection = '') {
   try {
-    const title = await store.createNote()
+    const key = await store.createNote('', collection)
     clearUiError()
     setMobileTransition('slide-from-right')
-    await router.push({ name: 'note', params: { title } })
+    await router.push({ name: 'note', params: { key } })
   } catch (e) {
     setUiError(e)
   }
 }
 
-function onRename(renamedTitle: string) {
-  void router.replace({ name: 'note', params: { title: renamedTitle } })
+function onRename(renamedKey: string) {
+  void router.replace({ name: 'note', params: { key: renamedKey } })
 }
 
 function goBackToList() {
@@ -274,9 +274,9 @@ function onDeleted() {
   void router.push({ name: 'list' })
 }
 
-async function togglePin(title: string) {
+async function togglePin(key: string) {
   try {
-    await store.togglePin(title)
+    await store.togglePin(key)
   } catch (e) {
     setUiError(e)
   }
@@ -293,26 +293,26 @@ useAutosave({
 })
 
 watch(
-  () => route.params.title,
+  () => route.params.key,
   async (value) => {
     if (!isAuthenticated.value) return
 
-    const title = typeof value === 'string' ? value : ''
-    if (!title) return
-    if (title !== store.selectedTitle) await selectNote(title, true, false)
+    const key = typeof value === 'string' ? value : ''
+    if (!key) return
+    if (key !== store.selectedKey) await selectNote(key, true, false)
   }
 )
 
 watch(
-  () => store.selectedTitle,
-  async (title) => {
-    if (!isAuthenticated.value || !title) return
+  () => store.selectedKey,
+  async (key) => {
+    if (!isAuthenticated.value || !key) return
     if (route.name !== 'note') return
 
-    const routeTitle = typeof route.params.title === 'string' ? route.params.title : ''
-    if (routeTitle === title) return
+    const routeKey = typeof route.params.key === 'string' ? route.params.key : ''
+    if (routeKey === key) return
 
-    await router.replace({ name: 'note', params: { title } })
+    await router.replace({ name: 'note', params: { key } })
   }
 )
 
@@ -367,11 +367,11 @@ async function initializeAuthenticatedSession() {
     storeInitialized = true
     await store.initialize()
 
-    const title = typeof route.params.title === 'string' ? route.params.title : ''
-    if (title) {
-      await selectNote(title, true, false)
-    } else if (!isMobile.value && store.selectedTitle) {
-      await router.replace({ name: 'note', params: { title: store.selectedTitle } })
+    const key = typeof route.params.key === 'string' ? route.params.key : ''
+    if (key) {
+      await selectNote(key, true, false)
+    } else if (!isMobile.value && store.selectedKey) {
+      await router.replace({ name: 'note', params: { key: store.selectedKey } })
     }
   } catch (e) {
     storeInitialized = false
@@ -463,7 +463,7 @@ onUnmounted(() => {
         <NoteList
           v-show="isListRoute"
           :notes="sortedNotes"
-          :selected-title="store.selectedTitle"
+          :selected-key="store.selectedKey"
           :note-contents="store.noteContents"
           :user-label="userLabel"
           @create="createNote"
@@ -487,7 +487,7 @@ onUnmounted(() => {
     <template v-else>
       <NoteList
         :notes="sortedNotes"
-        :selected-title="store.selectedTitle"
+        :selected-key="store.selectedKey"
         :note-contents="store.noteContents"
         :user-label="userLabel"
         @create="createNote"

@@ -2,14 +2,14 @@ import type { Ref } from 'vue'
 import type { CachedNote, NoteMeta } from '../types'
 
 interface NotesPersistDeps {
-  selectedTitle: Ref<string>
+  selectedKey: Ref<string>
   currentContent: Ref<string>
   currentUpdatedAt: Ref<string | null>
   dirty: Ref<boolean>
   contentVersion: Ref<number>
   notes: Ref<NoteMeta[]>
   noteContents: Ref<Record<string, string>>
-  getCachedNote: (title: string) => Promise<CachedNote | undefined>
+  getCachedNote: (key: string) => Promise<CachedNote | undefined>
   putCachedNote: (note: CachedNote) => Promise<IDBValidKey>
   updateSyncStatus: () => void
 }
@@ -31,12 +31,12 @@ export function createNotesPersist(deps: NotesPersistDeps) {
     pendingContentSnapshot = null
 
     await queueWrite(async () => {
-      const existing = await deps.getCachedNote(snapshot.title)
+      const existing = await deps.getCachedNote(snapshot.key)
       await deps.putCachedNote({
         ...snapshot,
         existsOnServer: existing?.existsOnServer
       })
-      if (deps.selectedTitle.value === snapshot.title && deps.contentVersion.value === snapshot.version) {
+      if (deps.selectedKey.value === snapshot.key && deps.contentVersion.value === snapshot.version) {
         deps.updateSyncStatus()
       }
     })
@@ -68,9 +68,9 @@ export function createNotesPersist(deps: NotesPersistDeps) {
     deps.currentUpdatedAt.value = nowIso
     deps.contentVersion.value += 1
 
-    if (!deps.selectedTitle.value) return
+    if (!deps.selectedKey.value) return
 
-    const selectedMeta = deps.notes.value.find((n) => n.title === deps.selectedTitle.value)
+    const selectedMeta = deps.notes.value.find((n) => n.key === deps.selectedKey.value)
     if (selectedMeta) {
       selectedMeta.dirty = true
       selectedMeta.updatedAt = nowIso
@@ -78,11 +78,17 @@ export function createNotesPersist(deps: NotesPersistDeps) {
 
     deps.noteContents.value = {
       ...deps.noteContents.value,
-      [deps.selectedTitle.value]: deps.currentContent.value
+      [deps.selectedKey.value]: deps.currentContent.value
     }
 
+    const fallback = deps.selectedKey.value.includes('/')
+      ? { collection: deps.selectedKey.value.split('/')[0], title: deps.selectedKey.value.split('/').slice(1).join('/') }
+      : { collection: '', title: deps.selectedKey.value }
+
     pendingContentSnapshot = {
-      title: deps.selectedTitle.value,
+      key: deps.selectedKey.value,
+      title: selectedMeta?.title || fallback.title,
+      collection: selectedMeta?.collection || fallback.collection,
       content: deps.currentContent.value,
       updatedAt: nowIso,
       dirty: true,
