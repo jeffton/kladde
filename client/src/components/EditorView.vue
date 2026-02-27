@@ -18,13 +18,16 @@ import {
   AlertTriangle,
   Check,
   ChevronLeft,
+  ClipboardCheck,
   CloudCheck,
   CloudOff,
+  Copy,
   FolderPlus,
   MoreVertical,
   RefreshCw,
   Share2,
-  Trash2
+  Trash2,
+  X
 } from 'lucide-vue-next'
 import EditorToolbar from './EditorToolbar.vue'
 import { apiFetch, shareNotePathApi } from '../stores/notesApi'
@@ -1040,36 +1043,53 @@ onUnmounted(() => {
     <Teleport v-if="isFullMode" to="body">
       <div v-if="showShareDialog" class="share-dialog-backdrop" @click.self="closeShareDialog">
         <div class="share-dialog" role="dialog" aria-modal="true" :aria-label="t('shareNote')">
-          <h2 class="share-dialog-title">{{ t('shareNote') }}</h2>
+          <div class="share-dialog-header">
+            <h2 class="share-dialog-title">{{ t('shareNote') }}</h2>
+            <button class="share-dialog-close" type="button" :aria-label="t('close')" @click="closeShareDialog">
+              <X :size="20" />
+            </button>
+          </div>
 
           <div class="share-link-row">
-            <div class="share-link-copy-wrap">
-              <div class="share-link-label">{{ t('shareReadonly') }}</div>
+            <div class="share-link-info">
+              <div class="share-link-label-row">
+                <span class="share-link-label">{{ t('shareReadonly') }}</span>
+                <button
+                  class="share-toggle"
+                  role="switch"
+                  :aria-checked="shareLinks.view.enabled"
+                  :disabled="shareBusyMode === 'view' || shareLoading"
+                  @click="toggleShareLink('view')">
+                  <span class="share-toggle-track"><span class="share-toggle-thumb" /></span>
+                </button>
+              </div>
               <div class="share-link-url">{{ shareLinks.view.url || t('shareOff') }}</div>
             </div>
-            <button class="share-link-toggle" :disabled="shareBusyMode === 'view' || shareLoading" @click="toggleShareLink('view')">
-              {{ shareLinks.view.enabled ? t('shareDisable') : t('shareEnable') }}
-            </button>
-            <button class="share-link-copy" :disabled="!shareLinks.view.url" @click="copyShareLink('view')">
-              {{ shareCopyMode === 'view' ? t('copied') : t('copyLink') }}
+            <button class="share-link-copy" :disabled="!shareLinks.view.url" :aria-label="t('copyLink')" @click="copyShareLink('view')">
+              <ClipboardCheck v-if="shareCopyMode === 'view'" :size="18" />
+              <Copy v-else :size="18" />
             </button>
           </div>
 
           <div class="share-link-row">
-            <div class="share-link-copy-wrap">
-              <div class="share-link-label">{{ t('shareCollaborative') }}</div>
+            <div class="share-link-info">
+              <div class="share-link-label-row">
+                <span class="share-link-label">{{ t('shareCollaborative') }}</span>
+                <button
+                  class="share-toggle"
+                  role="switch"
+                  :aria-checked="shareLinks.edit.enabled"
+                  :disabled="shareBusyMode === 'edit' || shareLoading"
+                  @click="toggleShareLink('edit')">
+                  <span class="share-toggle-track"><span class="share-toggle-thumb" /></span>
+                </button>
+              </div>
               <div class="share-link-url">{{ shareLinks.edit.url || t('shareOff') }}</div>
             </div>
-            <button class="share-link-toggle" :disabled="shareBusyMode === 'edit' || shareLoading" @click="toggleShareLink('edit')">
-              {{ shareLinks.edit.enabled ? t('shareDisable') : t('shareEnable') }}
+            <button class="share-link-copy" :disabled="!shareLinks.edit.url" :aria-label="t('copyLink')" @click="copyShareLink('edit')">
+              <ClipboardCheck v-if="shareCopyMode === 'edit'" :size="18" />
+              <Copy v-else :size="18" />
             </button>
-            <button class="share-link-copy" :disabled="!shareLinks.edit.url" @click="copyShareLink('edit')">
-              {{ shareCopyMode === 'edit' ? t('copied') : t('copyLink') }}
-            </button>
-          </div>
-
-          <div class="share-dialog-actions">
-            <button class="share-dialog-close" type="button" @click="closeShareDialog">{{ t('close') }}</button>
           </div>
         </div>
       </div>
