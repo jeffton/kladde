@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"net/http"
 	"net/url"
 	"strings"
@@ -110,9 +111,24 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	session, ok := s.requireAuth(w, r)
-	if !ok {
-		return
+	channel := ""
+	if shareToken := strings.TrimSpace(r.URL.Query().Get("shareToken")); shareToken != "" {
+		token, err := url.PathUnescape(shareToken)
+		if err != nil {
+			writeError(w, http.StatusUnauthorized, errors.New("invalid share token"))
+			return
+		}
+		if _, err := s.requireShareToken(token); err != nil {
+			writeError(w, http.StatusUnauthorized, errors.New("invalid share token"))
+			return
+		}
+		channel = shareBroadcastChannel(token)
+	} else {
+		session, ok := s.requireAuth(w, r)
+		if !ok {
+			return
+		}
+		channel = userBroadcastChannel(session.User.Username)
 	}
 
 	upgrader := websocket.Upgrader{
@@ -134,8 +150,7 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	username := session.User.Username
-	s.hub.Add(username, conn)
+	s.hub.Add(channel, conn)
 
 	conn.SetReadLimit(1024)
 	_ = conn.SetReadDeadline(time.Now().Add(60 * time.Second))
@@ -149,7 +164,7 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	defer func() {
 		close(done)
 		pingTicker.Stop()
-		s.hub.Remove(username, conn)
+		s.hub.Remove(channel, conn)
 		_ = conn.Close()
 	}()
 

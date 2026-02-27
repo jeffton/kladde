@@ -71,10 +71,30 @@ type debouncedEntry struct {
 	gen   uint64
 }
 
+type ShareRecord struct {
+	File    string `json:"file"`
+	Mode    string `json:"mode"`
+	Created string `json:"created"`
+}
+
+type ShareLink struct {
+	Enabled bool   `json:"enabled"`
+	Token   string `json:"token,omitempty"`
+	URL     string `json:"url,omitempty"`
+}
+
+type ShareLinksResponse struct {
+	View ShareLink `json:"view"`
+	Edit ShareLink `json:"edit"`
+}
+
 type Server struct {
 	notesBaseDir        string
 	clientDir           string
 	usersFile           string
+	sharesFile          string
+	shares              map[string]ShareRecord
+	sharesMu            sync.RWMutex
 	sessions            map[string]Session
 	sessionsMu          sync.RWMutex
 	usersMu             sync.Mutex

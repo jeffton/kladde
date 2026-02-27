@@ -127,6 +127,27 @@ select {
   overflow: hidden;
 }
 
+.share-shell {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.share-shell .editor-area {
+  width: min(980px, 100%);
+  margin: 0 auto;
+}
+
+.share-loading-state {
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: .35rem;
+}
+
+.share-loading-state p {
+  margin: 0;
+  color: var(--muted);
+}
+
 .sidebar {
   padding: 0;
   background: var(--panel);
@@ -849,6 +870,71 @@ button:disabled {
   color: currentColor;
 }
 
+.share-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  background: color-mix(in srgb, #000 38%, transparent);
+  display: grid;
+  place-items: center;
+  z-index: 14000;
+  padding: 1rem;
+}
+
+.share-dialog {
+  width: min(760px, 100%);
+  background: var(--panel);
+  border-radius: .8rem;
+  padding: .9rem;
+  display: grid;
+  gap: .7rem;
+}
+
+.share-dialog-title {
+  margin: 0;
+  font-size: 1.2rem;
+}
+
+.share-link-row {
+  background: var(--surface-soft);
+  border-radius: .7rem;
+  padding: .65rem;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: .5rem;
+  align-items: center;
+}
+
+.share-link-copy-wrap {
+  min-width: 0;
+}
+
+.share-link-label {
+  font-size: .86rem;
+  font-weight: 600;
+  margin-bottom: .18rem;
+}
+
+.share-link-url {
+  font-size: .82rem;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.share-link-toggle,
+.share-link-copy,
+.share-dialog-close {
+  min-height: 2.4rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  padding: 0 .85rem;
+}
+
+.share-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+}
 
 .plain-wrap,
 .wysiwyg-wrap {
@@ -1252,6 +1338,16 @@ button:disabled {
 
   .editor-toolbar .mode-toggle {
     margin-left: auto;
+  }
+
+  .share-link-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .share-link-toggle,
+  .share-link-copy,
+  .share-dialog-close {
+    width: 100%;
   }
 
   .plain-wrap textarea,

@@ -23,19 +23,23 @@ import {
   FolderPlus,
   MoreVertical,
   RefreshCw,
+  Share2,
   Trash2
 } from 'lucide-vue-next'
 import EditorToolbar from './EditorToolbar.vue'
-import type { NotesStore } from '../stores/notes'
+import { apiFetch, shareNotePathApi } from '../stores/notesApi'
+import type { AppMode, EditorStoreLike, ShareLinksResponse, ShareMode } from '../types'
 import { intlLocale, t } from '../i18n'
 
 interface Props {
-  store: NotesStore
+  store: EditorStoreLike
   showBack?: boolean
+  mode?: AppMode
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  showBack: false
+  showBack: false,
+  mode: 'full'
 })
 
 const emit = defineEmits<{
@@ -44,6 +48,9 @@ const emit = defineEmits<{
   (e: 'deleted'): void
   (e: 'ui-error', message: string): void
 }>()
+
+const isFullMode = computed(() => props.mode === 'full')
+const isReadonlyMode = computed(() => props.mode === 'share-readonly')
 
 const editableTitle = ref('')
 const titleInput = ref<HTMLInputElement | null>(null)
@@ -188,6 +195,14 @@ const FocusSafeTaskItem = TaskItem.extend({
 const showTooltip = ref(false)
 const isTouchLike = ref(false)
 const showNoteMenu = ref(false)
+const showShareDialog = ref(false)
+const shareLinks = ref<ShareLinksResponse>({
+  view: { enabled: false },
+  edit: { enabled: false }
+})
+const shareBusyMode = ref<ShareMode | ''>('')
+const shareCopyMode = ref<ShareMode | ''>('')
+const shareLoading = ref(false)
 const lastSyncTime = ref('')
 const noteMenuWrap = ref<HTMLElement | null>(null)
 const availableCollections = computed(() => props.store.collections)
@@ -402,6 +417,12 @@ const statusMeta = computed(() => {
 
   const lines: string[] = []
 
+  if (isReadonlyMode.value) {
+    if (modifiedLine) lines.push(modifiedLine)
+    lines.push(t('shareReadonly'))
+    return { state: 'synced' as const, lines }
+  }
+
   if (syncState === 'offline') {
     lines.push(t('offline'))
     if (modifiedLine) lines.push(modifiedLine)
@@ -462,6 +483,7 @@ const editor = useEditor({
       click: (_view, event) => handleTaskCheckboxClick(event)
     }
   },
+  editable: !isReadonlyMode.value,
   content: props.store.currentContent || '',
   onUpdate: ({ editor: tiptapEditor }) => {
     if (ignoreEditorChanges) return
@@ -650,8 +672,17 @@ function applyPlainAction(action: string) {
   }
 }
 
+function onPlainInput(event: Event) {
+  if (isReadonlyMode.value) return
+
+  const value = (event.target as HTMLTextAreaElement).value
+  void props.store.setCurrentContent(value).catch((err: unknown) => {
+    emit('ui-error', (err as Error)?.message || t('couldNotSaveLocally'))
+  })
+}
+
 async function commitTitleChange() {
-  if (!props.store.selectedKey) return
+  if (!isFullMode.value || !props.store.selectedKey) return
   const next = editableTitle.value.trim()
 
   if (!next) {
@@ -670,6 +701,7 @@ async function commitTitleChange() {
 }
 
 function toggleNoteMenu() {
+  if (!isFullMode.value) return
   showNoteMenu.value = !showNoteMenu.value
 }
 
@@ -684,7 +716,7 @@ function isValidCollectionName(value: string): boolean {
 }
 
 async function moveCurrentToCollection(collection: string) {
-  if (!props.store.selectedKey) return
+  if (!isFullMode.value || !props.store.selectedKey) return
 
   const targetCollection = selectedCollection.value === collection ? '' : collection
 
@@ -698,7 +730,7 @@ async function moveCurrentToCollection(collection: string) {
 }
 
 async function createCollectionAndMove() {
-  if (!props.store.selectedKey) return
+  if (!isFullMode.value || !props.store.selectedKey) return
 
   const candidate = window.prompt(t('newCollectionPrompt'))
   if (candidate === null) return
@@ -712,8 +744,75 @@ async function createCollectionAndMove() {
   await moveCurrentToCollection(nextCollection)
 }
 
+async function loadShareLinks() {
+  if (!isFullMode.value || !props.store.selectedTitle) return
+  shareLoading.value = true
+
+  try {
+    const response = await apiFetch(shareNotePathApi(props.store.selectedTitle, props.store.selectedCollection))
+    shareLinks.value = (await response.json()) as ShareLinksResponse
+  } catch (err) {
+    emit('ui-error', (err as Error).message || t('genericError'))
+  } finally {
+    shareLoading.value = false
+  }
+}
+
+function openShareDialog() {
+  if (!isFullMode.value) return
+  showNoteMenu.value = false
+  showShareDialog.value = true
+  shareCopyMode.value = ''
+  void loadShareLinks()
+}
+
+function closeShareDialog() {
+  showShareDialog.value = false
+  shareBusyMode.value = ''
+  shareCopyMode.value = ''
+}
+
+async function toggleShareLink(mode: ShareMode) {
+  if (!isFullMode.value || !props.store.selectedTitle) return
+  if (shareBusyMode.value) return
+
+  shareBusyMode.value = mode
+  shareCopyMode.value = ''
+
+  try {
+    const link = shareLinks.value[mode]
+    const response = link.enabled
+      ? await apiFetch(shareNotePathApi(props.store.selectedTitle, props.store.selectedCollection, mode), {
+          method: 'DELETE'
+        })
+      : await apiFetch(shareNotePathApi(props.store.selectedTitle, props.store.selectedCollection), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mode })
+        })
+
+    shareLinks.value = (await response.json()) as ShareLinksResponse
+  } catch (err) {
+    emit('ui-error', (err as Error).message || t('genericError'))
+  } finally {
+    shareBusyMode.value = ''
+  }
+}
+
+async function copyShareLink(mode: ShareMode) {
+  const url = shareLinks.value[mode].url
+  if (!url) return
+
+  try {
+    await navigator.clipboard.writeText(url)
+    shareCopyMode.value = mode
+  } catch {
+    emit('ui-error', t('couldNotCopyLink'))
+  }
+}
+
 async function deleteCurrentNote() {
-  if (!props.store.selectedKey) return
+  if (!isFullMode.value || !props.store.selectedKey) return
   const confirmed = window.confirm(t('confirmDelete'))
   if (!confirmed) return
 
@@ -776,6 +875,14 @@ function resetEditorScrollPosition() {
   reset(wysiwygWrap.value?.querySelector<HTMLElement>('.ProseMirror'))
 }
 
+watch(
+  () => props.mode,
+  (mode) => {
+    editor.value?.setEditable(mode !== 'share-readonly')
+  },
+  { immediate: true }
+)
+
 watch(showPlain, (isPlain) => {
   if (isPlain) {
     nextTick(() => plainTextarea.value?.focus())
@@ -811,6 +918,7 @@ watch(() => props.store.selectedKey, () => {
     editableTitle.value = props.store.selectedTitle || fallbackTitleFromKey(props.store.selectedKey)
   }
   showNoteMenu.value = false
+  showShareDialog.value = false
   syncEditorFromStore()
   nextTick(() => resetEditorScrollPosition())
 }, { immediate: true })
@@ -852,6 +960,7 @@ onUnmounted(() => {
         class="note-title-input"
         type="text"
         spellcheck="false"
+        :readonly="!isFullMode"
         @blur="commitTitleChange"
         @keydown.enter.prevent="($event.target as HTMLInputElement).blur()" />
 
@@ -877,7 +986,7 @@ onUnmounted(() => {
         </div>
       </div>
 
-      <div ref="noteMenuWrap" class="note-menu-wrap">
+      <div v-if="isFullMode" ref="noteMenuWrap" class="note-menu-wrap">
         <button class="note-menu-button" :aria-label="t('more')" :aria-expanded="showNoteMenu" @click="toggleNoteMenu">
           <MoreVertical :size="20" />
         </button>
@@ -911,6 +1020,13 @@ onUnmounted(() => {
             <span class="note-menu-label">{{ t('newCollection') }}</span>
           </button>
 
+          <button class="note-menu-item" role="menuitem" @click="openShareDialog">
+            <span class="note-menu-leading" aria-hidden="true">
+              <Share2 :size="16" />
+            </span>
+            <span class="note-menu-label">{{ t('shareNote') }}</span>
+          </button>
+
           <button class="note-menu-delete" role="menuitem" @click="deleteCurrentNote">
             <span class="note-menu-leading" aria-hidden="true">
               <Trash2 :size="16" />
@@ -921,9 +1037,48 @@ onUnmounted(() => {
       </div>
     </div>
 
+    <Teleport v-if="isFullMode" to="body">
+      <div v-if="showShareDialog" class="share-dialog-backdrop" @click.self="closeShareDialog">
+        <div class="share-dialog" role="dialog" aria-modal="true" :aria-label="t('shareNote')">
+          <h2 class="share-dialog-title">{{ t('shareNote') }}</h2>
+
+          <div class="share-link-row">
+            <div class="share-link-copy-wrap">
+              <div class="share-link-label">{{ t('shareReadonly') }}</div>
+              <div class="share-link-url">{{ shareLinks.view.url || t('shareOff') }}</div>
+            </div>
+            <button class="share-link-toggle" :disabled="shareBusyMode === 'view' || shareLoading" @click="toggleShareLink('view')">
+              {{ shareLinks.view.enabled ? t('shareDisable') : t('shareEnable') }}
+            </button>
+            <button class="share-link-copy" :disabled="!shareLinks.view.url" @click="copyShareLink('view')">
+              {{ shareCopyMode === 'view' ? t('copied') : t('copyLink') }}
+            </button>
+          </div>
+
+          <div class="share-link-row">
+            <div class="share-link-copy-wrap">
+              <div class="share-link-label">{{ t('shareCollaborative') }}</div>
+              <div class="share-link-url">{{ shareLinks.edit.url || t('shareOff') }}</div>
+            </div>
+            <button class="share-link-toggle" :disabled="shareBusyMode === 'edit' || shareLoading" @click="toggleShareLink('edit')">
+              {{ shareLinks.edit.enabled ? t('shareDisable') : t('shareEnable') }}
+            </button>
+            <button class="share-link-copy" :disabled="!shareLinks.edit.url" @click="copyShareLink('edit')">
+              {{ shareCopyMode === 'edit' ? t('copied') : t('copyLink') }}
+            </button>
+          </div>
+
+          <div class="share-dialog-actions">
+            <button class="share-dialog-close" type="button" @click="closeShareDialog">{{ t('close') }}</button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
     <EditorToolbar
       :editor="editor || null"
       :is-plain="showPlain"
+      :readonly="isReadonlyMode"
       @toggle-plain="showPlain = !showPlain"
       @plain-action="applyPlainAction" />
 
@@ -931,7 +1086,8 @@ onUnmounted(() => {
       <textarea
         ref="plainTextarea"
         :value="store.currentContent"
-        @input="store.setCurrentContent(($event.target as HTMLTextAreaElement).value)"></textarea>
+        :readonly="isReadonlyMode"
+        @input="onPlainInput"></textarea>
     </section>
     <section v-else ref="wysiwygWrap" class="wysiwyg-wrap">
       <EditorContent v-if="editor" :editor="editor || null" class="tiptap-root" />

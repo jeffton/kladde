@@ -22,8 +22,10 @@ type Options struct {
 	Addr      string           `json:"addr"`
 	Notes     string           `json:"notes"`
 	Client    string           `json:"client"`
-	Users     string           `json:"users"`
 	GitBackup GitBackupOptions `json:"gitBackup"`
+
+	OptionsDir string `json:"-"`
+	UsersFile  string `json:"-"`
 }
 
 func defaultOptions() Options {
@@ -31,7 +33,6 @@ func defaultOptions() Options {
 		Addr:   ":8080",
 		Notes:  "/var/data/kladde/notes/",
 		Client: "../client/dist",
-		Users:  "/var/data/kladde/users.json",
 		GitBackup: GitBackupOptions{
 			Enabled:             false,
 			Remote:              "",
@@ -43,13 +44,23 @@ func defaultOptions() Options {
 	}
 }
 
-func loadOptions(path string) (Options, error) {
-	path = strings.TrimSpace(path)
-	if path == "" {
-		return Options{}, errors.New("options file path is required")
+func loadOptions(optionsDir string) (Options, error) {
+	optionsDir = strings.TrimSpace(optionsDir)
+	if optionsDir == "" {
+		return Options{}, errors.New("options directory path is required")
 	}
 
-	data, err := os.ReadFile(path)
+	optionsDir = filepath.Clean(optionsDir)
+	info, err := os.Stat(optionsDir)
+	if err != nil {
+		return Options{}, fmt.Errorf("failed accessing options directory: %w", err)
+	}
+	if !info.IsDir() {
+		return Options{}, errors.New("options path must be a directory")
+	}
+
+	optionsFile := filepath.Join(optionsDir, "options.json")
+	data, err := os.ReadFile(optionsFile)
 	if err != nil {
 		return Options{}, fmt.Errorf("failed reading options file: %w", err)
 	}
@@ -73,13 +84,11 @@ func loadOptions(path string) (Options, error) {
 	if strings.TrimSpace(opts.Client) == "" {
 		return Options{}, errors.New("options.client is required")
 	}
-	if strings.TrimSpace(opts.Users) == "" {
-		return Options{}, errors.New("options.users is required")
-	}
 
 	opts.Notes = filepath.Clean(opts.Notes)
 	opts.Client = filepath.Clean(opts.Client)
-	opts.Users = filepath.Clean(opts.Users)
+	opts.OptionsDir = optionsDir
+	opts.UsersFile = filepath.Join(optionsDir, "users.json")
 
 	opts.GitBackup.Remote = strings.TrimSpace(opts.GitBackup.Remote)
 	opts.GitBackup.GitHubToken = strings.TrimSpace(opts.GitBackup.GitHubToken)

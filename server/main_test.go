@@ -178,7 +178,6 @@ func TestLoadOptionsDefaultsAndOverrides(t *testing.T) {
 		"addr":   "127.0.0.1:9090",
 		"notes":  "./notes",
 		"client": "./client/dist",
-		"users":  "./data/users.json",
 	}
 	data, err := json.Marshal(raw)
 	if err != nil {
@@ -188,7 +187,7 @@ func TestLoadOptionsDefaultsAndOverrides(t *testing.T) {
 		t.Fatalf("write options: %v", err)
 	}
 
-	opts, err := loadOptions(path)
+	opts, err := loadOptions(dir)
 	if err != nil {
 		t.Fatalf("loadOptions failed: %v", err)
 	}
@@ -202,8 +201,11 @@ func TestLoadOptionsDefaultsAndOverrides(t *testing.T) {
 	if opts.Client != "client/dist" {
 		t.Fatalf("unexpected client path: %q", opts.Client)
 	}
-	if opts.Users != "data/users.json" {
-		t.Fatalf("unexpected users path: %q", opts.Users)
+	if opts.OptionsDir != dir {
+		t.Fatalf("unexpected options dir: %q", opts.OptionsDir)
+	}
+	if opts.UsersFile != filepath.Join(dir, "users.json") {
+		t.Fatalf("unexpected users file path: %q", opts.UsersFile)
 	}
 	if opts.GitBackup.PushIntervalSeconds != 300 {
 		t.Fatalf("unexpected default git backup interval: %d", opts.GitBackup.PushIntervalSeconds)
@@ -218,7 +220,7 @@ func TestLoadOptionsRejectsUnknownFields(t *testing.T) {
 		t.Fatalf("write options: %v", err)
 	}
 
-	if _, err := loadOptions(path); err == nil {
+	if _, err := loadOptions(dir); err == nil {
 		t.Fatal("expected loadOptions to fail on unknown fields")
 	}
 }
@@ -231,7 +233,7 @@ func TestLoadOptionsGitBackupRequiresRemoteWhenEnabled(t *testing.T) {
 		t.Fatalf("write options: %v", err)
 	}
 
-	if _, err := loadOptions(path); err == nil {
+	if _, err := loadOptions(dir); err == nil {
 		t.Fatal("expected loadOptions to fail when git backup is enabled without remote")
 	}
 }
@@ -244,7 +246,7 @@ func TestLoadOptionsRejectsInvalidGitBackupInterval(t *testing.T) {
 		t.Fatalf("write options: %v", err)
 	}
 
-	if _, err := loadOptions(path); err == nil {
+	if _, err := loadOptions(dir); err == nil {
 		t.Fatal("expected loadOptions to fail when git backup interval is invalid")
 	}
 }

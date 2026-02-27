@@ -1,4 +1,5 @@
 import { t } from '../i18n'
+import type { ShareMode } from '../types'
 
 function makeClientOrigin(): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -41,6 +42,17 @@ export function renameNotePathApi(title: string, collection?: string | null): st
 
 export function starNotePathApi(title: string, collection?: string | null): string {
   return withCollectionQuery(`/api/notes/${encodeURIComponent(title)}/star`, collection)
+}
+
+export function shareNotePathApi(title: string, collection?: string | null, mode?: ShareMode): string {
+  const base = withCollectionQuery(`/api/notes/${encodeURIComponent(title)}/share`, collection)
+  if (!mode) return base
+  const separator = base.includes('?') ? '&' : '?'
+  return `${base}${separator}mode=${encodeURIComponent(mode)}`
+}
+
+export function sharedNotePathApi(token: string): string {
+  return `/api/share/${encodeURIComponent(token)}/note`
 }
 
 export async function apiFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {

@@ -26,13 +26,17 @@ import { t } from '../i18n'
 interface Props {
   editor: Editor | null
   isPlain?: boolean
+  showModeToggle?: boolean
+  readonly?: boolean
 }
 
 type ListTarget = 'bullet' | 'ordered' | 'task'
 
 const props = withDefaults(defineProps<Props>(), {
   editor: null,
-  isPlain: false
+  isPlain: false,
+  showModeToggle: true,
+  readonly: false
 })
 
 const emit = defineEmits<{
@@ -54,7 +58,7 @@ function run(action: string, richAction?: () => void) {
 }
 
 function isDisabled() {
-  return !props.editor && !props.isPlain
+  return props.readonly || (!props.editor && !props.isPlain)
 }
 
 function toggleMore() {
@@ -342,7 +346,7 @@ onUnmounted(() => {
 
       <button :title="t('codeBlock')" :disabled="isDisabled()" :class="{ active: !isPlain && editor?.isActive('codeBlock') }" @click="run('codeBlock', () => editor?.chain().focus().toggleCodeBlock().run())"><FileCode :size="18" /></button>
 
-      <button v-if="!isMobile" class="mode-toggle" :title="t('toggleMarkdownWysiwyg')" :class="{ active: isPlain }" @click="emit('toggle-plain')">
+      <button v-if="showModeToggle && !isMobile" class="mode-toggle" :title="t('toggleMarkdownWysiwyg')" :class="{ active: isPlain }" @click="emit('toggle-plain')">
         <FileText :size="18" />
       </button>
     </div>

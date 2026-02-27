@@ -59,7 +59,7 @@ This produces:
 ## Options file (JSON)
 
 The server reads runtime configuration from a JSON options file.
-For normal startup, `--options <file>` is the only runtime CLI argument.
+For normal startup, `--options <directory>` is the only runtime CLI argument (it loads `<directory>/options.json`).
 
 Example production file (`/etc/kladde/options.json`):
 
@@ -68,7 +68,6 @@ Example production file (`/etc/kladde/options.json`):
   "addr": ":8080",
   "notes": "/var/data/kladde/notes",
   "client": "/var/www/kladde/client/dist",
-  "users": "/var/data/kladde/users.json",
   "gitBackup": {
     "enabled": true,
     "remote": "https://github.com/your-org/kladde-backup.git",
@@ -85,12 +84,16 @@ Fields:
 - `addr` — HTTP listen address
 - `notes` — path to notes directory
 - `client` — path to built frontend assets (`client/dist`)
-- `users` — path to `users.json`
 - `gitBackup.enabled` — enable automatic git commit + push backups
 - `gitBackup.remote` — git remote URL (required when `gitBackup.enabled=true`)
 - `gitBackup.githubToken` *(optional)* — GitHub personal access token for authenticated push (see [Creating a GitHub token](#creating-a-github-token))
 - `gitBackup.pushIntervalSeconds` *(optional, default `300`)* — minimum seconds between push attempts
 - `gitBackup.authorName` / `gitBackup.authorEmail` — commit author identity
+
+Derived paths (not configurable in `options.json`):
+
+- `<options-dir>/users.json`
+- `<options-dir>/shares.json`
 
 Backup behavior:
 
@@ -118,17 +121,16 @@ No other permissions or scopes are needed.
 From repo root:
 
 ```bash
-mkdir -p tmp/notes tmp/data
+mkdir -p tmp/notes
 cat > tmp/options.json <<'JSON'
 {
   "addr": "127.0.0.1:8080",
   "notes": "./tmp/notes",
-  "client": "./client/dist",
-  "users": "./tmp/data/users.json"
+  "client": "./client/dist"
 }
 JSON
 
-./server/dist/kladde-server --options ./tmp/options.json
+./server/dist/kladde-server --options ./tmp
 ```
 
 Health check:
@@ -139,11 +141,11 @@ curl http://127.0.0.1:8080/api/health
 
 ## Create first user
 
-Before logging in, create a user (use the same `users` path as in your options file):
+Before logging in, create a user (`users.json` lives in the options directory):
 
 ```bash
 ./server/dist/kladde-server adduser \
-  --users ./tmp/data/users.json \
+  --users ./tmp/users.json \
   --username admin \
   --password "<choose-a-strong-password>" \
   --name "Admin"

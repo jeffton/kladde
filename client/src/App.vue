@@ -5,12 +5,17 @@ import { useNotesStore } from './stores/notes'
 import NoteList from './components/NoteList.vue'
 import EditorView from './components/EditorView.vue'
 import { useAutosave } from './composables/useAutosave'
-import type { AuthUser } from './types'
+import { useShareSession } from './composables/useShareSession'
+import type { AppMode, AuthUser } from './types'
 import { t } from './i18n'
 
 const store = useNotesStore()
 const route = useRoute()
 const router = useRouter()
+
+const isShareRoute = computed(() => route.name === 'share')
+const shareToken = computed(() => (typeof route.params.token === 'string' ? route.params.token : ''))
+
 const error = ref('')
 const authChecked = ref(false)
 const user = ref<AuthUser | null>(null)
@@ -379,7 +384,45 @@ async function initializeAuthenticatedSession() {
   }
 }
 
+const {
+  shareAppMode,
+  shareError,
+  shareLoading,
+  shareStore,
+  clearShareError,
+  setShareUiErrorMessage,
+  initializeShareSession,
+  teardownShareSession
+} = useShareSession({ isShareRoute, shareToken })
+
+const appMode = computed<AppMode>(() => {
+  if (!isShareRoute.value) return 'full'
+  return shareAppMode.value
+})
+
+watch(
+  [isShareRoute, shareToken],
+  ([isShare]) => {
+    if (!isShare) {
+      teardownShareSession()
+      if (isAuthenticated.value && !storeInitialized) {
+        void initializeAuthenticatedSession()
+      }
+      return
+    }
+
+    authChecked.value = true
+    void initializeShareSession()
+  },
+  { immediate: true }
+)
+
 onMounted(async () => {
+  if (isShareRoute.value) {
+    authChecked.value = true
+    return
+  }
+
   if (isAuthenticated.value) {
     authChecked.value = true
     await initializeAuthenticatedSession()
@@ -426,7 +469,32 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div v-if="!authChecked" class="login-shell">
+  <div v-if="isShareRoute" class="app-shell share-shell">
+    <Transition name="error-overlay">
+      <div v-if="shareError" class="error-overlay" role="alert" aria-live="assertive">
+        <p class="error-overlay-text">{{ shareError }}</p>
+        <button class="error-overlay-close" type="button" :aria-label="t('dismissError')" @click="clearShareError">×</button>
+      </div>
+    </Transition>
+
+    <main v-if="shareLoading" class="editor-area share-loading-state">
+      <h1 class="app-logo">kladde</h1>
+      <p>{{ t('loading') }}</p>
+    </main>
+
+    <EditorView
+      v-else-if="shareStore.selectedKey"
+      :store="shareStore"
+      :mode="appMode"
+      :show-back="false"
+      @ui-error="setShareUiErrorMessage" />
+
+    <main v-else class="editor-area share-loading-state">
+      <h1 class="app-logo">kladde</h1>
+    </main>
+  </div>
+
+  <div v-else-if="!authChecked" class="login-shell">
     <div class="login-card">
       <h1 class="app-logo">kladde</h1>
     </div>
@@ -477,6 +545,7 @@ onUnmounted(() => {
           v-show="!isListRoute"
           :store="store"
           :show-back="true"
+          mode="full"
           @rename="onRename"
           @back="goBackToList"
           @deleted="onDeleted"
@@ -498,6 +567,7 @@ onUnmounted(() => {
       <EditorView
         :store="store"
         :show-back="false"
+        mode="full"
         @rename="onRename"
         @back="goBackToList"
         @deleted="onDeleted"

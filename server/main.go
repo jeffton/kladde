@@ -16,14 +16,14 @@ func main() {
 		return
 	}
 
-	optionsFile := flag.String("options", "", "Path to JSON options file")
+	optionsDir := flag.String("options", "", "Path to options directory")
 	flag.Parse()
 
 	if flag.NArg() > 0 {
-		log.Fatal("unexpected positional arguments; use only -options <file>")
+		log.Fatal("unexpected positional arguments; use only -options <directory>")
 	}
 
-	opts, err := loadOptions(*optionsFile)
+	opts, err := loadOptions(*optionsDir)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -31,17 +31,28 @@ func main() {
 	if err := os.MkdirAll(opts.Notes, 0o755); err != nil {
 		log.Fatalf("failed creating notes dir: %v", err)
 	}
-	if err := os.MkdirAll(filepath.Dir(opts.Users), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(opts.UsersFile), 0o755); err != nil {
 		log.Fatalf("failed creating users dir: %v", err)
+	}
+
+	sharesFile := filepath.Join(opts.OptionsDir, "shares.json")
+	if err := os.MkdirAll(filepath.Dir(sharesFile), 0o755); err != nil {
+		log.Fatalf("failed creating shares dir: %v", err)
 	}
 
 	s := &Server{
 		notesBaseDir:        opts.Notes,
 		clientDir:           opts.Client,
-		usersFile:           opts.Users,
+		usersFile:           opts.UsersFile,
+		sharesFile:          sharesFile,
+		shares:              make(map[string]ShareRecord),
 		sessions:            make(map[string]Session),
 		hub:                 NewHub(),
 		recentChangeOrigins: NewRecentChangeOrigins(),
+	}
+
+	if err := s.loadShares(); err != nil {
+		log.Fatalf("failed loading shares: %v", err)
 	}
 
 	if opts.GitBackup.Enabled {
@@ -65,9 +76,11 @@ func main() {
 	mux.HandleFunc("/api/notes", s.handleNotes)
 	mux.HandleFunc("/api/notes/", s.handleNoteByTitle)
 	mux.HandleFunc("/api/ws", s.handleWebSocket)
+	mux.HandleFunc("/api/share/", s.handleSharedNoteAPI)
 	mux.HandleFunc("/api/health", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 	})
+	mux.HandleFunc("/share/", s.handleSharePage)
 	mux.HandleFunc("/", s.handleSPA)
 
 	log.Printf("kladde listening on %s, notes=%s, client=%s, gitBackup=%t", opts.Addr, opts.Notes, opts.Client, opts.GitBackup.Enabled)

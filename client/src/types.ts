@@ -30,6 +30,25 @@ export interface NoteResponse {
   starred?: boolean
 }
 
+export type AppMode = 'full' | 'share-readonly' | 'share-edit'
+
+export interface EditorStoreLike {
+  notes: NoteMeta[]
+  selectedKey: string
+  selectedTitle: string
+  selectedCollection: string
+  currentContent: string
+  currentUpdatedAt: string | null
+  syncStatus: string
+  syncState: SyncState
+  collections: string[]
+  noteContents: Record<string, string>
+  setCurrentContent: (content: string) => Promise<void>
+  renameCurrent: (newTitle: string, collectionOverride?: string) => Promise<string>
+  moveCurrentToCollection: (nextCollection: string) => Promise<string>
+  deleteCurrent: () => Promise<void>
+}
+
 export interface RenameResponse extends NoteResponse {
   error?: string
 }
@@ -37,6 +56,23 @@ export interface RenameResponse extends NoteResponse {
 export interface AuthUser {
   username: string
   displayName: string
+}
+
+export type ShareMode = 'view' | 'edit'
+
+export interface SharedNoteResponse extends NoteResponse {
+  shareMode: ShareMode
+}
+
+export interface ShareLink {
+  enabled: boolean
+  token?: string
+  url?: string
+}
+
+export interface ShareLinksResponse {
+  view: ShareLink
+  edit: ShareLink
 }
 
 export type SyncState = 'offline' | 'syncing' | 'error' | 'synced'
