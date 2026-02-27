@@ -11,7 +11,9 @@ export function isNetworkError(err: unknown): boolean {
     normalized.includes('failed to fetch') ||
     normalized.includes('networkerror') ||
     normalized.includes('network request failed') ||
-    normalized.includes('load failed')
+    normalized.includes('load failed') ||
+    normalized.includes('request_timeout') ||
+    normalized.includes('timeout')
   )
 }
 

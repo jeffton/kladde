@@ -55,9 +55,21 @@ export function sharedNotePathApi(token: string): string {
   return `/api/share/${encodeURIComponent(token)}/note`
 }
 
+const API_FETCH_TIMEOUT_MS = 10000
+
+function isAbortError(err: unknown): boolean {
+  return err instanceof DOMException && err.name === 'AbortError'
+}
+
 export async function apiFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
   const method = ((init?.method || (input instanceof Request ? input.method : 'GET')) || 'GET').toUpperCase()
-  let requestInit = init
+  const controller = new AbortController()
+  const timeout = window.setTimeout(() => controller.abort(), API_FETCH_TIMEOUT_MS)
+
+  let requestInit: RequestInit = {
+    ...init,
+    signal: init?.signal ? AbortSignal.any([init.signal, controller.signal]) : controller.signal
+  }
 
   if (method !== 'GET' && method !== 'HEAD') {
     const headers = new Headers(input instanceof Request ? input.headers : undefined)
@@ -66,10 +78,20 @@ export async function apiFetch(input: RequestInfo | URL, init?: RequestInit): Pr
       extra.forEach((value, key) => headers.set(key, value))
     }
     headers.set('X-Kladde-Origin', clientOrigin)
-    requestInit = { ...init, headers }
+    requestInit = { ...requestInit, headers }
   }
 
-  const res = await fetch(input, requestInit)
+  let res: Response
+  try {
+    res = await fetch(input, requestInit)
+  } catch (err: unknown) {
+    if (isAbortError(err)) {
+      throw new Error('REQUEST_TIMEOUT')
+    }
+    throw err
+  } finally {
+    window.clearTimeout(timeout)
+  }
 
   if (res.status === 401) {
     throw new Error('UNAUTHORIZED')

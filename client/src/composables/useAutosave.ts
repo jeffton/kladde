@@ -9,6 +9,8 @@ interface UseAutosaveOptions {
 export function useAutosave({ store, onError }: UseAutosaveOptions) {
   let autosaveTimer: number | null = null
   let syncTimer: number | null = null
+  let autosaveInProgress = false
+  let syncInProgress = false
 
   const flush = () => {
     if (!store.selectedKey || !store.dirty) return
@@ -17,20 +19,26 @@ export function useAutosave({ store, onError }: UseAutosaveOptions) {
 
   onMounted(() => {
     autosaveTimer = window.setInterval(async () => {
-      if (!store.dirty) return
+      if (autosaveInProgress || !store.dirty) return
+      autosaveInProgress = true
       try {
         await store.saveCurrent()
       } catch (err) {
         onError?.(err)
+      } finally {
+        autosaveInProgress = false
       }
     }, 2500)
 
     syncTimer = window.setInterval(async () => {
-      if (!store.online) return
+      if (syncInProgress || !store.online) return
+      syncInProgress = true
       try {
         await store.syncWithServer()
       } catch (err) {
         onError?.(err)
+      } finally {
+        syncInProgress = false
       }
     }, 15000)
 
