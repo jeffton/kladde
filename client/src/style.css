@@ -890,9 +890,10 @@ button:disabled {
 }
 
 .share-dialog-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: .5rem;
 }
 
 .share-dialog-title {
@@ -937,6 +938,13 @@ button:disabled {
 .share-link-label {
   font-size: .86rem;
   font-weight: 600;
+}
+
+.share-link-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: .45rem;
+  justify-self: end;
 }
 
 .share-link-url {
@@ -1410,14 +1418,25 @@ button:disabled {
     margin-left: auto;
   }
 
-  .share-link-row {
-    grid-template-columns: minmax(0, 1fr);
+  .share-dialog {
+    width: min(460px, 100%);
+    padding: .85rem;
   }
 
-  .share-link-toggle,
-  .share-link-copy,
-  .share-dialog-close {
-    width: 100%;
+  .share-link-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: .45rem;
+    padding: .6rem .65rem;
+  }
+
+  .share-link-actions {
+    gap: .35rem;
+  }
+
+  .share-dialog-close,
+  .share-link-copy {
+    width: 2.5rem;
+    height: 2.5rem;
   }
 
   .plain-wrap textarea,

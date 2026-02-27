@@ -1054,42 +1054,46 @@ onUnmounted(() => {
             <div class="share-link-info">
               <div class="share-link-label-row">
                 <span class="share-link-label">{{ t('shareReadonly') }}</span>
-                <button
-                  class="share-toggle"
-                  role="switch"
-                  :aria-checked="shareLinks.view.enabled"
-                  :disabled="shareBusyMode === 'view' || shareLoading"
-                  @click="toggleShareLink('view')">
-                  <span class="share-toggle-track"><span class="share-toggle-thumb" /></span>
-                </button>
               </div>
               <div class="share-link-url">{{ shareLinks.view.url || t('shareOff') }}</div>
             </div>
-            <button class="share-link-copy" :disabled="!shareLinks.view.url" :aria-label="t('copyLink')" @click="copyShareLink('view')">
-              <ClipboardCheck v-if="shareCopyMode === 'view'" :size="18" />
-              <Copy v-else :size="18" />
-            </button>
+            <div class="share-link-actions">
+              <button
+                class="share-toggle share-link-toggle"
+                role="switch"
+                :aria-checked="shareLinks.view.enabled"
+                :disabled="shareBusyMode === 'view' || shareLoading"
+                @click="toggleShareLink('view')">
+                <span class="share-toggle-track"><span class="share-toggle-thumb" /></span>
+              </button>
+              <button class="share-link-copy" :disabled="!shareLinks.view.url" :aria-label="t('copyLink')" @click="copyShareLink('view')">
+                <ClipboardCheck v-if="shareCopyMode === 'view'" :size="18" />
+                <Copy v-else :size="18" />
+              </button>
+            </div>
           </div>
 
           <div class="share-link-row">
             <div class="share-link-info">
               <div class="share-link-label-row">
                 <span class="share-link-label">{{ t('shareCollaborative') }}</span>
-                <button
-                  class="share-toggle"
-                  role="switch"
-                  :aria-checked="shareLinks.edit.enabled"
-                  :disabled="shareBusyMode === 'edit' || shareLoading"
-                  @click="toggleShareLink('edit')">
-                  <span class="share-toggle-track"><span class="share-toggle-thumb" /></span>
-                </button>
               </div>
               <div class="share-link-url">{{ shareLinks.edit.url || t('shareOff') }}</div>
             </div>
-            <button class="share-link-copy" :disabled="!shareLinks.edit.url" :aria-label="t('copyLink')" @click="copyShareLink('edit')">
-              <ClipboardCheck v-if="shareCopyMode === 'edit'" :size="18" />
-              <Copy v-else :size="18" />
-            </button>
+            <div class="share-link-actions">
+              <button
+                class="share-toggle share-link-toggle"
+                role="switch"
+                :aria-checked="shareLinks.edit.enabled"
+                :disabled="shareBusyMode === 'edit' || shareLoading"
+                @click="toggleShareLink('edit')">
+                <span class="share-toggle-track"><span class="share-toggle-thumb" /></span>
+              </button>
+              <button class="share-link-copy" :disabled="!shareLinks.edit.url" :aria-label="t('copyLink')" @click="copyShareLink('edit')">
+                <ClipboardCheck v-if="shareCopyMode === 'edit'" :size="18" />
+                <Copy v-else :size="18" />
+              </button>
+            </div>
           </div>
         </div>
       </div>
