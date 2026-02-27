@@ -994,13 +994,6 @@ onUnmounted(() => {
           <MoreVertical :size="20" />
         </button>
         <div v-if="showNoteMenu" class="note-menu-dropdown" role="menu">
-          <button class="note-menu-item" role="menuitemradio" :aria-checked="!selectedCollection" @click="moveCurrentToCollection('')">
-            <span class="note-menu-leading" aria-hidden="true">
-              <Check :size="16" :class="{ 'is-hidden': selectedCollection }" />
-            </span>
-            <span class="note-menu-label">{{ t('noCollection') }}</span>
-          </button>
-
           <div class="note-menu-collections" role="group" :aria-label="t('collections')">
             <button
               v-for="collection in availableCollections"
