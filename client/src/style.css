@@ -273,12 +273,16 @@ button:disabled {
   height: 2.3rem;
   border: 0;
   border-radius: 9999px;
-  background: var(--surface-soft);
-  color: var(--text);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--muted);
   padding: 0 2.3rem 0 2.15rem;
   outline: none;
   font-size: 16px;
   line-height: 1.35;
+}
+
+.search-input:not(:placeholder-shown) {
+  color: var(--text);
 }
 
 .search-input::placeholder {
@@ -288,6 +292,7 @@ button:disabled {
 .search-input:focus {
   box-shadow: none;
   background: var(--surface-active);
+  color: var(--text);
 }
 
 .search-input:focus-visible {
