@@ -626,7 +626,7 @@ button:disabled {
   padding-bottom: 0;
 }
 
-.ios-keyboard-open .note-title-wrap {
+.ios-keyboard-open .note-title-wrap:not(:focus-within) {
   display: none;
 }
 
