@@ -207,6 +207,19 @@ button:disabled {
   opacity: .45;
 }
 
+.icon-button {
+  width: var(--icon-button-size, 2.75rem);
+  height: var(--icon-button-size, 2.75rem);
+  border-radius: var(--icon-button-radius, 50%);
+  background: var(--icon-button-bg, transparent);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  padding: 0;
+  color: var(--icon-button-color, var(--text));
+}
+
 .search-controls {
   margin-top: .75rem;
   padding-left: var(--content-pad-x);
@@ -953,18 +966,12 @@ button:disabled {
 
 .share-dialog-close {
   grid-column: 2;
-  width: var(--share-icon-button-size);
-  height: var(--share-icon-button-size);
-  border-radius: 50%;
-  background: var(--surface-hover);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+  --icon-button-size: var(--share-icon-button-size);
+  --icon-button-bg: var(--surface-hover);
+  --icon-button-hover-bg: var(--surface-active, rgba(128,128,128,.22));
+  --icon-button-color: var(--muted);
   justify-self: end;
   margin-right: var(--share-actions-inset);
-  flex-shrink: 0;
-  padding: 0;
-  color: var(--muted);
 }
 
 .share-link-row {
@@ -1049,16 +1056,10 @@ button:disabled {
 }
 
 .share-link-copy {
-  width: var(--share-icon-button-size);
-  height: var(--share-icon-button-size);
-  border-radius: 50%;
-  background: color-mix(in srgb, var(--accent) 14%, transparent);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  padding: 0;
-  color: var(--text);
+  --icon-button-size: var(--share-icon-button-size);
+  --icon-button-bg: color-mix(in srgb, var(--accent) 14%, transparent);
+  --icon-button-hover-bg: color-mix(in srgb, var(--accent) 24%, transparent);
+  --icon-button-color: var(--text);
 }
 
 .plain-wrap,
@@ -1306,13 +1307,12 @@ button:disabled {
     opacity: 1;
   }
 
-  .mobile-title-back:hover,
-  .share-dialog-close:hover {
+  .mobile-title-back:hover {
     background: var(--surface-active, rgba(128,128,128,.22));
   }
 
-  .share-link-copy:hover {
-    background: color-mix(in srgb, var(--accent) 24%, transparent);
+  .icon-button:not(:disabled):hover {
+    background: var(--icon-button-hover-bg, var(--surface-hover));
   }
 
   .share-toggle:not(:disabled):hover .share-toggle-track {

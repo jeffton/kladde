@@ -239,8 +239,8 @@ async function submitPasswordChange() {
       <div class="collection-filter-wrap">
         <select v-model="collectionFilter" class="collection-filter-select" :aria-label="t('filterByCollection')">
           <option :value="COLLECTION_FILTER_ALL"></option>
-          <option :value="COLLECTION_FILTER_NONE">{{ t('noCollection') }}</option>
           <option v-for="collection in availableCollections" :key="collection" :value="collection">{{ collection }}</option>
+          <option :value="COLLECTION_FILTER_NONE">{{ t('noCollection') }}</option>
         </select>
       </div>
     </div>

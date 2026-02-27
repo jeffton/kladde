@@ -1037,7 +1037,7 @@ onUnmounted(() => {
       <div v-if="showShareDialog" class="share-dialog-backdrop" @click.self="closeShareDialog">
         <div class="share-dialog" role="dialog" aria-modal="true" :aria-label="t('shareNote')">
           <h2 class="share-dialog-title">{{ t('shareNote') }}</h2>
-          <button class="share-dialog-close" type="button" :aria-label="t('close')" @click="closeShareDialog">
+          <button class="icon-button share-dialog-close" type="button" :aria-label="t('close')" @click="closeShareDialog">
             <X :size="20" />
           </button>
 
@@ -1057,7 +1057,7 @@ onUnmounted(() => {
                 @click="toggleShareLink('view')">
                 <span class="share-toggle-track"><span class="share-toggle-thumb" /></span>
               </button>
-              <button class="share-link-copy" :disabled="!shareLinks.view.url" :aria-label="t('copyLink')" @click="copyShareLink('view')">
+              <button class="icon-button share-link-copy" :disabled="!shareLinks.view.url" :aria-label="t('copyLink')" @click="copyShareLink('view')">
                 <ClipboardCheck v-if="shareCopyMode === 'view'" :size="18" />
                 <Copy v-else :size="18" />
               </button>
@@ -1080,7 +1080,7 @@ onUnmounted(() => {
                 @click="toggleShareLink('edit')">
                 <span class="share-toggle-track"><span class="share-toggle-thumb" /></span>
               </button>
-              <button class="share-link-copy" :disabled="!shareLinks.edit.url" :aria-label="t('copyLink')" @click="copyShareLink('edit')">
+              <button class="icon-button share-link-copy" :disabled="!shareLinks.edit.url" :aria-label="t('copyLink')" @click="copyShareLink('edit')">
                 <ClipboardCheck v-if="shareCopyMode === 'edit'" :size="18" />
                 <Copy v-else :size="18" />
               </button>
