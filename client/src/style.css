@@ -203,6 +203,7 @@ button:disabled {
   margin-top: .75rem;
   padding-left: var(--content-pad-x);
   padding-right: var(--content-pad-right);
+  padding-bottom: .35rem;
   display: grid;
   grid-template-columns: 2fr 1fr;
   gap: .5rem;
@@ -234,21 +235,26 @@ button:disabled {
 .collection-filter-select {
   width: 100%;
   min-width: 0;
+  height: 2.3rem;
   border: 0;
   border-radius: 9999px;
   background: color-mix(in srgb, var(--accent) 14%, transparent);
   color: var(--muted);
-  padding: .46rem 2.2rem .46rem .7rem;
+  padding: 0 2.2rem 0 .7rem;
   outline: none;
-  font-size: .68rem;
+  font-size: .95rem;
   font-weight: 600;
-  line-height: 1;
+  line-height: 1.2;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   appearance: none;
   -webkit-appearance: none;
   transition: background-color .15s ease;
+}
+
+.collection-filter-select option {
+  font-size: 1rem;
 }
 
 .collection-filter-select::-ms-expand {
@@ -264,11 +270,12 @@ button:disabled {
 
 .search-input {
   width: 100%;
+  height: 2.3rem;
   border: 0;
   border-radius: 9999px;
   background: var(--surface-soft);
   color: var(--text);
-  padding: .7rem 2.75rem .7rem 2.3rem;
+  padding: 0 2.3rem 0 2.15rem;
   outline: none;
   font-size: 16px;
   line-height: 1.35;
@@ -302,8 +309,8 @@ button:disabled {
   right: 0;
   top: 50%;
   transform: translateY(-50%);
-  width: 2.75rem;
-  height: 2.75rem;
+  width: 2.3rem;
+  height: 2.3rem;
   padding: 0;
   display: inline-flex;
   align-items: center;
@@ -537,9 +544,9 @@ button:disabled {
 }
 
 .note-collection-chip {
-  display: inline-flex;
-  align-items: center;
+  display: inline-block;
   max-width: 6rem;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
