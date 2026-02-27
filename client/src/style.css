@@ -881,6 +881,8 @@ button:disabled {
 }
 
 .share-dialog {
+  --share-icon-button-size: 2.5rem;
+  --share-actions-column: 5.05rem;
   width: min(460px, 100%);
   background: var(--panel);
   border-radius: .8rem;
@@ -891,7 +893,7 @@ button:disabled {
 
 .share-dialog-header {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) var(--share-actions-column);
   align-items: start;
   gap: .5rem;
 }
@@ -902,13 +904,14 @@ button:disabled {
 }
 
 .share-dialog-close {
-  width: 2.75rem;
-  height: 2.75rem;
+  width: var(--share-icon-button-size);
+  height: var(--share-icon-button-size);
   border-radius: 50%;
   background: var(--surface-hover);
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  justify-self: end;
   flex-shrink: 0;
   padding: 0;
   color: var(--muted);
@@ -919,7 +922,7 @@ button:disabled {
   border-radius: .7rem;
   padding: .65rem .75rem;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) var(--share-actions-column);
   gap: .5rem;
   align-items: center;
 }
@@ -993,8 +996,8 @@ button:disabled {
 }
 
 .share-link-copy {
-  width: 2.4rem;
-  height: 2.4rem;
+  width: var(--share-icon-button-size);
+  height: var(--share-icon-button-size);
   border-radius: 50%;
   background: color-mix(in srgb, var(--accent) 14%, transparent);
   display: inline-flex;
