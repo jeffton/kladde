@@ -35,7 +35,7 @@ func main() {
 		log.Fatalf("failed creating users dir: %v", err)
 	}
 
-	sharesFile := filepath.Join(filepath.Dir(opts.Notes), "shares.json")
+	sharesFile := filepath.Join(filepath.Dir(opts.Users), "shares.json")
 	if err := os.MkdirAll(filepath.Dir(sharesFile), 0o755); err != nil {
 		log.Fatalf("failed creating shares dir: %v", err)
 	}
