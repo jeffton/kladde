@@ -845,7 +845,7 @@ button:disabled {
   position: absolute;
   right: 0;
   top: calc(100% + .35rem);
-  min-width: 220px;
+  width: min(260px, calc(100vw - 1rem));
   border: 1px solid var(--border);
   border-radius: .5rem;
   background: color-mix(in srgb, var(--panel) 95%, var(--bg));
@@ -866,6 +866,7 @@ button:disabled {
 .note-menu-item,
 .note-menu-delete {
   width: 100%;
+  min-width: 0;
   min-height: 44px;
   text-align: left;
   border-radius: .4rem;
@@ -895,7 +896,9 @@ button:disabled {
 }
 
 .note-menu-label {
+  flex: 1;
   min-width: 0;
+  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
