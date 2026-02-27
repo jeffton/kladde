@@ -229,7 +229,7 @@ async function submitPasswordChange() {
           v-model="query"
           class="search-input"
           type="text"
-          :placeholder="t('search')"
+          placeholder=""
           @keydown="onKeydown" />
         <button v-if="query" class="search-clear" :aria-label="t('clearSearch')" @click="clearQuery">
           <X :size="18" />
