@@ -1043,12 +1043,10 @@ onUnmounted(() => {
     <Teleport v-if="isFullMode" to="body">
       <div v-if="showShareDialog" class="share-dialog-backdrop" @click.self="closeShareDialog">
         <div class="share-dialog" role="dialog" aria-modal="true" :aria-label="t('shareNote')">
-          <div class="share-dialog-header">
-            <h2 class="share-dialog-title">{{ t('shareNote') }}</h2>
-            <button class="share-dialog-close" type="button" :aria-label="t('close')" @click="closeShareDialog">
-              <X :size="20" />
-            </button>
-          </div>
+          <h2 class="share-dialog-title">{{ t('shareNote') }}</h2>
+          <button class="share-dialog-close" type="button" :aria-label="t('close')" @click="closeShareDialog">
+            <X :size="20" />
+          </button>
 
           <div class="share-link-row">
             <div class="share-link-info">
