@@ -118,7 +118,7 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusUnauthorized, errors.New("invalid share token"))
 			return
 		}
-		if _, err := s.requireEditShareToken(token); err != nil {
+		if _, err := s.requireShareToken(token); err != nil {
 			writeError(w, http.StatusUnauthorized, errors.New("invalid share token"))
 			return
 		}

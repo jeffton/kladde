@@ -27,6 +27,7 @@ interface Props {
   editor: Editor | null
   isPlain?: boolean
   showModeToggle?: boolean
+  readonly?: boolean
 }
 
 type ListTarget = 'bullet' | 'ordered' | 'task'
@@ -34,7 +35,8 @@ type ListTarget = 'bullet' | 'ordered' | 'task'
 const props = withDefaults(defineProps<Props>(), {
   editor: null,
   isPlain: false,
-  showModeToggle: true
+  showModeToggle: true,
+  readonly: false
 })
 
 const emit = defineEmits<{
@@ -56,7 +58,7 @@ function run(action: string, richAction?: () => void) {
 }
 
 function isDisabled() {
-  return !props.editor && !props.isPlain
+  return props.readonly || (!props.editor && !props.isPlain)
 }
 
 function toggleMore() {

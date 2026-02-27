@@ -1,11 +1,9 @@
 package main
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"html/template"
 	"io/fs"
 	"net/http"
 	"net/url"
@@ -14,9 +12,6 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
-
-	"github.com/yuin/goldmark"
-	"github.com/yuin/goldmark/extension"
 )
 
 const (
@@ -171,12 +166,12 @@ func (s *Server) findShare(token string) (ShareRecord, bool) {
 	return record, ok
 }
 
-func (s *Server) requireEditShareToken(token string) (ShareRecord, error) {
+func (s *Server) requireShareToken(token string) (ShareRecord, error) {
 	if err := ensureShareToken(token); err != nil {
 		return ShareRecord{}, err
 	}
 	record, ok := s.findShare(token)
-	if !ok || record.Mode != shareModeEdit {
+	if !ok {
 		return ShareRecord{}, errors.New("invalid share token")
 	}
 	if _, _, _, err := parseShareFileRef(record.File); err != nil {
@@ -197,13 +192,13 @@ func (s *Server) tokenForFileAndMode(file, mode string) string {
 	return ""
 }
 
-func (s *Server) listEditShareTokensForFile(file string) []string {
+func (s *Server) listShareTokensForFile(file string) []string {
 	s.sharesMu.RLock()
 	defer s.sharesMu.RUnlock()
 
 	result := make([]string, 0, 2)
 	for token, record := range s.shares {
-		if record.Mode != shareModeEdit || record.File != file {
+		if record.File != file {
 			continue
 		}
 		result = append(result, token)
@@ -368,140 +363,9 @@ func (s *Server) broadcastNoteChange(username string, event NoteChangeEvent) {
 	s.hub.Broadcast(userBroadcastChannel(username), event)
 
 	file := shareFileRef(username, event.Title, event.Collection)
-	for _, token := range s.listEditShareTokensForFile(file) {
+	for _, token := range s.listShareTokensForFile(file) {
 		s.hub.Broadcast(shareBroadcastChannel(token), event)
 	}
-}
-
-var readonlyRenderer = goldmark.New(
-	goldmark.WithExtensions(extension.GFM),
-)
-
-var readonlyShareTemplate = template.Must(template.New("readonly-share").Parse(`<!doctype html>
-<html lang="da">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>{{.Title}} · kladde</title>
-    <style>
-      :root {
-        color-scheme: light dark;
-        --bg: #f0ece4;
-        --panel: #f7f4ed;
-        --text: #292524;
-        --muted: #78716c;
-        --accent: #57534e;
-      }
-      @media (prefers-color-scheme: dark) {
-        :root {
-          --bg: #292321;
-          --panel: #322b28;
-          --text: #ece7e2;
-          --muted: #a8a29e;
-          --accent: #d6d3d1;
-        }
-      }
-      body {
-        margin: 0;
-        font-family: Inter, system-ui, sans-serif;
-        background: var(--bg);
-        color: var(--text);
-      }
-      main {
-        width: min(820px, calc(100vw - 2rem));
-        margin: 1.5rem auto 3rem;
-      }
-      .card {
-        background: var(--panel);
-        border-radius: .8rem;
-        padding: 1rem 1.1rem;
-      }
-      h1 {
-        margin: 0;
-        font-size: clamp(1.5rem, 3vw, 2rem);
-      }
-      .top {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        gap: .6rem;
-        margin-bottom: .85rem;
-      }
-      .copy {
-        border: 0;
-        border-radius: 999px;
-        background: color-mix(in srgb, var(--accent) 16%, var(--panel));
-        color: var(--text);
-        padding: .55rem .85rem;
-        font-size: .92rem;
-        cursor: pointer;
-      }
-      .status {
-        color: var(--muted);
-        font-size: .85rem;
-      }
-      article {
-        font-size: 1.05rem;
-        line-height: 1.6;
-      }
-      article :first-child { margin-top: 0; }
-      article :last-child { margin-bottom: 0; }
-      article code {
-        background: color-mix(in srgb, var(--muted) 18%, transparent);
-        border-radius: .3rem;
-        padding: .1rem .28rem;
-      }
-      article pre {
-        background: color-mix(in srgb, var(--muted) 18%, transparent);
-        border-radius: .45rem;
-        padding: .7rem;
-        overflow-x: auto;
-      }
-      article pre code {
-        background: transparent;
-        padding: 0;
-      }
-      article blockquote {
-        margin: .8rem 0;
-        padding-left: .8rem;
-        border-left: 3px solid color-mix(in srgb, var(--muted) 35%, transparent);
-        color: var(--muted);
-      }
-    </style>
-  </head>
-  <body>
-    <main>
-      <div class="card">
-        <div class="top">
-          <h1>{{.Title}}</h1>
-          <button class="copy" id="copy-md" type="button">Kopiér som markdown</button>
-        </div>
-        <div class="status" id="copy-status"></div>
-        <article>{{.HTML}}</article>
-      </div>
-    </main>
-    <script>
-      const markdown = {{.MarkdownJSON}};
-      const button = document.getElementById('copy-md');
-      const status = document.getElementById('copy-status');
-      button?.addEventListener('click', async () => {
-        try {
-          await navigator.clipboard.writeText(markdown);
-          if (status) status.textContent = 'Markdown kopieret';
-        } catch {
-          if (status) status.textContent = 'Kunne ikke kopiere';
-        }
-      });
-    </script>
-  </body>
-</html>`))
-
-func renderReadonlyMarkdown(markdown string) (template.HTML, error) {
-	var out bytes.Buffer
-	if err := readonlyRenderer.Convert([]byte(markdown), &out); err != nil {
-		return "", err
-	}
-	return template.HTML(out.String()), nil
 }
 
 func (s *Server) resolveShareTokenFromPath(pathValue, prefix string) (string, error) {
@@ -532,54 +396,17 @@ func (s *Server) handleSharePage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	record, ok := s.findShare(token)
-	if !ok {
-		writeError(w, http.StatusNotFound, errors.New("share not found"))
-		return
-	}
-
-	switch record.Mode {
-	case shareModeView:
-		s.renderReadonlySharePage(w, record)
-	case shareModeEdit:
-		http.ServeFile(w, r, filepath.Join(s.clientDir, "index.html"))
-	default:
-		writeError(w, http.StatusNotFound, errors.New("share not found"))
-	}
-}
-
-func (s *Server) renderReadonlySharePage(w http.ResponseWriter, record ShareRecord) {
-	username, title, collection, err := parseShareFileRef(record.File)
+	record, err := s.requireShareToken(token)
 	if err != nil {
 		writeError(w, http.StatusNotFound, errors.New("share not found"))
 		return
 	}
-
-	note, err := s.getNote(s.userNotesDir(username), title, collection)
-	if err != nil {
-		if errors.Is(err, fs.ErrNotExist) {
-			writeError(w, http.StatusNotFound, errors.New("note not found"))
-			return
-		}
-		writeError(w, http.StatusInternalServerError, err)
+	if record.Mode != shareModeView && record.Mode != shareModeEdit {
+		writeError(w, http.StatusNotFound, errors.New("share not found"))
 		return
 	}
 
-	htmlContent, err := renderReadonlyMarkdown(note.Content)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, err)
-		return
-	}
-	markdownJSON, _ := json.Marshal(note.Content)
-
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := readonlyShareTemplate.Execute(w, map[string]any{
-		"Title":        note.Title,
-		"HTML":         htmlContent,
-		"MarkdownJSON": template.JS(string(markdownJSON)),
-	}); err != nil {
-		writeError(w, http.StatusInternalServerError, err)
-	}
+	http.ServeFile(w, r, filepath.Join(s.clientDir, "index.html"))
 }
 
 func (s *Server) handleSharedNoteAPI(w http.ResponseWriter, r *http.Request) {
@@ -596,7 +423,7 @@ func (s *Server) handleSharedNoteAPI(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	record, err := s.requireEditShareToken(token)
+	record, err := s.requireShareToken(token)
 	if err != nil {
 		writeError(w, http.StatusUnauthorized, errors.New("invalid share token"))
 		return
@@ -611,6 +438,18 @@ func (s *Server) handleSharedNoteAPI(w http.ResponseWriter, r *http.Request) {
 	userDir := s.userNotesDir(username)
 	origin := readChangeOrigin(r)
 
+	writeSharedNote := func(status int, note *Note, mode string) {
+		writeJSON(w, status, map[string]any{
+			"key":        note.Key,
+			"title":      note.Title,
+			"collection": note.Collection,
+			"content":    note.Content,
+			"updatedAt":  note.UpdatedAt,
+			"starred":    note.Starred,
+			"shareMode":  mode,
+		})
+	}
+
 	switch r.Method {
 	case http.MethodGet:
 		note, err := s.getNote(userDir, title, collection)
@@ -622,8 +461,13 @@ func (s *Server) handleSharedNoteAPI(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusInternalServerError, err)
 			return
 		}
-		writeJSON(w, http.StatusOK, note)
+		writeSharedNote(http.StatusOK, note, record.Mode)
 	case http.MethodPut:
+		if record.Mode != shareModeEdit {
+			writeError(w, http.StatusForbidden, errors.New("share token is read-only"))
+			return
+		}
+
 		var payload struct {
 			Content string `json:"content"`
 		}
@@ -647,7 +491,7 @@ func (s *Server) handleSharedNoteAPI(w http.ResponseWriter, r *http.Request) {
 			Action:     action,
 			Origin:     origin,
 		})
-		writeJSON(w, http.StatusOK, note)
+		writeSharedNote(http.StatusOK, note, record.Mode)
 	default:
 		w.WriteHeader(http.StatusMethodNotAllowed)
 	}

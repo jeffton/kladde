@@ -131,6 +131,23 @@ select {
   grid-template-columns: minmax(0, 1fr);
 }
 
+.share-shell .editor-area {
+  width: min(980px, 100%);
+  margin: 0 auto;
+}
+
+.share-loading-state {
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: .35rem;
+}
+
+.share-loading-state p {
+  margin: 0;
+  color: var(--muted);
+}
+
 .sidebar {
   padding: 0;
   background: var(--panel);
@@ -917,34 +934,6 @@ button:disabled {
 .share-dialog-actions {
   display: flex;
   justify-content: flex-end;
-}
-
-.share-editor-area {
-  width: min(980px, 100%);
-  margin: 0 auto;
-}
-
-.share-header {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: .75rem;
-  margin-bottom: .45rem;
-}
-
-.share-title {
-  margin: 0;
-  font-size: clamp(1.45rem, 2.8vw, 2rem);
-}
-
-.share-status {
-  color: var(--muted);
-  font-size: .9rem;
-}
-
-.share-error {
-  margin: 0 0 .5rem;
-  color: #ef4444;
 }
 
 .plain-wrap,

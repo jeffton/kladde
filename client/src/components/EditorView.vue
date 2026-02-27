@@ -27,18 +27,19 @@ import {
   Trash2
 } from 'lucide-vue-next'
 import EditorToolbar from './EditorToolbar.vue'
-import type { NotesStore } from '../stores/notes'
 import { apiFetch, shareNotePathApi } from '../stores/notesApi'
-import type { ShareLinksResponse, ShareMode } from '../types'
+import type { AppMode, EditorStoreLike, ShareLinksResponse, ShareMode } from '../types'
 import { intlLocale, t } from '../i18n'
 
 interface Props {
-  store: NotesStore
+  store: EditorStoreLike
   showBack?: boolean
+  mode?: AppMode
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  showBack: false
+  showBack: false,
+  mode: 'full'
 })
 
 const emit = defineEmits<{
@@ -47,6 +48,9 @@ const emit = defineEmits<{
   (e: 'deleted'): void
   (e: 'ui-error', message: string): void
 }>()
+
+const isFullMode = computed(() => props.mode === 'full')
+const isReadonlyMode = computed(() => props.mode === 'share-readonly')
 
 const editableTitle = ref('')
 const titleInput = ref<HTMLInputElement | null>(null)
@@ -413,6 +417,12 @@ const statusMeta = computed(() => {
 
   const lines: string[] = []
 
+  if (isReadonlyMode.value) {
+    if (modifiedLine) lines.push(modifiedLine)
+    lines.push(t('shareReadonly'))
+    return { state: 'synced' as const, lines }
+  }
+
   if (syncState === 'offline') {
     lines.push(t('offline'))
     if (modifiedLine) lines.push(modifiedLine)
@@ -473,6 +483,7 @@ const editor = useEditor({
       click: (_view, event) => handleTaskCheckboxClick(event)
     }
   },
+  editable: !isReadonlyMode.value,
   content: props.store.currentContent || '',
   onUpdate: ({ editor: tiptapEditor }) => {
     if (ignoreEditorChanges) return
@@ -661,8 +672,17 @@ function applyPlainAction(action: string) {
   }
 }
 
+function onPlainInput(event: Event) {
+  if (isReadonlyMode.value) return
+
+  const value = (event.target as HTMLTextAreaElement).value
+  void props.store.setCurrentContent(value).catch((err: unknown) => {
+    emit('ui-error', (err as Error)?.message || t('couldNotSaveLocally'))
+  })
+}
+
 async function commitTitleChange() {
-  if (!props.store.selectedKey) return
+  if (!isFullMode.value || !props.store.selectedKey) return
   const next = editableTitle.value.trim()
 
   if (!next) {
@@ -681,6 +701,7 @@ async function commitTitleChange() {
 }
 
 function toggleNoteMenu() {
+  if (!isFullMode.value) return
   showNoteMenu.value = !showNoteMenu.value
 }
 
@@ -695,7 +716,7 @@ function isValidCollectionName(value: string): boolean {
 }
 
 async function moveCurrentToCollection(collection: string) {
-  if (!props.store.selectedKey) return
+  if (!isFullMode.value || !props.store.selectedKey) return
 
   const targetCollection = selectedCollection.value === collection ? '' : collection
 
@@ -709,7 +730,7 @@ async function moveCurrentToCollection(collection: string) {
 }
 
 async function createCollectionAndMove() {
-  if (!props.store.selectedKey) return
+  if (!isFullMode.value || !props.store.selectedKey) return
 
   const candidate = window.prompt(t('newCollectionPrompt'))
   if (candidate === null) return
@@ -724,7 +745,7 @@ async function createCollectionAndMove() {
 }
 
 async function loadShareLinks() {
-  if (!props.store.selectedTitle) return
+  if (!isFullMode.value || !props.store.selectedTitle) return
   shareLoading.value = true
 
   try {
@@ -738,6 +759,7 @@ async function loadShareLinks() {
 }
 
 function openShareDialog() {
+  if (!isFullMode.value) return
   showNoteMenu.value = false
   showShareDialog.value = true
   shareCopyMode.value = ''
@@ -751,7 +773,7 @@ function closeShareDialog() {
 }
 
 async function toggleShareLink(mode: ShareMode) {
-  if (!props.store.selectedTitle) return
+  if (!isFullMode.value || !props.store.selectedTitle) return
   if (shareBusyMode.value) return
 
   shareBusyMode.value = mode
@@ -790,7 +812,7 @@ async function copyShareLink(mode: ShareMode) {
 }
 
 async function deleteCurrentNote() {
-  if (!props.store.selectedKey) return
+  if (!isFullMode.value || !props.store.selectedKey) return
   const confirmed = window.confirm(t('confirmDelete'))
   if (!confirmed) return
 
@@ -852,6 +874,14 @@ function resetEditorScrollPosition() {
   reset(wysiwygWrap.value?.querySelector<HTMLElement>('.tiptap-root'))
   reset(wysiwygWrap.value?.querySelector<HTMLElement>('.ProseMirror'))
 }
+
+watch(
+  () => props.mode,
+  (mode) => {
+    editor.value?.setEditable(mode !== 'share-readonly')
+  },
+  { immediate: true }
+)
 
 watch(showPlain, (isPlain) => {
   if (isPlain) {
@@ -930,6 +960,7 @@ onUnmounted(() => {
         class="note-title-input"
         type="text"
         spellcheck="false"
+        :readonly="!isFullMode"
         @blur="commitTitleChange"
         @keydown.enter.prevent="($event.target as HTMLInputElement).blur()" />
 
@@ -955,7 +986,7 @@ onUnmounted(() => {
         </div>
       </div>
 
-      <div ref="noteMenuWrap" class="note-menu-wrap">
+      <div v-if="isFullMode" ref="noteMenuWrap" class="note-menu-wrap">
         <button class="note-menu-button" :aria-label="t('more')" :aria-expanded="showNoteMenu" @click="toggleNoteMenu">
           <MoreVertical :size="20" />
         </button>
@@ -1006,7 +1037,7 @@ onUnmounted(() => {
       </div>
     </div>
 
-    <Teleport to="body">
+    <Teleport v-if="isFullMode" to="body">
       <div v-if="showShareDialog" class="share-dialog-backdrop" @click.self="closeShareDialog">
         <div class="share-dialog" role="dialog" aria-modal="true" :aria-label="t('shareNote')">
           <h2 class="share-dialog-title">{{ t('shareNote') }}</h2>
@@ -1047,6 +1078,7 @@ onUnmounted(() => {
     <EditorToolbar
       :editor="editor || null"
       :is-plain="showPlain"
+      :readonly="isReadonlyMode"
       @toggle-plain="showPlain = !showPlain"
       @plain-action="applyPlainAction" />
 
@@ -1054,7 +1086,8 @@ onUnmounted(() => {
       <textarea
         ref="plainTextarea"
         :value="store.currentContent"
-        @input="store.setCurrentContent(($event.target as HTMLTextAreaElement).value)"></textarea>
+        :readonly="isReadonlyMode"
+        @input="onPlainInput"></textarea>
     </section>
     <section v-else ref="wysiwygWrap" class="wysiwyg-wrap">
       <EditorContent v-if="editor" :editor="editor || null" class="tiptap-root" />

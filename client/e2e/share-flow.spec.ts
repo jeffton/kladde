@@ -43,10 +43,29 @@ test.describe('Share flow', () => {
     expect(viewUrl).toBeTruthy()
     expect(editUrl).toBeTruthy()
 
+    await page.locator('.share-dialog-close').click()
+
+    const renamedTitle = `share-flow-renamed-${Date.now()}`
+    await page.locator('.note-title-input').fill(renamedTitle)
+    await page.locator('.note-title-input').press('Enter')
+    await expect(page.locator('.note-title-input')).toHaveValue(renamedTitle)
+
+    const collectionName = `deling-${Date.now()}`
+    page.once('dialog', (dialog) => dialog.accept(collectionName))
+    await page.locator('.note-menu-button').click()
+    await page.locator('.note-menu-item').filter({ has: page.locator('.lucide-folder-plus') }).click()
+
+    await page.waitForTimeout(800)
+
     const readonlyContext = await browser.newContext()
     const readonlyPage = await readonlyContext.newPage()
     await readonlyPage.goto(String(viewUrl), { waitUntil: 'networkidle' })
-    await expect(readonlyPage.locator('article')).toContainText('første linje')
+
+    const readonlyEditor = readonlyPage.locator('.tiptap-root .ProseMirror')
+    await expect(readonlyEditor).toBeVisible()
+    await expect(readonlyEditor).toContainText('første linje')
+    await expect(readonlyEditor).toHaveAttribute('contenteditable', 'false')
+    await expect(readonlyPage.locator('.note-title-input')).toHaveValue(renamedTitle)
     await readonlyPage.screenshot({ path: '../screenshots/playwright-share-readonly.png', fullPage: true })
 
     const guestContext = await browser.newContext()
@@ -55,6 +74,8 @@ test.describe('Share flow', () => {
 
     const guestEditor = guestPage.locator('.tiptap-root .ProseMirror')
     await expect(guestEditor).toBeVisible()
+    await expect(guestEditor).toHaveAttribute('contenteditable', 'true')
+    await expect(guestPage.locator('.note-title-input')).toHaveValue(renamedTitle)
     await guestPage.screenshot({ path: '../screenshots/playwright-share-editor.png', fullPage: true })
 
     await guestEditor.click()
