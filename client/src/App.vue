@@ -8,7 +8,7 @@ import { useAutosave } from './composables/useAutosave'
 import { useShareSession } from './composables/useShareSession'
 import type { AppMode, AuthUser } from './types'
 import { t } from './i18n'
-import { isIndexedDbRuntimeError, isNetworkError } from './stores/notesErrors'
+import { isIndexedDbRuntimeError, isNetworkError, isUnauthorizedError, UNAUTHORIZED_EVENT } from './stores/notesErrors'
 
 const store = useNotesStore()
 const route = useRoute()
@@ -74,7 +74,15 @@ function isAbortError(err: unknown): boolean {
 }
 
 function isUnauthorized(err: unknown): boolean {
-  return (err as Error)?.message === 'UNAUTHORIZED'
+  return isUnauthorizedError(err)
+}
+
+function handleUnauthorizedSession() {
+  user.value = null
+  writeCachedAuthUser(null)
+  clearUiError()
+  loginError.value = ''
+  storeInitialized = false
 }
 
 function clearUiError() {
@@ -83,9 +91,7 @@ function clearUiError() {
 
 function setUiError(err: unknown) {
   if (isUnauthorized(err)) {
-    user.value = null
-    writeCachedAuthUser(null)
-    clearUiError()
+    handleUnauthorizedSession()
     return
   }
 
@@ -119,8 +125,7 @@ async function loadMe(background = false) {
     }
 
     if (res.status === 401) {
-      user.value = null
-      writeCachedAuthUser(null)
+      handleUnauthorizedSession()
       return
     }
 
@@ -253,6 +258,9 @@ async function togglePin(key: string) {
 
 const online = () => store.setOnline(true)
 const offline = () => store.setOnline(false)
+const onUnauthorizedEvent = () => {
+  handleUnauthorizedSession()
+}
 
 useAutosave({
   store,
@@ -382,6 +390,8 @@ watch(
 )
 
 onMounted(async () => {
+  window.addEventListener(UNAUTHORIZED_EVENT, onUnauthorizedEvent)
+
   if (isShareRoute.value) {
     authChecked.value = true
     return
@@ -418,6 +428,8 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
+  window.removeEventListener(UNAUTHORIZED_EVENT, onUnauthorizedEvent)
+
   if (media && mediaListener) media.removeEventListener('change', mediaListener)
   window.removeEventListener('online', online)
   window.removeEventListener('offline', offline)

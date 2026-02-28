@@ -7,7 +7,7 @@ import { apiFetch, clientOrigin, isNotFoundError, notePathApi } from './notesApi
 import { createNotesWebSocket } from './notesWebSocket'
 import { createNotesPersist } from './notesPersist'
 import { createNotesSync } from './notesSync'
-import { isNetworkError, toUserSyncError } from './notesErrors'
+import { emitUnauthorizedEvent, isNetworkError, isUnauthorizedError, toUserSyncError } from './notesErrors'
 import {
   buildNoteKey,
   isServerBacked,
@@ -109,6 +109,13 @@ export const useNotesStore = defineStore('notes', () => {
   }
 
   const handleSyncFailure = (err: unknown, fallback: string) => {
+    if (isUnauthorizedError(err)) {
+      clearSyncRetry()
+      clearSyncError()
+      emitUnauthorizedEvent()
+      return
+    }
+
     if (isNetworkError(err) && (typeof navigator !== 'undefined' && !navigator.onLine)) {
       online.value = false
       clearSyncError()

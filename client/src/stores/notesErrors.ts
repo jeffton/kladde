@@ -1,5 +1,16 @@
 import { t } from '../i18n'
 
+export const UNAUTHORIZED_EVENT = 'kladde:unauthorized'
+
+export function isUnauthorizedError(err: unknown): boolean {
+  return (err as Error)?.message === 'UNAUTHORIZED'
+}
+
+export function emitUnauthorizedEvent() {
+  if (typeof window === 'undefined') return
+  window.dispatchEvent(new Event(UNAUTHORIZED_EVENT))
+}
+
 export function isNetworkError(err: unknown): boolean {
   if (!err) return false
   if (typeof navigator !== 'undefined' && navigator.onLine === false) return true
@@ -36,7 +47,7 @@ export function isIndexedDbRuntimeError(err: unknown): boolean {
 }
 
 export function toUserSyncError(err: unknown, fallback: string): string {
-  if ((err as Error)?.message === 'UNAUTHORIZED') return 'UNAUTHORIZED'
+  if (isUnauthorizedError(err)) return 'UNAUTHORIZED'
   if (isNetworkError(err)) return t('temporaryConnectionIssue')
   if (isIndexedDbRuntimeError(err)) return t('couldNotSaveLocally')
   return (err as Error)?.message || fallback

@@ -2,6 +2,7 @@ import type { Ref } from 'vue'
 import type { CachedNote, NoteResponse } from '../types'
 import { normalizeCollection } from './notesModel'
 import { notePathApi } from './notesApi'
+import { emitUnauthorizedEvent, isUnauthorizedError } from './notesErrors'
 
 interface NotesWebSocketDeps {
   online: Ref<boolean>
@@ -208,11 +209,12 @@ export function createNotesWebSocket(deps: NotesWebSocketDeps) {
           await deps.apiFetch('/client-api/me')
           lastMeUnauthorized = false
         } catch (err: unknown) {
-          lastMeUnauthorized = (err as Error)?.message === 'UNAUTHORIZED'
+          lastMeUnauthorized = isUnauthorizedError(err)
         }
 
         if (lastMeUnauthorized) {
           wsReconnectDisabled = true
+          emitUnauthorizedEvent()
           return
         }
 
