@@ -1,7 +1,7 @@
 import type { Ref } from 'vue'
 import type { CachedNote, NoteMeta, NoteResponse, PendingOp, RenameResponse } from '../types'
 import { t } from '../i18n'
-import { buildNoteKey, normalizeCollection, normalizeTs, splitNoteKey } from './notesModel'
+import { normalizeCollection, normalizeTs, splitNoteKey } from './notesModel'
 import { notePathApi, renameNotePathApi, starNotePathApi } from './notesApi'
 
 interface NotesSyncDeps {
@@ -38,7 +38,7 @@ interface NotesSyncDeps {
 }
 
 interface ServerNoteMeta {
-  key?: string
+  key: string
   title: string
   collection?: string
   updatedAt: string
@@ -50,7 +50,7 @@ function normalizeServerNote(note: NoteResponse): CachedNote {
   const title = note.title.trim()
 
   return {
-    key: note.key.trim() || buildNoteKey(title, collection),
+    key: note.key.trim(),
     title,
     collection,
     content: note.content,
@@ -66,7 +66,7 @@ function normalizeServerMeta(meta: ServerNoteMeta): NoteMeta {
   const title = meta.title.trim()
 
   return {
-    key: meta.key?.trim() || buildNoteKey(title, collection),
+    key: meta.key.trim(),
     title,
     collection,
     updatedAt: normalizeTs(meta.updatedAt),
@@ -253,7 +253,6 @@ export function createNotesSync(deps: NotesSyncDeps) {
 
       const payload = normalizeServerNote((await res.json()) as RenameResponse)
       const serverKey = payload.key
-      if (!serverKey) throw new Error(t('invalidServerTitle'))
 
       const renamedLocal = await deps.getCachedNote(op.newKey)
       if (renamedLocal) {

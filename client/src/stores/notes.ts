@@ -28,7 +28,7 @@ function normalizeServerNote(note: NoteResponse): CachedNote {
   const title = note.title.trim()
 
   return {
-    key: note.key.trim() || buildNoteKey(title, collection),
+    key: note.key.trim(),
     title,
     collection,
     content: note.content,

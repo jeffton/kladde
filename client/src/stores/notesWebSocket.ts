@@ -1,6 +1,6 @@
 import type { Ref } from 'vue'
 import type { CachedNote, NoteResponse } from '../types'
-import { buildNoteKey, normalizeCollection, splitNoteKey } from './notesModel'
+import { normalizeCollection } from './notesModel'
 import { notePathApi } from './notesApi'
 
 interface NotesWebSocketDeps {
@@ -27,7 +27,7 @@ function normalizeServerNote(note: NoteResponse): CachedNote {
   const title = note.title.trim()
 
   return {
-    key: note.key.trim() || buildNoteKey(title, collection),
+    key: note.key.trim(),
     title,
     collection,
     content: note.content,
@@ -172,22 +172,18 @@ export function createNotesWebSocket(deps: NotesWebSocketDeps) {
     ws.onmessage = (event) => {
       try {
         const payload = JSON.parse(String(event.data)) as {
-          type?: string
-          key?: string
-          title?: string
+          type: string
+          key: string
+          title: string
           collection?: string
-          action?: string
+          action: string
           origin?: string
         }
-        if (payload.type === 'note_changed' && payload.action) {
+        if (payload.type === 'note_changed') {
           if (payload.origin && payload.origin === deps.clientOrigin) return
 
           const collection = normalizeCollection(payload.collection)
-          const title = payload.title || splitNoteKey(payload.key || '').title
-          if (!title) return
-
-          const key = payload.key || buildNoteKey(title, collection)
-          queueRemoteChange(key, title, collection, payload.action)
+          queueRemoteChange(payload.key.trim(), payload.title.trim(), collection, payload.action)
         }
       } catch {
         // ignore malformed payloads

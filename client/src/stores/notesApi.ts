@@ -25,7 +25,7 @@ export function isNotFoundError(err: unknown): boolean {
 }
 
 function withCollectionQuery(path: string, collection?: string | null): string {
-  const normalizedCollection = (collection || '').trim()
+  const normalizedCollection = collection?.trim() ?? ''
   if (!normalizedCollection) return path
 
   const separator = path.includes('?') ? '&' : '?'
@@ -100,8 +100,8 @@ export async function apiFetch(input: RequestInfo | URL, init?: RequestInit): Pr
   if (!res.ok) {
     let message = t('requestFailed')
     try {
-      const payload = (await res.json()) as { error?: string }
-      if (payload?.error) message = payload.error
+      const payload = (await res.json()) as { error: string }
+      message = payload.error
     } catch {
       // no-op
     }

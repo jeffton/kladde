@@ -101,7 +101,7 @@ export function useShareSession({ isShareRoute, shareToken }: UseShareSessionOpt
   function applySharedNote(note: SharedNoteResponse) {
     shareMode.value = note.shareMode === 'edit' ? 'edit' : 'view'
 
-    const key = note.key.trim() || `share/${shareToken.value}`
+    const key = note.key.trim()
     const title = note.title.trim()
     const collection = (note.collection || '').trim()
     const content = note.content
