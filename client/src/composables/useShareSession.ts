@@ -1,5 +1,6 @@
 import { computed, onUnmounted, reactive, ref, type ComputedRef } from 'vue'
 import { ApiError, apiFetch, clientOrigin, sharedNotePathApi } from '../stores/notesApi'
+import { isUnauthorizedError } from '../stores/notesErrors'
 import { t } from '../i18n'
 import type { AppMode, EditorStoreLike, NoteMeta, SharedNoteResponse, ShareMode, SyncState } from '../types'
 
@@ -44,12 +45,12 @@ export function useShareSession({ isShareRoute, shareToken }: UseShareSessionOpt
 
   function toShareMessage(err: unknown): string {
     const message = (err as Error)?.message || ''
-    if (!message || message === 'UNAUTHORIZED') return t('genericError')
+    if (!message || isUnauthorizedError(err)) return t('genericError')
     return message
   }
 
   function isFatalShareError(err: unknown): boolean {
-    if ((err as Error)?.message === 'UNAUTHORIZED') return true
+    if (isUnauthorizedError(err)) return true
     if (err instanceof ApiError) {
       return err.status === 401 || err.status === 403 || err.status === 404
     }

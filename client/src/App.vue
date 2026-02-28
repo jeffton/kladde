@@ -73,10 +73,6 @@ function isAbortError(err: unknown): boolean {
   return err instanceof DOMException && err.name === 'AbortError'
 }
 
-function isUnauthorized(err: unknown): boolean {
-  return isUnauthorizedError(err)
-}
-
 function handleUnauthorizedSession() {
   user.value = null
   writeCachedAuthUser(null)
@@ -90,7 +86,7 @@ function clearUiError() {
 }
 
 function setUiError(err: unknown) {
-  if (isUnauthorized(err)) {
+  if (isUnauthorizedError(err)) {
     handleUnauthorizedSession()
     return
   }
