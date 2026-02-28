@@ -179,7 +179,23 @@ Example usage:
 
 ```bash
 TOKEN="kld_..."
+
+# List notes
 curl -H "Authorization: Bearer $TOKEN" http://127.0.0.1:8080/api/notes
+
+# Create/update a note inside collection "opskrifter"
+curl -X PUT \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: text/markdown" \
+  --data-binary $'# Carbonara\n\n- Æg' \
+  http://127.0.0.1:8080/api/notes/opskrifter/carbonara
+
+# Rename/move a note
+curl -X PUT \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"from":"opskrifter/carbonara","to":"aftensmad/carbonara"}' \
+  http://127.0.0.1:8080/api/move
 ```
 
 ## Deploy (production)

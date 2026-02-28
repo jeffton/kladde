@@ -41,35 +41,38 @@ func agentNotePath(title, collection string) string {
 	return collection + "/" + title
 }
 
-func parseAgentNotePath(r *http.Request) (string, string, error) {
-	rest := strings.TrimPrefix(r.URL.Path, "/api/notes/")
-	rest = strings.TrimSpace(strings.Trim(rest, "/"))
-	if rest == "" {
+func parseAgentPathValue(raw string, unescape bool) (string, string, error) {
+	raw = strings.TrimSpace(strings.Trim(raw, "/"))
+	if raw == "" {
 		return "", "", errors.New("invalid note path")
 	}
 
-	parts := strings.Split(rest, "/")
+	parts := strings.Split(raw, "/")
 	if len(parts) > 2 {
 		return "", "", errors.New("invalid note path")
 	}
 
-	decoded := make([]string, 0, len(parts))
+	values := make([]string, 0, len(parts))
 	for _, part := range parts {
-		value, err := url.PathUnescape(part)
-		if err != nil {
-			return "", "", errors.New("invalid note path encoding")
+		value := part
+		if unescape {
+			decoded, err := url.PathUnescape(part)
+			if err != nil {
+				return "", "", errors.New("invalid note path encoding")
+			}
+			value = decoded
 		}
 		value = strings.TrimSpace(value)
 		if value == "" {
 			return "", "", errors.New("invalid note path")
 		}
-		decoded = append(decoded, value)
+		values = append(values, value)
 	}
 
-	title := decoded[len(decoded)-1]
+	title := values[len(values)-1]
 	collection := ""
-	if len(decoded) == 2 {
-		collection = decoded[0]
+	if len(values) == 2 {
+		collection = values[0]
 	}
 
 	if err := validateTitle(title); err != nil {
@@ -80,6 +83,11 @@ func parseAgentNotePath(r *http.Request) (string, string, error) {
 	}
 
 	return title, collection, nil
+}
+
+func parseAgentNotePath(r *http.Request) (string, string, error) {
+	rest := strings.TrimPrefix(r.URL.Path, "/api/notes/")
+	return parseAgentPathValue(rest, true)
 }
 
 func readMarkdownBody(w http.ResponseWriter, r *http.Request) (string, error) {
@@ -119,6 +127,7 @@ func (s *Server) handleAgentAPI(w http.ResponseWriter, r *http.Request) {
 			"PUT /api/notes/{path}":     "Write note (markdown body)",
 			"PATCH /api/notes/{path}":   "Find-and-replace (JSON: {find, replace})",
 			"DELETE /api/notes/{path}":  "Delete note",
+			"PUT /api/move":             "Move/rename note (JSON: {from, to})",
 			"GET /api/search?q={query}": "Full-text search across notes (JSON)",
 		},
 		"auth": "Bearer token in Authorization header",
@@ -126,6 +135,7 @@ func (s *Server) handleAgentAPI(w http.ResponseWriter, r *http.Request) {
 			"GET /api/notes/{path}":   "text/markdown",
 			"PUT /api/notes/{path}":   "text/markdown",
 			"PATCH /api/notes/{path}": "application/json request, text/markdown response",
+			"PUT /api/move":           "application/json",
 			"GET /api/notes":          "application/json",
 			"GET /api/search":         "application/json",
 			"errors":                  "application/json",
@@ -290,6 +300,63 @@ func (s *Server) handleAgentNoteByPath(w http.ResponseWriter, r *http.Request) {
 	default:
 		w.WriteHeader(http.StatusMethodNotAllowed)
 	}
+}
+
+func (s *Server) handleAgentMove(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPut {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	principal, ok := s.requireAPIKey(w, r)
+	if !ok {
+		return
+	}
+	if principal.ReadOnly {
+		writeError(w, http.StatusForbidden, errors.New("api key is read-only"))
+		return
+	}
+
+	var payload struct {
+		From string `json:"from"`
+		To   string `json:"to"`
+	}
+	if err := decodeJSONBody(w, r, &payload); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	oldTitle, oldCollection, err := parseAgentPathValue(payload.From, false)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, fmt.Errorf("invalid from path: %w", err))
+		return
+	}
+	newTitle, newCollection, err := parseAgentPathValue(payload.To, false)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, fmt.Errorf("invalid to path: %w", err))
+		return
+	}
+
+	userDir := s.userNotesDir(principal.Username)
+	if err := os.MkdirAll(userDir, 0o755); err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+
+	note, err := s.renameNote(userDir, oldTitle, oldCollection, newTitle, newCollection)
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			writeError(w, http.StatusNotFound, errors.New("note not found"))
+			return
+		}
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{
+		"from": payload.From,
+		"to":   agentNotePath(note.Title, note.Collection),
+	})
 }
 
 func (s *Server) handleAgentSearch(w http.ResponseWriter, r *http.Request) {

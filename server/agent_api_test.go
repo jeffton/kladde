@@ -81,6 +81,9 @@ func TestHandleAgentAPIPublicDocumentation(t *testing.T) {
 	if _, found := endpoints["PATCH /api/notes/{path}"]; !found {
 		t.Fatalf("expected PATCH endpoint in docs, got %#v", endpoints)
 	}
+	if _, found := endpoints["PUT /api/move"]; !found {
+		t.Fatalf("expected move endpoint in docs, got %#v", endpoints)
+	}
 }
 
 func TestAgentAPIRequiresAuthForNotesList(t *testing.T) {
@@ -163,6 +166,33 @@ func TestAgentAPIPatchRequiresSingleMatch(t *testing.T) {
 	}
 }
 
+func TestAgentAPIMoveRenamesAndMovesCollection(t *testing.T) {
+	s, token, _ := makeAgentTestServer(t, false)
+	userDir := s.userNotesDir("david")
+
+	if _, _, err := s.saveNote(userDir, "Indkøb", "", "hej"); err != nil {
+		t.Fatalf("seed note failed: %v", err)
+	}
+
+	req := authRequest(http.MethodPut, "/api/move", token, `{"from":"Indkøb","to":"opskrifter/Indkøb"}`)
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	s.handleAgentMove(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected move 200, got %d body=%s", w.Code, w.Body.String())
+	}
+
+	movedPath := filepath.Join(userDir, "opskrifter", "Indkøb.md")
+	if _, err := os.Stat(movedPath); err != nil {
+		t.Fatalf("expected moved note at %s, stat failed: %v", movedPath, err)
+	}
+
+	oldPath := filepath.Join(userDir, "Indkøb.md")
+	if _, err := os.Stat(oldPath); !os.IsNotExist(err) {
+		t.Fatalf("expected old note path to be gone, err=%v", err)
+	}
+}
+
 func TestAgentAPISearchReturnsLineMatches(t *testing.T) {
 	s, token, _ := makeAgentTestServer(t, false)
 	userDir := s.userNotesDir("david")
@@ -229,6 +259,14 @@ func TestAgentAPIReadOnlyKeyBlocksWrites(t *testing.T) {
 	s.handleAgentNoteByPath(deleteW, deleteReq)
 	if deleteW.Code != http.StatusForbidden {
 		t.Fatalf("expected DELETE 403 for readonly key, got %d body=%s", deleteW.Code, deleteW.Body.String())
+	}
+
+	moveReq := authRequest(http.MethodPut, "/api/move", token, `{"from":"Plan","to":"opskrifter/Plan"}`)
+	moveReq.Header.Set("Content-Type", "application/json")
+	moveW := httptest.NewRecorder()
+	s.handleAgentMove(moveW, moveReq)
+	if moveW.Code != http.StatusForbidden {
+		t.Fatalf("expected MOVE 403 for readonly key, got %d body=%s", moveW.Code, moveW.Body.String())
 	}
 }
 

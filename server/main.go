@@ -91,6 +91,7 @@ func main() {
 	mux.HandleFunc("/api", s.handleAgentAPI)
 	mux.HandleFunc("/api/notes", s.handleAgentNotes)
 	mux.HandleFunc("/api/notes/", s.handleAgentNoteByPath)
+	mux.HandleFunc("/api/move", s.handleAgentMove)
 	mux.HandleFunc("/api/search", s.handleAgentSearch)
 	mux.HandleFunc("/api/health", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
