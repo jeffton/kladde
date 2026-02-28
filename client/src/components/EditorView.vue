@@ -239,35 +239,10 @@ function isTaskCheckboxTarget(target: EventTarget | null): target is HTMLInputEl
   return Boolean(target.closest("ul[data-type='taskList'] li input[type='checkbox']"))
 }
 
-function syncTouchSelectionFromTarget(target: EventTarget | null) {
-  if (!touchDevice || !editor.value) return
-  if (!(target instanceof Node)) return
-
-  const root = editor.value.view.dom as HTMLElement
-  if (!root.contains(target)) return
-
-  const element = target.nodeType === Node.ELEMENT_NODE
-    ? (target as Element)
-    : target.parentElement
-
-  const paragraph = element?.closest('p')
-  if (!paragraph) return
-
-  const anchorNode = paragraph.firstChild || paragraph
-
-  try {
-    const selectionPos = editor.value.view.posAtDOM(anchorNode, 0)
-    editor.value.commands.setTextSelection(selectionPos)
-  } catch {
-    // Ignore unresolvable tap targets.
-  }
-}
-
 function handleTaskCheckboxPointerStart(event: Event): boolean {
   if (!touchDevice) return false
   if (!isTaskCheckboxTarget(event.target)) {
     shouldBlurAfterTaskCheckboxTap = false
-    syncTouchSelectionFromTarget(event.target)
     return false
   }
 
