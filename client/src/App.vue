@@ -113,7 +113,7 @@ async function loadMe(background = false) {
 
     let res: Response
     try {
-      res = await fetch('/api/me', { signal: controller.signal })
+      res = await fetch('/client-api/me', { signal: controller.signal })
     } finally {
       window.clearTimeout(timer)
     }

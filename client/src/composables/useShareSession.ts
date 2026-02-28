@@ -263,7 +263,7 @@ export function useShareSession({ isShareRoute, shareToken }: UseShareSessionOpt
     if (shareWs && (shareWs.readyState === WebSocket.OPEN || shareWs.readyState === WebSocket.CONNECTING)) return
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const wsUrl = `${protocol}//${window.location.host}/api/ws?shareToken=${encodeURIComponent(shareToken.value)}`
+    const wsUrl = `${protocol}//${window.location.host}/client-api/ws?shareToken=${encodeURIComponent(shareToken.value)}`
 
     try {
       shareWs = new WebSocket(wsUrl)

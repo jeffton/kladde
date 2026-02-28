@@ -155,7 +155,7 @@ async function submitPasswordChange() {
 
   changingPassword.value = true
   try {
-    const res = await fetch('/api/me/password', {
+    const res = await fetch('/client-api/me/password', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

@@ -410,7 +410,7 @@ func (s *Server) handleSharePage(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleSharedNoteAPI(w http.ResponseWriter, r *http.Request) {
-	rest := strings.Trim(strings.TrimPrefix(r.URL.Path, "/api/share/"), "/")
+	rest := strings.Trim(strings.TrimPrefix(r.URL.Path, "/client-api/share/"), "/")
 	parts := strings.Split(rest, "/")
 	if len(parts) != 2 || parts[1] != "note" {
 		writeError(w, http.StatusNotFound, errors.New("invalid share endpoint"))

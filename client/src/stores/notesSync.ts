@@ -108,7 +108,7 @@ export function createNotesSync(deps: NotesSyncDeps) {
     let res: Response
 
     if (local.existsOnServer === false) {
-      res = await deps.apiFetch('/api/notes', {
+      res = await deps.apiFetch('/client-api/notes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ title: localTitle, collection: localCollection, content: local.content })
@@ -124,7 +124,7 @@ export function createNotesSync(deps: NotesSyncDeps) {
         if (!deps.isNotFoundError(err)) throw err
 
         // Note doesn't exist on server — create it instead of discarding.
-        res = await deps.apiFetch('/api/notes', {
+        res = await deps.apiFetch('/client-api/notes', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ title: localTitle, collection: localCollection, content: local.content })
@@ -369,7 +369,7 @@ export function createNotesSync(deps: NotesSyncDeps) {
           await runPushDirtyNote(local.key)
         }
 
-        const metaRes = await deps.apiFetch('/api/notes')
+        const metaRes = await deps.apiFetch('/client-api/notes')
         const serverMetas = ((await metaRes.json()) as ServerNoteMeta[]).map(normalizeServerMeta)
         const currentLocalMap = new Map((await deps.getAllCachedNotes()).map((n) => [n.key, n]))
         const serverKeys = new Set(serverMetas.map((n) => n.key))

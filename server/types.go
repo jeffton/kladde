@@ -41,6 +41,21 @@ type UserRecord struct {
 	DisplayName  string `json:"displayName"`
 }
 
+type APIKeyRecord struct {
+	ID           string `json:"id"`
+	Name         string `json:"name"`
+	Username     string `json:"username"`
+	PasswordHash string `json:"passwordHash"`
+	ReadOnly     bool   `json:"readOnly"`
+}
+
+type APIPrincipal struct {
+	KeyID    string
+	Name     string
+	Username string
+	ReadOnly bool
+}
+
 type Session struct {
 	User      SessionUser
 	ExpiresAt time.Time
@@ -92,6 +107,7 @@ type Server struct {
 	notesBaseDir        string
 	clientDir           string
 	usersFile           string
+	apiKeysFile         string
 	sharesFile          string
 	shares              map[string]ShareRecord
 	sharesMu            sync.RWMutex

@@ -143,7 +143,7 @@ export function createNotesWebSocket(deps: NotesWebSocketDeps) {
     if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const wsUrl = `${protocol}//${window.location.host}/api/ws`
+    const wsUrl = `${protocol}//${window.location.host}/client-api/ws`
     let opened = false
 
     try {
@@ -205,7 +205,7 @@ export function createNotesWebSocket(deps: NotesWebSocketDeps) {
 
       void (async () => {
         try {
-          await deps.apiFetch('/api/me')
+          await deps.apiFetch('/client-api/me')
           lastMeUnauthorized = false
         } catch (err: unknown) {
           lastMeUnauthorized = (err as Error)?.message === 'UNAUTHORIZED'

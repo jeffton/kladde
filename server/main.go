@@ -9,11 +9,19 @@ import (
 )
 
 func main() {
-	if len(os.Args) > 1 && os.Args[1] == "adduser" {
-		if err := runAddUser(os.Args[2:]); err != nil {
-			log.Fatal(err)
+	if len(os.Args) > 1 {
+		switch os.Args[1] {
+		case "adduser":
+			if err := runAddUser(os.Args[2:]); err != nil {
+				log.Fatal(err)
+			}
+			return
+		case "addapikey":
+			if err := runAddAPIKey(os.Args[2:]); err != nil {
+				log.Fatal(err)
+			}
+			return
 		}
-		return
 	}
 
 	optionsDir := flag.String("options", "", "Path to options directory")
@@ -44,6 +52,7 @@ func main() {
 		notesBaseDir:        opts.Notes,
 		clientDir:           opts.Client,
 		usersFile:           opts.UsersFile,
+		apiKeysFile:         opts.APIKeysFile,
 		sharesFile:          sharesFile,
 		shares:              make(map[string]ShareRecord),
 		sessions:            make(map[string]Session),
@@ -71,15 +80,24 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/auth/login", s.handleAuthLogin)
 	mux.HandleFunc("/auth/logout", s.handleLogout)
-	mux.HandleFunc("/api/me", s.handleMe)
-	mux.HandleFunc("/api/me/password", s.handleChangePassword)
-	mux.HandleFunc("/api/notes", s.handleNotes)
-	mux.HandleFunc("/api/notes/", s.handleNoteByTitle)
-	mux.HandleFunc("/api/ws", s.handleWebSocket)
-	mux.HandleFunc("/api/share/", s.handleSharedNoteAPI)
+
+	mux.HandleFunc("/client-api/me", s.handleMe)
+	mux.HandleFunc("/client-api/me/password", s.handleChangePassword)
+	mux.HandleFunc("/client-api/notes", s.handleNotes)
+	mux.HandleFunc("/client-api/notes/", s.handleNoteByTitle)
+	mux.HandleFunc("/client-api/ws", s.handleWebSocket)
+	mux.HandleFunc("/client-api/share/", s.handleSharedNoteAPI)
+
+	mux.HandleFunc("/api", s.handleAgentAPI)
+	mux.HandleFunc("/api/notes", s.handleAgentNotes)
+	mux.HandleFunc("/api/notes/", s.handleAgentNoteByPath)
+	mux.HandleFunc("/api/search", s.handleAgentSearch)
 	mux.HandleFunc("/api/health", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 	})
+
+	mux.HandleFunc("/api/", s.handleAPINotFound)
+	mux.HandleFunc("/client-api/", s.handleAPINotFound)
 	mux.HandleFunc("/share/", s.handleSharePage)
 	mux.HandleFunc("/", s.handleSPA)
 

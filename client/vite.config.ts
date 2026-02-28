@@ -37,7 +37,7 @@ export default defineConfig({
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
         runtimeCaching: [
           {
-            urlPattern: /^\/api\/.*$/,
+            urlPattern: /^\/client-api\/.*$/,
             handler: 'NetworkFirst',
             options: {
               cacheName: 'api-cache',
@@ -54,6 +54,7 @@ export default defineConfig({
   ],
   server: {
     proxy: {
+      '/client-api': 'http://localhost:8080',
       '/api': 'http://localhost:8080'
     }
   }

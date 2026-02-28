@@ -139,6 +139,17 @@ Health check:
 curl http://127.0.0.1:8080/api/health
 ```
 
+## API layout
+
+- `/client-api/*` — web app API (cookie/session auth)
+- `/api/*` — agent API (Bearer token auth, markdown-first)
+
+Agent API is self-documenting:
+
+```bash
+curl http://127.0.0.1:8080/api
+```
+
 ## Create first user
 
 Before logging in, create a user (`users.json` lives in the options directory):
@@ -149,6 +160,26 @@ Before logging in, create a user (`users.json` lives in the options directory):
   --username admin \
   --password "<choose-a-strong-password>" \
   --name "Admin"
+```
+
+## Create an agent API key
+
+API keys are stored in `apikeys.json` in the options directory.
+The command prints the token once (copy it immediately):
+
+```bash
+./server/dist/kladde-server addapikey \
+  --keys ./tmp/apikeys.json \
+  --username admin \
+  --name "my-agent" \
+  --readonly
+```
+
+Example usage:
+
+```bash
+TOKEN="kld_..."
+curl -H "Authorization: Bearer $TOKEN" http://127.0.0.1:8080/api/notes
 ```
 
 ## Deploy (production)

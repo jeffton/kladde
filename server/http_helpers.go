@@ -44,7 +44,7 @@ func decodeJSONBody(w http.ResponseWriter, r *http.Request, dest any) error {
 }
 
 func (s *Server) handleSPA(w http.ResponseWriter, r *http.Request) {
-	if strings.HasPrefix(r.URL.Path, "/api/") {
+	if strings.HasPrefix(r.URL.Path, "/api/") || strings.HasPrefix(r.URL.Path, "/client-api/") || strings.HasPrefix(r.URL.Path, "/auth/") {
 		http.NotFound(w, r)
 		return
 	}
@@ -95,6 +95,10 @@ func writeJSON(w http.ResponseWriter, status int, data any) {
 	if err := json.NewEncoder(w).Encode(data); err != nil {
 		log.Printf("failed to write JSON response: %v", err)
 	}
+}
+
+func (s *Server) handleAPINotFound(w http.ResponseWriter, r *http.Request) {
+	writeError(w, http.StatusNotFound, errors.New("endpoint not found"))
 }
 
 func loggingMiddleware(next http.Handler) http.Handler {

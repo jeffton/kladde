@@ -24,8 +24,9 @@ type Options struct {
 	Client    string           `json:"client"`
 	GitBackup GitBackupOptions `json:"gitBackup"`
 
-	OptionsDir string `json:"-"`
-	UsersFile  string `json:"-"`
+	OptionsDir  string `json:"-"`
+	UsersFile   string `json:"-"`
+	APIKeysFile string `json:"-"`
 }
 
 func defaultOptions() Options {
@@ -89,6 +90,7 @@ func loadOptions(optionsDir string) (Options, error) {
 	opts.Client = filepath.Clean(opts.Client)
 	opts.OptionsDir = optionsDir
 	opts.UsersFile = filepath.Join(optionsDir, "users.json")
+	opts.APIKeysFile = filepath.Join(optionsDir, "apikeys.json")
 
 	opts.GitBackup.Remote = strings.TrimSpace(opts.GitBackup.Remote)
 	opts.GitBackup.GitHubToken = strings.TrimSpace(opts.GitBackup.GitHubToken)

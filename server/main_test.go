@@ -207,6 +207,9 @@ func TestLoadOptionsDefaultsAndOverrides(t *testing.T) {
 	if opts.UsersFile != filepath.Join(dir, "users.json") {
 		t.Fatalf("unexpected users file path: %q", opts.UsersFile)
 	}
+	if opts.APIKeysFile != filepath.Join(dir, "apikeys.json") {
+		t.Fatalf("unexpected api keys file path: %q", opts.APIKeysFile)
+	}
 	if opts.GitBackup.PushIntervalSeconds != 300 {
 		t.Fatalf("unexpected default git backup interval: %d", opts.GitBackup.PushIntervalSeconds)
 	}

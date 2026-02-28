@@ -126,7 +126,7 @@ func TestHandleSharedNoteAPIViewTokenIsReadonly(t *testing.T) {
 		hub: NewHub(),
 	}
 
-	getReq := httptest.NewRequest(http.MethodGet, "/api/share/"+token+"/note", nil)
+	getReq := httptest.NewRequest(http.MethodGet, "/client-api/share/"+token+"/note", nil)
 	getW := httptest.NewRecorder()
 	s.handleSharedNoteAPI(getW, getReq)
 	if getW.Code != http.StatusOK {
@@ -141,7 +141,7 @@ func TestHandleSharedNoteAPIViewTokenIsReadonly(t *testing.T) {
 		t.Fatalf("expected shareMode=%q, got %q", shareModeView, mode)
 	}
 
-	putReq := httptest.NewRequest(http.MethodPut, "/api/share/"+token+"/note", strings.NewReader(`{"content":"efter"}`))
+	putReq := httptest.NewRequest(http.MethodPut, "/client-api/share/"+token+"/note", strings.NewReader(`{"content":"efter"}`))
 	putReq.Header.Set("Content-Type", "application/json")
 	putW := httptest.NewRecorder()
 	s.handleSharedNoteAPI(putW, putReq)
@@ -175,7 +175,7 @@ func TestHandleSharedNoteAPIGetAndPutForEditToken(t *testing.T) {
 		hub: NewHub(),
 	}
 
-	getReq := httptest.NewRequest(http.MethodGet, "/api/share/"+token+"/note", nil)
+	getReq := httptest.NewRequest(http.MethodGet, "/client-api/share/"+token+"/note", nil)
 	getW := httptest.NewRecorder()
 	s.handleSharedNoteAPI(getW, getReq)
 	if getW.Code != http.StatusOK {
@@ -190,7 +190,7 @@ func TestHandleSharedNoteAPIGetAndPutForEditToken(t *testing.T) {
 		t.Fatalf("expected shareMode=%q, got %q", shareModeEdit, mode)
 	}
 
-	putReq := httptest.NewRequest(http.MethodPut, "/api/share/"+token+"/note", strings.NewReader(`{"content":"efter"}`))
+	putReq := httptest.NewRequest(http.MethodPut, "/client-api/share/"+token+"/note", strings.NewReader(`{"content":"efter"}`))
 	putReq.Header.Set("Content-Type", "application/json")
 	putW := httptest.NewRecorder()
 	s.handleSharedNoteAPI(putW, putReq)
@@ -246,7 +246,7 @@ func TestShareTokenSurvivesRenameAndCollectionMoves(t *testing.T) {
 
 	renameToCollectionReq := httptest.NewRequest(
 		http.MethodPut,
-		"/api/notes/Plan/rename",
+		"/client-api/notes/Plan/rename",
 		strings.NewReader(`{"newTitle":"Plan flyttet","newCollection":"arbejde"}`),
 	)
 	renameToCollectionReq.Header.Set("Content-Type", "application/json")
@@ -258,7 +258,7 @@ func TestShareTokenSurvivesRenameAndCollectionMoves(t *testing.T) {
 		t.Fatalf("expected rename into collection 200, got %d body=%s", renameToCollectionW.Code, renameToCollectionW.Body.String())
 	}
 
-	sharedAfterMoveReq := httptest.NewRequest(http.MethodGet, "/api/share/"+token+"/note", nil)
+	sharedAfterMoveReq := httptest.NewRequest(http.MethodGet, "/client-api/share/"+token+"/note", nil)
 	sharedAfterMoveW := httptest.NewRecorder()
 	s.handleSharedNoteAPI(sharedAfterMoveW, sharedAfterMoveReq)
 	if sharedAfterMoveW.Code != http.StatusOK {
@@ -278,7 +278,7 @@ func TestShareTokenSurvivesRenameAndCollectionMoves(t *testing.T) {
 
 	renameOutOfCollectionReq := httptest.NewRequest(
 		http.MethodPut,
-		"/api/notes/Plan%20flyttet/rename?collection=arbejde",
+		"/client-api/notes/Plan%20flyttet/rename?collection=arbejde",
 		strings.NewReader(`{"newTitle":"Plan igen","newCollection":""}`),
 	)
 	renameOutOfCollectionReq.Header.Set("Content-Type", "application/json")
@@ -290,7 +290,7 @@ func TestShareTokenSurvivesRenameAndCollectionMoves(t *testing.T) {
 		t.Fatalf("expected rename out of collection 200, got %d body=%s", renameOutOfCollectionW.Code, renameOutOfCollectionW.Body.String())
 	}
 
-	sharedAfterMoveBackReq := httptest.NewRequest(http.MethodGet, "/api/share/"+token+"/note", nil)
+	sharedAfterMoveBackReq := httptest.NewRequest(http.MethodGet, "/client-api/share/"+token+"/note", nil)
 	sharedAfterMoveBackW := httptest.NewRecorder()
 	s.handleSharedNoteAPI(sharedAfterMoveBackW, sharedAfterMoveBackReq)
 	if sharedAfterMoveBackW.Code != http.StatusOK {

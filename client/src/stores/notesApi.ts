@@ -33,26 +33,26 @@ function withCollectionQuery(path: string, collection?: string | null): string {
 }
 
 export function notePathApi(title: string, collection?: string | null): string {
-  return withCollectionQuery(`/api/notes/${encodeURIComponent(title)}`, collection)
+  return withCollectionQuery(`/client-api/notes/${encodeURIComponent(title)}`, collection)
 }
 
 export function renameNotePathApi(title: string, collection?: string | null): string {
-  return withCollectionQuery(`/api/notes/${encodeURIComponent(title)}/rename`, collection)
+  return withCollectionQuery(`/client-api/notes/${encodeURIComponent(title)}/rename`, collection)
 }
 
 export function starNotePathApi(title: string, collection?: string | null): string {
-  return withCollectionQuery(`/api/notes/${encodeURIComponent(title)}/star`, collection)
+  return withCollectionQuery(`/client-api/notes/${encodeURIComponent(title)}/star`, collection)
 }
 
 export function shareNotePathApi(title: string, collection?: string | null, mode?: ShareMode): string {
-  const base = withCollectionQuery(`/api/notes/${encodeURIComponent(title)}/share`, collection)
+  const base = withCollectionQuery(`/client-api/notes/${encodeURIComponent(title)}/share`, collection)
   if (!mode) return base
   const separator = base.includes('?') ? '&' : '?'
   return `${base}${separator}mode=${encodeURIComponent(mode)}`
 }
 
 export function sharedNotePathApi(token: string): string {
-  return `/api/share/${encodeURIComponent(token)}/note`
+  return `/client-api/share/${encodeURIComponent(token)}/note`
 }
 
 const API_FETCH_TIMEOUT_MS = 10000

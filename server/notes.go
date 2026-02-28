@@ -164,7 +164,7 @@ func (s *Server) handleNoteByTitle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rest := strings.TrimPrefix(r.URL.Path, "/api/notes/")
+	rest := strings.TrimPrefix(r.URL.Path, "/client-api/notes/")
 	rest = strings.TrimSpace(strings.TrimSuffix(rest, "/"))
 	parts := strings.Split(rest, "/")
 
