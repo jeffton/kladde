@@ -24,14 +24,13 @@ interface NotesWebSocketDeps {
 
 function normalizeServerNote(note: NoteResponse): CachedNote {
   const collection = normalizeCollection(note.collection)
-  const title = (note.title || '').trim()
-  const key = (note.key || '').trim() || buildNoteKey(title, collection)
+  const title = note.title.trim()
 
   return {
-    key,
+    key: note.key.trim() || buildNoteKey(title, collection),
     title,
     collection,
-    content: note.content || '',
+    content: note.content,
     updatedAt: note.updatedAt,
     dirty: false,
     starred: Boolean(note.starred),
@@ -105,7 +104,7 @@ export function createNotesWebSocket(deps: NotesWebSocketDeps) {
     } catch {
       // If note disappeared between event and fetch, reconcile via full sync.
       if (action === 'created' || action === 'updated') {
-        void deps.syncWithServer().catch(() => undefined)
+        void deps.syncWithServer()
       }
     }
   }
@@ -124,7 +123,7 @@ export function createNotesWebSocket(deps: NotesWebSocketDeps) {
         }
         await deps.refreshStateFromCache()
       })().catch(() => {
-        void deps.syncWithServer().catch(() => undefined)
+        void deps.syncWithServer()
       })
     }, 200)
   }
@@ -167,7 +166,7 @@ export function createNotesWebSocket(deps: NotesWebSocketDeps) {
       wsReconnectDisabled = false
       lastMeUnauthorized = false
       clearWsReconnect()
-      void deps.syncWithServer().catch(() => undefined)
+      void deps.syncWithServer()
     }
 
     ws.onmessage = (event) => {

@@ -101,11 +101,11 @@ export function useShareSession({ isShareRoute, shareToken }: UseShareSessionOpt
   function applySharedNote(note: SharedNoteResponse) {
     shareMode.value = note.shareMode === 'edit' ? 'edit' : 'view'
 
-    const key = (note.key || '').trim() || `share/${shareToken.value}`
-    const title = (note.title || '').trim() || 'kladde'
+    const key = note.key.trim() || `share/${shareToken.value}`
+    const title = note.title.trim()
     const collection = (note.collection || '').trim()
-    const content = note.content || ''
-    const updatedAt = note.updatedAt || new Date().toISOString()
+    const content = note.content
+    const updatedAt = note.updatedAt
 
     const meta: NoteMeta = {
       key,

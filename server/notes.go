@@ -203,17 +203,18 @@ func (s *Server) handleNoteByTitle(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		note, err := s.renameNote(userDir, oldTitle, oldCollection, strings.TrimSpace(payload.NewTitle), newCollection)
+		newTitle := strings.TrimSpace(payload.NewTitle)
+		if err := validateTitle(newTitle); err != nil {
+			writeError(w, http.StatusBadRequest, err)
+			return
+		}
+
+		note, err := s.renameNote(userDir, oldTitle, oldCollection, newTitle, newCollection)
 		if err != nil {
-			switch {
-			case errors.Is(err, fs.ErrNotExist):
+			if errors.Is(err, fs.ErrNotExist) {
 				writeError(w, http.StatusNotFound, errors.New("note not found"))
-			default:
-				if strings.Contains(err.Error(), "title") || strings.Contains(err.Error(), "collection") {
-					writeError(w, http.StatusBadRequest, err)
-				} else {
-					writeError(w, http.StatusInternalServerError, err)
-				}
+			} else {
+				writeError(w, http.StatusInternalServerError, err)
 			}
 			return
 		}
@@ -598,8 +599,8 @@ func (s *Server) createNote(notesDir, title, collection, content string) (*Note,
 			return nil, err
 		}
 
-		if _, err := os.Lstat(path); err == nil {
-			if info, lerr := os.Lstat(path); lerr == nil && info.Mode()&os.ModeSymlink != 0 {
+		if info, err := os.Lstat(path); err == nil {
+			if info.Mode()&os.ModeSymlink != 0 {
 				return nil, errors.New("symlink notes are not allowed")
 			}
 			finalTitle = fmt.Sprintf("%s (%d)", baseTitle, n)
@@ -729,8 +730,8 @@ func (s *Server) renameNote(notesDir, oldTitle, oldCollection, newTitle, newColl
 				return nil, err
 			}
 
-			if _, err := os.Lstat(newPath); err == nil {
-				if info, lerr := os.Lstat(newPath); lerr == nil && info.Mode()&os.ModeSymlink != 0 {
+			if info, err := os.Lstat(newPath); err == nil {
+				if info.Mode()&os.ModeSymlink != 0 {
 					return nil, errors.New("symlink notes are not allowed")
 				}
 				finalTitle = fmt.Sprintf("%s (%d)", baseTitle, n)

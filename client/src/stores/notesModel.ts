@@ -8,7 +8,7 @@ export function normalizeTs(value?: string | null): string {
 }
 
 export function normalizeCollection(value?: string | null): string {
-  return (value || '').trim()
+  return value?.trim() ?? ''
 }
 
 export function buildNoteKey(title: string, collection?: string | null): string {
@@ -17,7 +17,7 @@ export function buildNoteKey(title: string, collection?: string | null): string 
 }
 
 export function splitNoteKey(key: string): { title: string; collection: string } {
-  const normalized = (key || '').trim()
+  const normalized = key.trim()
   if (!normalized) return { title: '', collection: '' }
 
   const slashIdx = normalized.indexOf('/')

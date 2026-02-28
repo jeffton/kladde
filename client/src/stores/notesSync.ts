@@ -47,14 +47,13 @@ interface ServerNoteMeta {
 
 function normalizeServerNote(note: NoteResponse): CachedNote {
   const collection = normalizeCollection(note.collection)
-  const title = (note.title || '').trim()
-  const key = (note.key || '').trim() || buildNoteKey(title, collection)
+  const title = note.title.trim()
 
   return {
-    key,
+    key: note.key.trim() || buildNoteKey(title, collection),
     title,
     collection,
-    content: note.content || '',
+    content: note.content,
     updatedAt: normalizeTs(note.updatedAt),
     dirty: false,
     starred: Boolean(note.starred),
@@ -64,11 +63,10 @@ function normalizeServerNote(note: NoteResponse): CachedNote {
 
 function normalizeServerMeta(meta: ServerNoteMeta): NoteMeta {
   const collection = normalizeCollection(meta.collection)
-  const title = (meta.title || '').trim()
-  const key = (meta.key || '').trim() || buildNoteKey(title, collection)
+  const title = meta.title.trim()
 
   return {
-    key,
+    key: meta.key?.trim() || buildNoteKey(title, collection),
     title,
     collection,
     updatedAt: normalizeTs(meta.updatedAt),
@@ -424,7 +422,6 @@ export function createNotesSync(deps: NotesSyncDeps) {
         deps.clearSyncError()
       } catch (err: unknown) {
         deps.handleSyncFailure(err, t('couldNotSync'))
-        throw err
       } finally {
         deps.syncing.value = false
         deps.updateSyncStatus()

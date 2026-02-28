@@ -25,14 +25,13 @@ import {
 
 function normalizeServerNote(note: NoteResponse): CachedNote {
   const collection = normalizeCollection(note.collection)
-  const title = (note.title || '').trim()
-  const key = (note.key || '').trim() || buildNoteKey(title, collection)
+  const title = note.title.trim()
 
   return {
-    key,
+    key: note.key.trim() || buildNoteKey(title, collection),
     title,
     collection,
-    content: note.content || '',
+    content: note.content,
     updatedAt: normalizeTs(note.updatedAt),
     dirty: false,
     starred: Boolean(note.starred),
@@ -144,10 +143,14 @@ export const useNotesStore = defineStore('notes', () => {
 
     syncRetryTimer = window.setTimeout(() => {
       syncRetryTimer = null
-      void syncWithServer().catch(() => undefined)
+      triggerBackgroundSync()
     }, delay)
 
     syncRetryAttempt = Math.min(syncRetryAttempt + 1, 8)
+  }
+
+  const triggerBackgroundSync = () => {
+    void syncWithServer()
   }
 
   const { queueWrite, flushPendingWrites, setCurrentContent } = createNotesPersist({
@@ -160,7 +163,10 @@ export const useNotesStore = defineStore('notes', () => {
     noteContents,
     getCachedNote,
     putCachedNote,
-    updateSyncStatus
+    updateSyncStatus,
+    onPersistError: (err) => {
+      handleSyncFailure(err, t('couldNotSaveLocally'))
+    }
   })
 
   const setOnline = (value: boolean) => {
@@ -168,7 +174,7 @@ export const useNotesStore = defineStore('notes', () => {
     updateSyncStatus()
     if (value) {
       clearSyncRetry()
-      void syncWithServer().catch(() => undefined)
+      triggerBackgroundSync()
       void connectWebSocket()
       return
     }
@@ -203,7 +209,7 @@ export const useNotesStore = defineStore('notes', () => {
     })
 
     if (online.value) {
-      void syncWithServer().catch(() => undefined)
+      triggerBackgroundSync()
     }
   }
 
@@ -271,7 +277,7 @@ export const useNotesStore = defineStore('notes', () => {
     await refreshStateFromCache()
     updateSyncStatus()
     if (online.value) {
-      void syncWithServer().catch(() => undefined)
+      triggerBackgroundSync()
     }
     void connectWebSocket()
   }
@@ -327,7 +333,7 @@ export const useNotesStore = defineStore('notes', () => {
       if (!isNotFoundError(err)) {
         handleSyncFailure(err, t('couldNotFetchNote'))
       }
-      void syncWithServer().catch(() => undefined)
+      triggerBackgroundSync()
     }
   }
 
@@ -466,7 +472,7 @@ export const useNotesStore = defineStore('notes', () => {
       return key
     }
 
-    void syncWithServer().catch(() => undefined)
+    triggerBackgroundSync()
     return key
   }
 
@@ -501,7 +507,7 @@ export const useNotesStore = defineStore('notes', () => {
     })
 
     if (online.value) {
-      void syncWithServer().catch(() => undefined)
+      triggerBackgroundSync()
     }
 
     return renamedKey
@@ -562,7 +568,7 @@ export const useNotesStore = defineStore('notes', () => {
     })
 
     if (online.value) {
-      void syncWithServer().catch(() => undefined)
+      triggerBackgroundSync()
     }
   }
 

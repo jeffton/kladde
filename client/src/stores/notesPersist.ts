@@ -12,6 +12,7 @@ interface NotesPersistDeps {
   getCachedNote: (key: string) => Promise<CachedNote | undefined>
   putCachedNote: (note: CachedNote) => Promise<IDBValidKey>
   updateSyncStatus: () => void
+  onPersistError: (err: unknown) => void
 }
 
 export function createNotesPersist(deps: NotesPersistDeps) {
@@ -21,8 +22,9 @@ export function createNotesPersist(deps: NotesPersistDeps) {
   let writeQueue: Promise<unknown> = Promise.resolve()
 
   const queueWrite = (task: () => Promise<unknown>) => {
-    writeQueue = writeQueue.then(task).catch(() => undefined)
-    return writeQueue
+    const run = writeQueue.then(() => task())
+    writeQueue = run.catch(() => undefined)
+    return run
   }
 
   const persistLatestContentSnapshot = async () => {
@@ -47,7 +49,9 @@ export function createNotesPersist(deps: NotesPersistDeps) {
 
     contentPersistTimer = window.setTimeout(() => {
       contentPersistTimer = null
-      void persistLatestContentSnapshot().catch(() => undefined)
+      void persistLatestContentSnapshot().catch((err) => {
+        deps.onPersistError(err)
+      })
     }, contentPersistDelayMs)
   }
 
