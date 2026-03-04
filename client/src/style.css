@@ -221,6 +221,7 @@ button:disabled {
 }
 
 .search-controls {
+  align-items: stretch;
   margin-top: .75rem;
   padding-left: var(--content-pad-x);
   padding-right: var(--content-pad-right);
