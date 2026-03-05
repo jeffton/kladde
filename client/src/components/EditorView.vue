@@ -22,6 +22,7 @@ import {
   CloudCheck,
   CloudOff,
   Copy,
+  FileText,
   FolderPlus,
   MoreVertical,
   RefreshCw,
@@ -205,12 +206,14 @@ const shareLinks = ref<ShareLinksResponse>({
 })
 const shareBusyMode = ref<ShareMode | ''>('')
 const shareCopyMode = ref<ShareMode | ''>('')
+const menuCopyFeedback = ref<'markdown' | 'path' | ''>('')
 const shareLoading = ref(false)
 const lastSyncTime = ref('')
 const noteMenuWrap = ref<HTMLElement | null>(null)
 const availableCollections = computed(() => props.store.collections)
 const selectedCollection = computed(() => props.store.selectedCollection || '')
 let shouldBlurAfterTaskCheckboxTap = false
+let menuCopyFeedbackTimeout: ReturnType<typeof setTimeout> | null = null
 
 function capitalize(text = '') {
   return text ? text.charAt(0).toUpperCase() + text.slice(1) : text
@@ -789,6 +792,43 @@ async function copyShareLink(mode: ShareMode) {
   }
 }
 
+function setMenuCopyFeedback(type: 'markdown' | 'path') {
+  menuCopyFeedback.value = type
+  if (menuCopyFeedbackTimeout) clearTimeout(menuCopyFeedbackTimeout)
+  menuCopyFeedbackTimeout = setTimeout(() => {
+    menuCopyFeedback.value = ''
+    menuCopyFeedbackTimeout = null
+  }, 1500)
+}
+
+async function copyCurrentAsMarkdown() {
+  if (!isFullMode.value) return
+
+  try {
+    await navigator.clipboard.writeText(props.store.currentContent || '')
+    setMenuCopyFeedback('markdown')
+    showNoteMenu.value = false
+  } catch {
+    emit('ui-error', t('couldNotCopyLink'))
+  }
+}
+
+async function copyCurrentPath() {
+  if (!isFullMode.value || !props.store.selectedTitle) return
+
+  const notePath = selectedCollection.value
+    ? `${selectedCollection.value}/${props.store.selectedTitle}`
+    : props.store.selectedTitle
+
+  try {
+    await navigator.clipboard.writeText(notePath)
+    setMenuCopyFeedback('path')
+    showNoteMenu.value = false
+  } catch {
+    emit('ui-error', t('couldNotCopyLink'))
+  }
+}
+
 async function deleteCurrentNote() {
   if (!isFullMode.value || !props.store.selectedKey) return
   const confirmed = window.confirm(t('confirmDelete'))
@@ -922,6 +962,7 @@ onUnmounted(() => {
   window.removeEventListener('resize', updateInputMode)
   window.removeEventListener('pointerdown', onGlobalPointerDown)
   window.removeEventListener('keydown', handleGlobalTabKeyDown, true)
+  if (menuCopyFeedbackTimeout) clearTimeout(menuCopyFeedbackTimeout)
   editor.value?.destroy()
 })
 </script>
@@ -989,6 +1030,22 @@ onUnmounted(() => {
               <FolderPlus :size="16" />
             </span>
             <span class="note-menu-label">{{ t('newCollection') }}</span>
+          </button>
+
+          <button class="note-menu-item" role="menuitem" @click="copyCurrentAsMarkdown">
+            <span class="note-menu-leading" aria-hidden="true">
+              <ClipboardCheck v-if="menuCopyFeedback === 'markdown'" :size="16" />
+              <FileText v-else :size="16" />
+            </span>
+            <span class="note-menu-label">{{ t('copyAsMarkdown') }}</span>
+          </button>
+
+          <button class="note-menu-item" role="menuitem" @click="copyCurrentPath">
+            <span class="note-menu-leading" aria-hidden="true">
+              <ClipboardCheck v-if="menuCopyFeedback === 'path'" :size="16" />
+              <Copy v-else :size="16" />
+            </span>
+            <span class="note-menu-label">{{ t('copyPath') }}</span>
           </button>
 
           <button class="note-menu-item" role="menuitem" @click="openShareDialog">
