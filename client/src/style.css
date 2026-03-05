@@ -218,7 +218,6 @@ button:disabled {
   flex-shrink: 0;
   padding: 0;
   color: var(--icon-button-color, var(--text));
-  cursor: pointer;
 }
 
 .search-controls {
