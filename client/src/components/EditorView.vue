@@ -821,7 +821,7 @@ async function copyCurrentPath() {
     : props.store.selectedTitle
 
   try {
-    await navigator.clipboard.writeText(notePath)
+    await navigator.clipboard.writeText(`"${notePath}"`)
     setMenuCopyFeedback('path')
     showNoteMenu.value = false
   } catch {
