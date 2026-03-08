@@ -289,21 +289,20 @@ export const useNotesStore = defineStore('notes', () => {
     void connectWebSocket()
   }
 
-  const selectNote = async (key: string) => {
-    await flushPendingWrites()
-    selectedKey.value = key
-
-    const cached = await getCachedNote(key)
+  const hydrateSelectedNoteFromCache = (cached: CachedNote | undefined) => {
     if (cached) {
       currentContent.value = cached.content || ''
       currentUpdatedAt.value = cached.updatedAt ? normalizeTs(cached.updatedAt) : null
       dirty.value = Boolean(cached.dirty)
-    } else {
-      currentContent.value = ''
-      currentUpdatedAt.value = null
-      dirty.value = false
+      return
     }
 
+    currentContent.value = ''
+    currentUpdatedAt.value = null
+    dirty.value = false
+  }
+
+  const refreshSelectedNoteFromServer = async (key: string, cached: CachedNote | undefined) => {
     if (!online.value) return
 
     const ref = cached || splitNoteKey(key)
@@ -342,6 +341,18 @@ export const useNotesStore = defineStore('notes', () => {
       }
       triggerBackgroundSync()
     }
+  }
+
+  const selectNote = async (key: string) => {
+    await flushPendingWrites()
+    selectedKey.value = key
+
+    const cached = await getCachedNote(key)
+    hydrateSelectedNoteFromCache(cached)
+
+    if (!online.value) return
+
+    void refreshSelectedNoteFromServer(key, cached)
   }
 
   const applyLocalRename = async (oldKey: string, desiredTitle: string, desiredCollection: string) => {
