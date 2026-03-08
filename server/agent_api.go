@@ -296,6 +296,10 @@ func (s *Server) handleAgentNoteByPath(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusInternalServerError, err)
 			return
 		}
+		if err := s.revokeSharesForFile(shareFileRef(principal.Username, title, collection)); err != nil {
+			writeError(w, http.StatusInternalServerError, err)
+			return
+		}
 		writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
 	default:
 		w.WriteHeader(http.StatusMethodNotAllowed)
@@ -349,6 +353,13 @@ func (s *Server) handleAgentMove(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusNotFound, errors.New("note not found"))
 			return
 		}
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+
+	oldFile := shareFileRef(principal.Username, oldTitle, oldCollection)
+	newFile := shareFileRef(principal.Username, note.Title, note.Collection)
+	if err := s.retargetSharesForFile(oldFile, newFile); err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}

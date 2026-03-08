@@ -303,6 +303,16 @@ func (s *Server) handleNoteByTitle(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		s.recordRecentChangeOrigin(session.User.Username, oldCollection, title, origin)
+		s.broadcastNoteChange(session.User.Username, NoteChangeEvent{
+			Type:       "note_changed",
+			Key:        key,
+			Title:      title,
+			Collection: oldCollection,
+			Action:     "updated",
+			Origin:     origin,
+		})
+
 		writeJSON(w, http.StatusOK, map[string]any{
 			"key":        key,
 			"title":      title,
@@ -787,7 +797,14 @@ func (s *Server) notePath(notesDir, title, collection string) (string, error) {
 		return "", err
 	}
 
-	path := filepath.Join(base, collection, title+".md")
+	collectionDir := filepath.Join(base, collection)
+	if collection != "" {
+		if err := rejectSymlinkIfExists(collectionDir); err != nil {
+			return "", err
+		}
+	}
+
+	path := filepath.Join(collectionDir, title+".md")
 	abs, err := filepath.Abs(path)
 	if err != nil {
 		return "", err
@@ -799,6 +816,20 @@ func (s *Server) notePath(notesDir, title, collection string) (string, error) {
 	}
 
 	return abs, nil
+}
+
+func rejectSymlinkIfExists(path string) error {
+	info, err := os.Lstat(path)
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil
+		}
+		return err
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		return errors.New("symlink notes are not allowed")
+	}
+	return nil
 }
 
 func rejectSymlink(path string) error {

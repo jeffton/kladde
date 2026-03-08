@@ -39,9 +39,16 @@ func makeAgentTestServer(t *testing.T, readOnly bool) (*Server, string, string) 
 		t.Fatalf("save api keys failed: %v", err)
 	}
 
+	sharesFile := filepath.Join(dir, "shares.json")
+	if err := os.WriteFile(sharesFile, []byte("{}\n"), 0o600); err != nil {
+		t.Fatalf("write shares file failed: %v", err)
+	}
+
 	s := &Server{
 		notesBaseDir: notesDir,
 		apiKeysFile:  apiKeysFile,
+		sharesFile:   sharesFile,
+		shares:       map[string]ShareRecord{},
 		hub:          NewHub(),
 	}
 
@@ -174,6 +181,19 @@ func TestAgentAPIMoveRenamesAndMovesCollection(t *testing.T) {
 		t.Fatalf("seed note failed: %v", err)
 	}
 
+	shareToken := "agentmoveshare"
+	s.shares[shareToken] = ShareRecord{
+		File:    shareFileRef("david", "Indkøb", ""),
+		Mode:    shareModeEdit,
+		Created: "2026-02-26T21:00:00Z",
+	}
+	s.sharesMu.Lock()
+	if err := s.persistSharesLocked(); err != nil {
+		s.sharesMu.Unlock()
+		t.Fatalf("persist shares failed: %v", err)
+	}
+	s.sharesMu.Unlock()
+
 	req := authRequest(http.MethodPut, "/api/move", token, `{"from":"Indkøb","to":"opskrifter/Indkøb"}`)
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
@@ -190,6 +210,47 @@ func TestAgentAPIMoveRenamesAndMovesCollection(t *testing.T) {
 	oldPath := filepath.Join(userDir, "Indkøb.md")
 	if _, err := os.Stat(oldPath); !os.IsNotExist(err) {
 		t.Fatalf("expected old note path to be gone, err=%v", err)
+	}
+
+	record, ok := s.findShare(shareToken)
+	if !ok {
+		t.Fatal("expected share token to remain after move")
+	}
+	if record.File != shareFileRef("david", "Indkøb", "opskrifter") {
+		t.Fatalf("expected share to retarget to moved note, got %+v", record)
+	}
+}
+
+func TestAgentAPIDeleteRevokesShares(t *testing.T) {
+	s, token, _ := makeAgentTestServer(t, false)
+	userDir := s.userNotesDir("david")
+
+	if _, _, err := s.saveNote(userDir, "Plan", "", "hej"); err != nil {
+		t.Fatalf("seed note failed: %v", err)
+	}
+
+	shareToken := "agentdeleteshare"
+	s.shares[shareToken] = ShareRecord{
+		File:    shareFileRef("david", "Plan", ""),
+		Mode:    shareModeView,
+		Created: "2026-02-26T21:00:00Z",
+	}
+	s.sharesMu.Lock()
+	if err := s.persistSharesLocked(); err != nil {
+		s.sharesMu.Unlock()
+		t.Fatalf("persist shares failed: %v", err)
+	}
+	s.sharesMu.Unlock()
+
+	deleteReq := authRequest(http.MethodDelete, "/api/notes/Plan", token, "")
+	deleteW := httptest.NewRecorder()
+	s.handleAgentNoteByPath(deleteW, deleteReq)
+	if deleteW.Code != http.StatusOK {
+		t.Fatalf("expected DELETE 200, got %d body=%s", deleteW.Code, deleteW.Body.String())
+	}
+
+	if _, ok := s.findShare(shareToken); ok {
+		t.Fatal("expected share token to be revoked after delete")
 	}
 }
 

@@ -9,7 +9,31 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/gorilla/websocket"
 )
+
+func openTestWebSocket(t *testing.T, handler http.HandlerFunc, path string, cookie *http.Cookie) *websocket.Conn {
+	t.Helper()
+
+	server := httptest.NewServer(handler)
+	t.Cleanup(server.Close)
+
+	wsURL := "ws" + strings.TrimPrefix(server.URL, "http") + path
+	header := http.Header{"Origin": {server.URL}}
+	if cookie != nil {
+		header.Add("Cookie", cookie.String())
+	}
+
+	conn, _, err := websocket.DefaultDialer.Dial(wsURL, header)
+	if err != nil {
+		t.Fatalf("websocket dial failed: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = conn.Close()
+	})
+	return conn
+}
 
 func TestCreateShareReplacesExistingTokenForMode(t *testing.T) {
 	dir := t.TempDir()
@@ -63,6 +87,43 @@ func TestCreateShareReplacesExistingTokenForMode(t *testing.T) {
 	}
 	if len(payload) != 1 {
 		t.Fatalf("expected 1 share in file, got %d", len(payload))
+	}
+}
+
+func TestRevokeShareClosesOpenShareWebSocket(t *testing.T) {
+	dir := t.TempDir()
+	file := shareFileRef("david", "Plan", "")
+	token := "closesharetoken"
+	s := &Server{
+		sharesFile: filepath.Join(dir, "shares.json"),
+		shares: map[string]ShareRecord{
+			token: {
+				File:    file,
+				Mode:    shareModeView,
+				Created: "2026-02-26T21:00:00Z",
+			},
+		},
+		hub: NewHub(),
+	}
+
+	s.sharesMu.Lock()
+	if err := s.persistSharesLocked(); err != nil {
+		s.sharesMu.Unlock()
+		t.Fatalf("persist shares failed: %v", err)
+	}
+	s.sharesMu.Unlock()
+
+	conn := openTestWebSocket(t, s.handleWebSocket, "/client-api/ws?shareToken="+token, nil)
+	if err := conn.SetReadDeadline(time.Now().Add(2 * time.Second)); err != nil {
+		t.Fatalf("set read deadline failed: %v", err)
+	}
+
+	if err := s.revokeShare(file, shareModeView); err != nil {
+		t.Fatalf("revokeShare failed: %v", err)
+	}
+
+	if _, _, err := conn.ReadMessage(); err == nil {
+		t.Fatal("expected websocket to close after share revoke")
 	}
 }
 
@@ -204,6 +265,50 @@ func TestHandleSharedNoteAPIGetAndPutForEditToken(t *testing.T) {
 	}
 	if string(updated) != "efter" {
 		t.Fatalf("expected updated content, got %q", string(updated))
+	}
+}
+
+func TestStarChangeBroadcastsToConnectedClients(t *testing.T) {
+	dir := t.TempDir()
+	notesDir := filepath.Join(dir, "notes")
+	if err := os.MkdirAll(filepath.Join(notesDir, "david"), 0o755); err != nil {
+		t.Fatalf("mkdir failed: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(notesDir, "david", "Plan.md"), []byte("før"), 0o644); err != nil {
+		t.Fatalf("write note failed: %v", err)
+	}
+
+	s := &Server{
+		notesBaseDir: notesDir,
+		sessions: map[string]Session{
+			"sid": {
+				User:      SessionUser{Username: "david", DisplayName: "David"},
+				ExpiresAt: time.Now().Add(time.Hour),
+			},
+		},
+		hub: NewHub(),
+	}
+
+	conn := openTestWebSocket(t, s.handleWebSocket, "/client-api/ws", &http.Cookie{Name: sessionCookieName, Value: "sid"})
+	if err := conn.SetReadDeadline(time.Now().Add(2 * time.Second)); err != nil {
+		t.Fatalf("set read deadline failed: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPut, "/client-api/notes/Plan/star", strings.NewReader(`{"starred":true}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.AddCookie(&http.Cookie{Name: sessionCookieName, Value: "sid"})
+	w := httptest.NewRecorder()
+	s.handleNoteByTitle(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected star update 200, got %d body=%s", w.Code, w.Body.String())
+	}
+
+	var event NoteChangeEvent
+	if err := conn.ReadJSON(&event); err != nil {
+		t.Fatalf("expected websocket event after star change: %v", err)
+	}
+	if event.Type != "note_changed" || event.Action != "updated" || event.Title != "Plan" {
+		t.Fatalf("unexpected websocket event: %+v", event)
 	}
 }
 

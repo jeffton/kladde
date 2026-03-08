@@ -206,6 +206,19 @@ func (s *Server) listShareTokensForFile(file string) []string {
 	return result
 }
 
+func (s *Server) closeShareChannels(tokens []string) {
+	if s.hub == nil {
+		return
+	}
+	for _, token := range tokens {
+		token = strings.TrimSpace(token)
+		if token == "" {
+			continue
+		}
+		s.hub.CloseChannel(shareBroadcastChannel(token))
+	}
+}
+
 func (s *Server) createShare(file, mode string) (string, error) {
 	if mode = normalizeShareMode(mode); mode == "" {
 		return "", errors.New("invalid share mode")
@@ -214,17 +227,19 @@ func (s *Server) createShare(file, mode string) (string, error) {
 		return "", errors.New("invalid shared file path")
 	}
 
-	s.sharesMu.Lock()
-	defer s.sharesMu.Unlock()
+	replacedTokens := make([]string, 0, 1)
 
+	s.sharesMu.Lock()
 	for token, record := range s.shares {
 		if record.File == file && record.Mode == mode {
 			delete(s.shares, token)
+			replacedTokens = append(replacedTokens, token)
 		}
 	}
 
 	token, err := randomToken(18)
 	if err != nil {
+		s.sharesMu.Unlock()
 		return "", err
 	}
 	s.shares[token] = ShareRecord{
@@ -233,8 +248,12 @@ func (s *Server) createShare(file, mode string) (string, error) {
 		Created: time.Now().UTC().Format(time.RFC3339),
 	}
 	if err := s.persistSharesLocked(); err != nil {
+		s.sharesMu.Unlock()
 		return "", err
 	}
+	s.sharesMu.Unlock()
+
+	s.closeShareChannels(replacedTokens)
 	return token, nil
 }
 
@@ -244,33 +263,52 @@ func (s *Server) revokeShare(file, mode string) error {
 		return errors.New("invalid share mode")
 	}
 
-	s.sharesMu.Lock()
-	defer s.sharesMu.Unlock()
+	revokedTokens := make([]string, 0, 1)
 
+	s.sharesMu.Lock()
 	for token, record := range s.shares {
 		if record.File == file && record.Mode == mode {
 			delete(s.shares, token)
+			revokedTokens = append(revokedTokens, token)
 		}
 	}
-	return s.persistSharesLocked()
+	if len(revokedTokens) == 0 {
+		s.sharesMu.Unlock()
+		return nil
+	}
+	if err := s.persistSharesLocked(); err != nil {
+		s.sharesMu.Unlock()
+		return err
+	}
+	s.sharesMu.Unlock()
+
+	s.closeShareChannels(revokedTokens)
+	return nil
 }
 
 func (s *Server) revokeSharesForFile(file string) error {
-	s.sharesMu.Lock()
-	defer s.sharesMu.Unlock()
+	revokedTokens := make([]string, 0, 2)
 
-	changed := false
+	s.sharesMu.Lock()
 	for token, record := range s.shares {
 		if record.File != file {
 			continue
 		}
 		delete(s.shares, token)
-		changed = true
+		revokedTokens = append(revokedTokens, token)
 	}
-	if !changed {
+	if len(revokedTokens) == 0 {
+		s.sharesMu.Unlock()
 		return nil
 	}
-	return s.persistSharesLocked()
+	if err := s.persistSharesLocked(); err != nil {
+		s.sharesMu.Unlock()
+		return err
+	}
+	s.sharesMu.Unlock()
+
+	s.closeShareChannels(revokedTokens)
+	return nil
 }
 
 func (s *Server) retargetSharesForFile(oldFile, newFile string) error {

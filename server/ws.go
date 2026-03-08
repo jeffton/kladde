@@ -72,6 +72,29 @@ func (h *Hub) Broadcast(username string, event NoteChangeEvent) {
 	}
 }
 
+func (h *Hub) CloseChannel(channel string) {
+	h.mu.RLock()
+	conns := make([]*websocket.Conn, 0, len(h.clients[channel]))
+	for conn := range h.clients[channel] {
+		conns = append(conns, conn)
+	}
+	h.mu.RUnlock()
+
+	for _, conn := range conns {
+		lock := h.connWriteLock(conn)
+		if lock != nil {
+			lock.Lock()
+			_ = conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+			_ = conn.WriteControl(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.ClosePolicyViolation, "channel closed"), time.Now().Add(10*time.Second))
+			_ = conn.Close()
+			lock.Unlock()
+		} else {
+			_ = conn.Close()
+		}
+		h.Remove(channel, conn)
+	}
+}
+
 func NewFileEventDebouncer() *FileEventDebouncer {
 	return &FileEventDebouncer{entries: make(map[string]*debouncedEntry)}
 }
