@@ -54,6 +54,20 @@ func TestNotePathStaysInsideNotesDir(t *testing.T) {
 	}
 }
 
+func TestNotePathRejectsSymlinkCollectionDir(t *testing.T) {
+	dir := t.TempDir()
+	outside := t.TempDir()
+	linkPath := filepath.Join(dir, "shared")
+	if err := os.Symlink(outside, linkPath); err != nil {
+		t.Skipf("symlink creation not supported: %v", err)
+	}
+
+	s := &Server{}
+	if _, err := s.notePath(dir, "normal-title", "shared"); err == nil {
+		t.Fatal("expected notePath to reject symlink collection dir")
+	}
+}
+
 func TestValidateCollection(t *testing.T) {
 	cases := []struct {
 		name       string
