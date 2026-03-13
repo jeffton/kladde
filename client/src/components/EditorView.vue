@@ -215,10 +215,6 @@ const selectedCollection = computed(() => props.store.selectedCollection || '')
 let shouldBlurAfterTaskCheckboxTap = false
 let menuCopyFeedbackTimeout: ReturnType<typeof setTimeout> | null = null
 
-function capitalize(text = '') {
-  return text ? text.charAt(0).toUpperCase() + text.slice(1) : text
-}
-
 function isSameDay(a: Date, b: Date) {
   return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate()
 }

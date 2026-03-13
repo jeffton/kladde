@@ -1,6 +1,6 @@
 export type UiLocale = 'da' | 'sv' | 'en-US' | 'fr'
 
-function resolveUiLocale(language?: string): UiLocale {
+export function resolveUiLocale(language?: string): UiLocale {
   const normalized = (language || '').toLowerCase()
   if (normalized.startsWith('da')) return 'da'
   if (normalized.startsWith('sv')) return 'sv'

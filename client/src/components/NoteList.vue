@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { TransitionGroup, computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { KeyRound, LogOut, Plus, Search, Star, Sun, User, X } from 'lucide-vue-next'
 import type { NoteMeta } from '../types'
 import { t } from '../i18n'
@@ -13,7 +13,8 @@ interface Props {
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  selectedKey: ''
+  selectedKey: '',
+  userLabel: ''
 })
 
 const emit = defineEmits<{

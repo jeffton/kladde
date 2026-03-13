@@ -193,7 +193,7 @@ export const useNotesStore = defineStore('notes', () => {
     const note = notes.value.find((n) => n.key === key)
     if (!note) return
 
-    const nextStarred = !Boolean(note.starred)
+    const nextStarred = !note.starred
     note.starred = nextStarred
 
     await queueWrite(async () => {
@@ -279,7 +279,11 @@ export const useNotesStore = defineStore('notes', () => {
 
   const initialize = async () => {
     const storedOps = await getPendingOps()
-    pendingOps.value = storedOps.map(({ id: _id, ...op }) => op)
+    pendingOps.value = storedOps.map((storedOp) => {
+      const { id, ...op } = storedOp
+      void id
+      return op
+    })
 
     await refreshStateFromCache()
     updateSyncStatus()

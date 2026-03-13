@@ -86,7 +86,7 @@ export async function apiFetch(input: RequestInfo | URL, init?: RequestInit): Pr
     res = await fetch(input, requestInit)
   } catch (err: unknown) {
     if (isAbortError(err)) {
-      throw new Error('REQUEST_TIMEOUT')
+      throw new Error('REQUEST_TIMEOUT', { cause: err })
     }
     throw err
   } finally {

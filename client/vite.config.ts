@@ -1,3 +1,4 @@
+/// <reference types="vitest/config" />
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import { VitePWA } from 'vite-plugin-pwa'
@@ -52,6 +53,40 @@ export default defineConfig({
       }
     })
   ],
+  build: {
+    rolldownOptions: {
+      output: {
+        codeSplitting: {
+          groups: [
+            {
+              name: 'prosemirror',
+              test: /node_modules[\\/]prosemirror/,
+              priority: 30
+            },
+            {
+              name: 'tiptap',
+              test: /node_modules[\\/]@tiptap/,
+              priority: 25
+            },
+            {
+              name: 'markdown',
+              test: /node_modules[\\/](?:tiptap-markdown|markdown-it|mdast|micromark|remark|rehype)/,
+              priority: 20
+            },
+            {
+              name: 'vendor',
+              test: /node_modules/,
+              priority: 10
+            }
+          ]
+        }
+      }
+    }
+  },
+  test: {
+    environment: 'node',
+    include: ['src/**/*.test.ts']
+  },
   server: {
     proxy: {
       '/client-api': 'http://localhost:8080',
