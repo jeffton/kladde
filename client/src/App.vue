@@ -1,361 +1,361 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
-import { useNotesStore } from './stores/notes'
-import NoteList from './components/NoteList.vue'
-import EditorView from './components/EditorView.vue'
-import { useAutosave } from './composables/useAutosave'
-import { useShareSession } from './composables/useShareSession'
-import type { AppMode, AuthUser } from './types'
-import { t } from './i18n'
+import { computed, onMounted, onUnmounted, ref, watch } from "vue";
+import { useRoute, useRouter } from "vue-router";
+import { useNotesStore } from "./stores/notes";
+import NoteList from "./components/NoteList.vue";
+import EditorView from "./components/EditorView.vue";
+import { useAutosave } from "./composables/useAutosave";
+import { useShareSession } from "./composables/useShareSession";
+import type { AppMode, AuthUser } from "./types";
+import { t } from "./i18n";
 import {
   isIndexedDbRuntimeError,
   isNetworkError,
   isUnauthorizedError,
   UNAUTHORIZED_EVENT,
-} from './stores/notesErrors'
+} from "./stores/notesErrors";
 
-const store = useNotesStore()
-const route = useRoute()
-const router = useRouter()
+const store = useNotesStore();
+const route = useRoute();
+const router = useRouter();
 
-const isShareRoute = computed(() => route.name === 'share')
+const isShareRoute = computed(() => route.name === "share");
 const shareToken = computed(() =>
-  typeof route.params.token === 'string' ? route.params.token : '',
-)
+  typeof route.params.token === "string" ? route.params.token : "",
+);
 
-const error = ref('')
-const authChecked = ref(false)
-const user = ref<AuthUser | null>(null)
+const error = ref("");
+const authChecked = ref(false);
+const user = ref<AuthUser | null>(null);
 
-const isAuthenticated = computed(() => Boolean(user.value))
-const userLabel = computed(() => user.value?.displayName || user.value?.username || '')
-const username = ref('')
-const password = ref('')
-const loginError = ref('')
-const loggingIn = ref(false)
+const isAuthenticated = computed(() => Boolean(user.value));
+const userLabel = computed(() => user.value?.displayName || user.value?.username || "");
+const username = ref("");
+const password = ref("");
+const loginError = ref("");
+const loggingIn = ref(false);
 
-const AUTH_USER_STORAGE_KEY = 'kladde.auth.user'
-const ME_REQUEST_TIMEOUT_MS = 2000
+const AUTH_USER_STORAGE_KEY = "kladde.auth.user";
+const ME_REQUEST_TIMEOUT_MS = 2000;
 
 function readCachedAuthUser(): AuthUser | null {
   try {
-    const raw = window.localStorage.getItem(AUTH_USER_STORAGE_KEY)
-    if (!raw) return null
+    const raw = window.localStorage.getItem(AUTH_USER_STORAGE_KEY);
+    if (!raw) return null;
 
-    const parsed = JSON.parse(raw) as Partial<AuthUser>
-    const usernameValue = typeof parsed?.username === 'string' ? parsed.username : ''
-    const displayNameValue = typeof parsed?.displayName === 'string' ? parsed.displayName : ''
+    const parsed = JSON.parse(raw) as Partial<AuthUser>;
+    const usernameValue = typeof parsed?.username === "string" ? parsed.username : "";
+    const displayNameValue = typeof parsed?.displayName === "string" ? parsed.displayName : "";
 
-    if (!usernameValue && !displayNameValue) return null
+    if (!usernameValue && !displayNameValue) return null;
 
     return {
       username: usernameValue,
       displayName: displayNameValue,
-    }
+    };
   } catch {
-    return null
+    return null;
   }
 }
 
 function writeCachedAuthUser(nextUser: AuthUser | null) {
   try {
     if (!nextUser) {
-      window.localStorage.removeItem(AUTH_USER_STORAGE_KEY)
-      return
+      window.localStorage.removeItem(AUTH_USER_STORAGE_KEY);
+      return;
     }
 
-    window.localStorage.setItem(AUTH_USER_STORAGE_KEY, JSON.stringify(nextUser))
+    window.localStorage.setItem(AUTH_USER_STORAGE_KEY, JSON.stringify(nextUser));
   } catch {
     // Ignore storage failures.
   }
 }
 
-const cachedAuthUser = readCachedAuthUser()
+const cachedAuthUser = readCachedAuthUser();
 if (cachedAuthUser) {
-  user.value = cachedAuthUser
+  user.value = cachedAuthUser;
 }
 
 function isAbortError(err: unknown): boolean {
-  return err instanceof DOMException && err.name === 'AbortError'
+  return err instanceof DOMException && err.name === "AbortError";
 }
 
 function handleUnauthorizedSession() {
-  user.value = null
-  writeCachedAuthUser(null)
-  clearUiError()
-  loginError.value = ''
-  storeInitialized = false
+  user.value = null;
+  writeCachedAuthUser(null);
+  clearUiError();
+  loginError.value = "";
+  storeInitialized = false;
 }
 
 function clearUiError() {
-  error.value = ''
+  error.value = "";
 }
 
 function setUiError(err: unknown) {
   if (isUnauthorizedError(err)) {
-    handleUnauthorizedSession()
-    return
+    handleUnauthorizedSession();
+    return;
   }
 
   if (isNetworkError(err)) {
-    clearUiError()
-    return
+    clearUiError();
+    return;
   }
 
   if (isIndexedDbRuntimeError(err)) {
-    error.value = t('couldNotSaveLocally')
-    return
+    error.value = t("couldNotSaveLocally");
+    return;
   }
 
-  error.value = (err as Error)?.message || t('genericError')
+  error.value = (err as Error)?.message || t("genericError");
 }
 
 function setUiErrorMessage(message: string) {
-  error.value = message || t('genericError')
+  error.value = message || t("genericError");
 }
 
 async function loadMe(background = false) {
   try {
-    const controller = new AbortController()
-    const timer = window.setTimeout(() => controller.abort(), ME_REQUEST_TIMEOUT_MS)
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => controller.abort(), ME_REQUEST_TIMEOUT_MS);
 
-    let res: Response
+    let res: Response;
     try {
-      res = await fetch('/client-api/me', { signal: controller.signal })
+      res = await fetch("/client-api/me", { signal: controller.signal });
     } finally {
-      window.clearTimeout(timer)
+      window.clearTimeout(timer);
     }
 
     if (res.status === 401) {
-      handleUnauthorizedSession()
-      return
+      handleUnauthorizedSession();
+      return;
     }
 
-    if (!res.ok) throw new Error(t('couldNotLoadUser'))
+    if (!res.ok) throw new Error(t("couldNotLoadUser"));
 
-    const me = (await res.json()) as AuthUser
-    user.value = me
-    writeCachedAuthUser(me)
+    const me = (await res.json()) as AuthUser;
+    user.value = me;
+    writeCachedAuthUser(me);
   } catch (err: unknown) {
     if (isAbortError(err) || isNetworkError(err)) {
-      return
+      return;
     }
 
     if (!user.value) {
-      user.value = null
-      writeCachedAuthUser(null)
+      user.value = null;
+      writeCachedAuthUser(null);
     }
   } finally {
     if (!background) {
-      authChecked.value = true
+      authChecked.value = true;
     }
   }
 }
 
 async function login() {
-  loginError.value = ''
-  loggingIn.value = true
+  loginError.value = "";
+  loggingIn.value = true;
 
   try {
-    const res = await fetch('/auth/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+    const res = await fetch("/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ username: username.value, password: password.value }),
-    })
+    });
 
     if (res.status === 401) {
-      loginError.value = t('wrongCredentials')
-      return
+      loginError.value = t("wrongCredentials");
+      return;
     }
-    if (!res.ok) throw new Error(t('couldNotLogin'))
+    if (!res.ok) throw new Error(t("couldNotLogin"));
 
-    user.value = (await res.json()) as AuthUser
-    writeCachedAuthUser(user.value)
-    password.value = ''
-    await store.initialize()
+    user.value = (await res.json()) as AuthUser;
+    writeCachedAuthUser(user.value);
+    password.value = "";
+    await store.initialize();
   } catch {
-    loginError.value = t('couldNotLoginNow')
+    loginError.value = t("couldNotLoginNow");
   } finally {
-    loggingIn.value = false
+    loggingIn.value = false;
   }
 }
 
 async function logout() {
   try {
-    await fetch('/auth/logout', { method: 'POST' })
+    await fetch("/auth/logout", { method: "POST" });
   } finally {
-    user.value = null
-    writeCachedAuthUser(null)
-    clearUiError()
-    loginError.value = ''
+    user.value = null;
+    writeCachedAuthUser(null);
+    clearUiError();
+    loginError.value = "";
   }
 }
 
-const sortedNotes = computed(() => store.sortedNotes)
-const isMobile = ref(window.matchMedia('(max-width: 900px)').matches)
-const isListRoute = computed(() => route.name === 'list')
-const mobileTransitionName = ref<'' | 'slide-from-right' | 'slide-from-left'>('')
+const sortedNotes = computed(() => store.sortedNotes);
+const isMobile = ref(window.matchMedia("(max-width: 900px)").matches);
+const isListRoute = computed(() => route.name === "list");
+const mobileTransitionName = ref<"" | "slide-from-right" | "slide-from-left">("");
 
 const appShellClass = computed(() => ({
-  'mobile-list-view': isMobile.value && isListRoute.value,
-  'mobile-editor-view': isMobile.value && !isListRoute.value,
-}))
+  "mobile-list-view": isMobile.value && isListRoute.value,
+  "mobile-editor-view": isMobile.value && !isListRoute.value,
+}));
 
-function setMobileTransition(name: '' | 'slide-from-right' | 'slide-from-left') {
-  mobileTransitionName.value = isMobile.value ? name : ''
+function setMobileTransition(name: "" | "slide-from-right" | "slide-from-left") {
+  mobileTransitionName.value = isMobile.value ? name : "";
 }
 
-let selectRequestId = 0
+let selectRequestId = 0;
 
 async function selectNote(key: string, replace = false, withTransition = true) {
-  const requestId = ++selectRequestId
+  const requestId = ++selectRequestId;
 
   try {
-    await store.selectNote(key)
-    if (requestId !== selectRequestId) return
+    await store.selectNote(key);
+    if (requestId !== selectRequestId) return;
 
-    clearUiError()
-    const target = { name: 'note', params: { key } }
-    if (withTransition) setMobileTransition('slide-from-right')
-    if (replace) await router.replace(target)
-    else await router.push(target)
+    clearUiError();
+    const target = { name: "note", params: { key } };
+    if (withTransition) setMobileTransition("slide-from-right");
+    if (replace) await router.replace(target);
+    else await router.push(target);
   } catch (e) {
-    if (requestId !== selectRequestId) return
-    setUiError(e)
+    if (requestId !== selectRequestId) return;
+    setUiError(e);
   }
 }
 
-async function createNote(collection = '') {
+async function createNote(collection = "") {
   try {
-    const key = await store.createNote('', collection)
-    clearUiError()
-    setMobileTransition('slide-from-right')
-    await router.push({ name: 'note', params: { key } })
+    const key = await store.createNote("", collection);
+    clearUiError();
+    setMobileTransition("slide-from-right");
+    await router.push({ name: "note", params: { key } });
   } catch (e) {
-    setUiError(e)
+    setUiError(e);
   }
 }
 
 function onRename(renamedKey: string) {
-  void router.replace({ name: 'note', params: { key: renamedKey } })
+  void router.replace({ name: "note", params: { key: renamedKey } });
 }
 
 function goBackToList() {
-  setMobileTransition('slide-from-left')
-  void router.push({ name: 'list' })
+  setMobileTransition("slide-from-left");
+  void router.push({ name: "list" });
 }
 
 function onDeleted() {
-  setMobileTransition('slide-from-left')
-  void router.push({ name: 'list' })
+  setMobileTransition("slide-from-left");
+  void router.push({ name: "list" });
 }
 
 async function togglePin(key: string) {
   try {
-    await store.togglePin(key)
+    await store.togglePin(key);
   } catch (e) {
-    setUiError(e)
+    setUiError(e);
   }
 }
 
-const online = () => store.setOnline(true)
-const offline = () => store.setOnline(false)
+const online = () => store.setOnline(true);
+const offline = () => store.setOnline(false);
 const onUnauthorizedEvent = () => {
-  handleUnauthorizedSession()
-}
+  handleUnauthorizedSession();
+};
 
 useAutosave({
   store,
   onError: (err) => {
-    setUiError(err)
+    setUiError(err);
   },
-})
+});
 
 watch(
   () => route.params.key,
   async (value) => {
-    if (!isAuthenticated.value) return
+    if (!isAuthenticated.value) return;
 
-    const key = typeof value === 'string' ? value : ''
-    if (!key) return
-    if (key !== store.selectedKey) await selectNote(key, true, false)
+    const key = typeof value === "string" ? value : "";
+    if (!key) return;
+    if (key !== store.selectedKey) await selectNote(key, true, false);
   },
-)
+);
 
 watch(
   () => store.selectedKey,
   async (key) => {
-    if (!isAuthenticated.value || !key) return
-    if (route.name !== 'note') return
+    if (!isAuthenticated.value || !key) return;
+    if (route.name !== "note") return;
 
-    const routeKey = typeof route.params.key === 'string' ? route.params.key : ''
-    if (routeKey === key) return
+    const routeKey = typeof route.params.key === "string" ? route.params.key : "";
+    if (routeKey === key) return;
 
-    await router.replace({ name: 'note', params: { key } })
+    await router.replace({ name: "note", params: { key } });
   },
-)
+);
 
 const removeAfterEach = router.afterEach(() => {
   requestAnimationFrame(() => {
     requestAnimationFrame(() => {
-      mobileTransitionName.value = ''
-    })
-  })
-})
+      mobileTransitionName.value = "";
+    });
+  });
+});
 
-let media: MediaQueryList | null = null
-let mediaListener: ((event: MediaQueryListEvent) => void) | null = null
-let visualViewport: VisualViewport | null = null
-let viewportListener: (() => void) | null = null
+let media: MediaQueryList | null = null;
+let mediaListener: ((event: MediaQueryListEvent) => void) | null = null;
+let visualViewport: VisualViewport | null = null;
+let viewportListener: (() => void) | null = null;
 
 function isIOSDevice(): boolean {
-  const ua = navigator.userAgent
-  const platform = navigator.platform
+  const ua = navigator.userAgent;
+  const platform = navigator.platform;
 
-  const iosByUa = /iPad|iPhone|iPod/.test(ua)
-  const ipadOsDesktopUa = platform === 'MacIntel' && navigator.maxTouchPoints > 1
+  const iosByUa = /iPad|iPhone|iPod/.test(ua);
+  const ipadOsDesktopUa = platform === "MacIntel" && navigator.maxTouchPoints > 1;
 
-  return iosByUa || ipadOsDesktopUa
+  return iosByUa || ipadOsDesktopUa;
 }
 
 function updateIOSViewportHeight() {
-  if (!visualViewport) return
+  if (!visualViewport) return;
 
-  const viewportHeight = Math.round(visualViewport.height)
-  const fullHeight = Math.round(window.innerHeight)
+  const viewportHeight = Math.round(visualViewport.height);
+  const fullHeight = Math.round(window.innerHeight);
 
-  const keyboardOpen = fullHeight - viewportHeight > 120
+  const keyboardOpen = fullHeight - viewportHeight > 120;
 
   if (Math.abs(fullHeight - viewportHeight) < 2) {
-    document.documentElement.style.removeProperty('--app-height')
+    document.documentElement.style.removeProperty("--app-height");
   } else {
-    document.documentElement.style.setProperty('--app-height', `${viewportHeight}px`)
+    document.documentElement.style.setProperty("--app-height", `${viewportHeight}px`);
   }
 
-  document.documentElement.classList.toggle('ios-keyboard-open', keyboardOpen)
+  document.documentElement.classList.toggle("ios-keyboard-open", keyboardOpen);
 
-  window.scrollTo(0, 0)
+  window.scrollTo(0, 0);
 }
 
-let storeInitialized = false
+let storeInitialized = false;
 
 async function initializeAuthenticatedSession() {
-  if (!isAuthenticated.value || storeInitialized) return
+  if (!isAuthenticated.value || storeInitialized) return;
 
   try {
-    storeInitialized = true
-    await store.initialize()
+    storeInitialized = true;
+    await store.initialize();
 
-    const key = typeof route.params.key === 'string' ? route.params.key : ''
+    const key = typeof route.params.key === "string" ? route.params.key : "";
     if (key) {
-      await selectNote(key, true, false)
+      await selectNote(key, true, false);
     } else if (!isMobile.value && store.selectedKey) {
-      await router.replace({ name: 'note', params: { key: store.selectedKey } })
+      await router.replace({ name: "note", params: { key: store.selectedKey } });
     }
   } catch (e) {
-    storeInitialized = false
-    setUiError(e)
+    storeInitialized = false;
+    setUiError(e);
   }
 }
 
@@ -368,83 +368,83 @@ const {
   setShareUiErrorMessage,
   initializeShareSession,
   teardownShareSession,
-} = useShareSession({ isShareRoute, shareToken })
+} = useShareSession({ isShareRoute, shareToken });
 
 const appMode = computed<AppMode>(() => {
-  if (!isShareRoute.value) return 'full'
-  return shareAppMode.value
-})
+  if (!isShareRoute.value) return "full";
+  return shareAppMode.value;
+});
 
 watch(
   [isShareRoute, shareToken],
   ([isShare]) => {
     if (!isShare) {
-      teardownShareSession()
+      teardownShareSession();
       if (isAuthenticated.value && !storeInitialized) {
-        void initializeAuthenticatedSession()
+        void initializeAuthenticatedSession();
       }
-      return
+      return;
     }
 
-    authChecked.value = true
-    void initializeShareSession()
+    authChecked.value = true;
+    void initializeShareSession();
   },
   { immediate: true },
-)
+);
 
 onMounted(async () => {
-  window.addEventListener(UNAUTHORIZED_EVENT, onUnauthorizedEvent)
+  window.addEventListener(UNAUTHORIZED_EVENT, onUnauthorizedEvent);
 
   if (isShareRoute.value) {
-    authChecked.value = true
-    return
+    authChecked.value = true;
+    return;
   }
 
   if (isAuthenticated.value) {
-    authChecked.value = true
-    await initializeAuthenticatedSession()
-    void loadMe(true)
+    authChecked.value = true;
+    await initializeAuthenticatedSession();
+    void loadMe(true);
   } else {
-    await loadMe()
-    await initializeAuthenticatedSession()
+    await loadMe();
+    await initializeAuthenticatedSession();
   }
 
-  media = window.matchMedia('(max-width: 900px)')
+  media = window.matchMedia("(max-width: 900px)");
   mediaListener = (event: MediaQueryListEvent) => {
-    isMobile.value = event.matches
-  }
+    isMobile.value = event.matches;
+  };
 
-  media.addEventListener('change', mediaListener)
-  window.addEventListener('online', online)
-  window.addEventListener('offline', offline)
+  media.addEventListener("change", mediaListener);
+  window.addEventListener("online", online);
+  window.addEventListener("offline", offline);
 
   if (isIOSDevice() && window.visualViewport) {
-    visualViewport = window.visualViewport
+    visualViewport = window.visualViewport;
     viewportListener = () => {
-      updateIOSViewportHeight()
-    }
+      updateIOSViewportHeight();
+    };
 
-    visualViewport.addEventListener('resize', viewportListener)
-    visualViewport.addEventListener('scroll', viewportListener)
-    updateIOSViewportHeight()
+    visualViewport.addEventListener("resize", viewportListener);
+    visualViewport.addEventListener("scroll", viewportListener);
+    updateIOSViewportHeight();
   }
-})
+});
 
 onUnmounted(() => {
-  window.removeEventListener(UNAUTHORIZED_EVENT, onUnauthorizedEvent)
+  window.removeEventListener(UNAUTHORIZED_EVENT, onUnauthorizedEvent);
 
-  if (media && mediaListener) media.removeEventListener('change', mediaListener)
-  window.removeEventListener('online', online)
-  window.removeEventListener('offline', offline)
+  if (media && mediaListener) media.removeEventListener("change", mediaListener);
+  window.removeEventListener("online", online);
+  window.removeEventListener("offline", offline);
 
   if (visualViewport && viewportListener) {
-    visualViewport.removeEventListener('resize', viewportListener)
-    visualViewport.removeEventListener('scroll', viewportListener)
+    visualViewport.removeEventListener("resize", viewportListener);
+    visualViewport.removeEventListener("scroll", viewportListener);
   }
 
-  document.documentElement.style.removeProperty('--app-height')
-  removeAfterEach()
-})
+  document.documentElement.style.removeProperty("--app-height");
+  removeAfterEach();
+});
 </script>
 
 <template>
@@ -465,7 +465,7 @@ onUnmounted(() => {
 
     <main v-if="shareLoading" class="editor-area share-loading-state">
       <h1 class="app-logo">kladde</h1>
-      <p>{{ t('loading') }}</p>
+      <p>{{ t("loading") }}</p>
     </main>
 
     <EditorView
@@ -510,7 +510,7 @@ onUnmounted(() => {
         <p v-if="loginError" class="login-error" role="alert" aria-live="assertive">
           {{ loginError }}
         </p>
-        <button class="login-button" type="submit" :disabled="loggingIn">{{ t('login') }}</button>
+        <button class="login-button" type="submit" :disabled="loggingIn">{{ t("login") }}</button>
       </form>
     </div>
   </div>

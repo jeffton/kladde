@@ -1,31 +1,31 @@
-import { defineConfig } from 'vite-plus'
-import vue from '@vitejs/plugin-vue'
-import { VitePWA } from 'vite-plugin-pwa'
+import { defineConfig } from "vite-plus";
+import vue from "@vitejs/plugin-vue";
+import { VitePWA } from "vite-plugin-pwa";
 
 export default defineConfig({
   plugins: [
     vue(),
     VitePWA({
-      registerType: 'autoUpdate',
-      includeAssets: ['favicon.svg'],
+      registerType: "autoUpdate",
+      includeAssets: ["favicon.svg"],
       manifest: {
-        name: 'kladde',
-        short_name: 'kladde',
-        description: 'Offline-first markdown note app',
-        theme_color: '#f0ece4',
-        background_color: '#f0ece4',
-        display: 'standalone',
-        start_url: '/',
+        name: "kladde",
+        short_name: "kladde",
+        description: "Offline-first markdown note app",
+        theme_color: "#f0ece4",
+        background_color: "#f0ece4",
+        display: "standalone",
+        start_url: "/",
         icons: [
           {
-            src: '/pwa-192.png',
-            sizes: '192x192',
-            type: 'image/png',
+            src: "/pwa-192.png",
+            sizes: "192x192",
+            type: "image/png",
           },
           {
-            src: '/pwa-512.png',
-            sizes: '512x512',
-            type: 'image/png',
+            src: "/pwa-512.png",
+            sizes: "512x512",
+            type: "image/png",
           },
         ],
       },
@@ -33,14 +33,14 @@ export default defineConfig({
         cleanupOutdatedCaches: true,
         clientsClaim: true,
         skipWaiting: true,
-        navigateFallback: '/index.html',
-        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+        navigateFallback: "/index.html",
+        globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
         runtimeCaching: [
           {
             urlPattern: /^\/client-api\/.*$/,
-            handler: 'NetworkFirst',
+            handler: "NetworkFirst",
             options: {
-              cacheName: 'api-cache',
+              cacheName: "api-cache",
               networkTimeoutSeconds: 3,
               expiration: {
                 maxEntries: 100,
@@ -53,12 +53,10 @@ export default defineConfig({
     }),
   ],
   fmt: {
-    semi: false,
-    singleQuote: true,
-    ignorePatterns: ['dist/**'],
+    ignorePatterns: ["dist/**"],
   },
   lint: {
-    ignorePatterns: ['dist/**', 'e2e/**'],
+    ignorePatterns: ["dist/**", "e2e/**"],
     options: {
       typeAware: true,
       typeCheck: true,
@@ -70,22 +68,22 @@ export default defineConfig({
         codeSplitting: {
           groups: [
             {
-              name: 'prosemirror',
+              name: "prosemirror",
               test: /node_modules[\\/]prosemirror/,
               priority: 30,
             },
             {
-              name: 'tiptap',
+              name: "tiptap",
               test: /node_modules[\\/]@tiptap/,
               priority: 25,
             },
             {
-              name: 'markdown',
+              name: "markdown",
               test: /node_modules[\\/](?:tiptap-markdown|markdown-it|mdast|micromark|remark|rehype)/,
               priority: 20,
             },
             {
-              name: 'vendor',
+              name: "vendor",
               test: /node_modules/,
               priority: 10,
             },
@@ -95,13 +93,13 @@ export default defineConfig({
     },
   },
   test: {
-    environment: 'node',
-    include: ['src/**/*.test.ts'],
+    environment: "node",
+    include: ["src/**/*.test.ts"],
   },
   server: {
     proxy: {
-      '/client-api': 'http://localhost:8080',
-      '/api': 'http://localhost:8080',
+      "/client-api": "http://localhost:8080",
+      "/api": "http://localhost:8080",
     },
   },
-})
+});

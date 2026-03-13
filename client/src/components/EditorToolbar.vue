@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref } from 'vue'
+import { onMounted, onUnmounted, ref } from "vue";
 import {
   Bold,
   Code,
@@ -16,306 +16,306 @@ import {
   Indent,
   Outdent,
   Quote,
-} from 'lucide-vue-next'
-import type { Editor } from '@tiptap/vue-3'
-import { Fragment } from '@tiptap/pm/model'
-import type { Node as ProseMirrorNode } from '@tiptap/pm/model'
-import { TextSelection } from '@tiptap/pm/state'
-import { t } from '../i18n'
+} from "lucide-vue-next";
+import type { Editor } from "@tiptap/vue-3";
+import { Fragment } from "@tiptap/pm/model";
+import type { Node as ProseMirrorNode } from "@tiptap/pm/model";
+import { TextSelection } from "@tiptap/pm/state";
+import { t } from "../i18n";
 
 interface Props {
-  editor: Editor | null
-  isPlain?: boolean
-  showModeToggle?: boolean
-  readonly?: boolean
+  editor: Editor | null;
+  isPlain?: boolean;
+  showModeToggle?: boolean;
+  readonly?: boolean;
 }
 
-type ListTarget = 'bullet' | 'ordered' | 'task'
+type ListTarget = "bullet" | "ordered" | "task";
 
 const props = withDefaults(defineProps<Props>(), {
   editor: null,
   isPlain: false,
   showModeToggle: true,
   readonly: false,
-})
+});
 
 const emit = defineEmits<{
-  (e: 'toggle-plain'): void
-  (e: 'plain-action', action: string): void
-}>()
+  (e: "toggle-plain"): void;
+  (e: "plain-action", action: string): void;
+}>();
 
-const isMobile = ref(window.matchMedia('(max-width: 900px)').matches)
-const showMobileMore = ref(false)
-let media: MediaQueryList | null = null
-let mediaListener: ((event: MediaQueryListEvent) => void) | null = null
+const isMobile = ref(window.matchMedia("(max-width: 900px)").matches);
+const showMobileMore = ref(false);
+let media: MediaQueryList | null = null;
+let mediaListener: ((event: MediaQueryListEvent) => void) | null = null;
 
 function run(action: string, richAction?: () => void) {
   if (props.isPlain) {
-    emit('plain-action', action)
-    return
+    emit("plain-action", action);
+    return;
   }
-  richAction?.()
+  richAction?.();
 }
 
 function isDisabled() {
-  return props.readonly || (!props.editor && !props.isPlain)
+  return props.readonly || (!props.editor && !props.isPlain);
 }
 
 function toggleMore() {
-  showMobileMore.value = !showMobileMore.value
+  showMobileMore.value = !showMobileMore.value;
 }
 
 function convertListSelection(target: ListTarget): boolean {
-  if (!props.editor) return false
+  if (!props.editor) return false;
 
-  const editor = props.editor
-  const { state } = editor
-  const { schema, selection } = state
+  const editor = props.editor;
+  const { state } = editor;
+  const { schema, selection } = state;
 
-  const bulletList = schema.nodes.bulletList
-  const orderedList = schema.nodes.orderedList
-  const taskList = schema.nodes.taskList
-  const listItem = schema.nodes.listItem
-  const taskItem = schema.nodes.taskItem
+  const bulletList = schema.nodes.bulletList;
+  const orderedList = schema.nodes.orderedList;
+  const taskList = schema.nodes.taskList;
+  const listItem = schema.nodes.listItem;
+  const taskItem = schema.nodes.taskItem;
 
-  if (!bulletList || !orderedList || !taskList || !listItem || !taskItem) return false
+  if (!bulletList || !orderedList || !taskList || !listItem || !taskItem) return false;
 
   const isListNodeName = (name: string) =>
-    name === 'bulletList' || name === 'orderedList' || name === 'taskList'
+    name === "bulletList" || name === "orderedList" || name === "taskList";
 
   const targetNodeName =
-    target === 'bullet' ? 'bulletList' : target === 'ordered' ? 'orderedList' : 'taskList'
+    target === "bullet" ? "bulletList" : target === "ordered" ? "orderedList" : "taskList";
   const targetListType =
-    target === 'bullet' ? bulletList : target === 'ordered' ? orderedList : taskList
+    target === "bullet" ? bulletList : target === "ordered" ? orderedList : taskList;
 
   const addNearestListRoot = ($pos: typeof selection.$from, roots: number[]) => {
     for (let depth = $pos.depth; depth >= 1; depth--) {
-      const node = $pos.node(depth)
-      if (!isListNodeName(node.type.name)) continue
-      const listPos = $pos.before(depth)
-      if (!roots.includes(listPos)) roots.push(listPos)
-      return
+      const node = $pos.node(depth);
+      if (!isListNodeName(node.type.name)) continue;
+      const listPos = $pos.before(depth);
+      if (!roots.includes(listPos)) roots.push(listPos);
+      return;
     }
-  }
+  };
 
-  const listRoots: number[] = []
+  const listRoots: number[] = [];
 
-  addNearestListRoot(selection.$from, listRoots)
-  addNearestListRoot(selection.$to, listRoots)
+  addNearestListRoot(selection.$from, listRoots);
+  addNearestListRoot(selection.$to, listRoots);
 
   if (!selection.empty) {
     state.doc.nodesBetween(selection.from, selection.to, (node, pos) => {
-      if (!isListNodeName(node.type.name)) return
-      if (listRoots.includes(pos)) return
-      listRoots.push(pos)
-    })
+      if (!isListNodeName(node.type.name)) return;
+      if (listRoots.includes(pos)) return;
+      listRoots.push(pos);
+    });
   }
 
-  if (listRoots.length === 0) return false
+  if (listRoots.length === 0) return false;
 
   const convertSelectedItem = (item: ProseMirrorNode): ProseMirrorNode => {
-    if (target === 'task') {
-      if (item.type.name === 'taskItem') return item
-      return taskItem.create({ checked: false }, item.content)
+    if (target === "task") {
+      if (item.type.name === "taskItem") return item;
+      return taskItem.create({ checked: false }, item.content);
     }
 
-    if (item.type.name === 'listItem') return item
-    return listItem.create(null, item.content)
-  }
+    if (item.type.name === "listItem") return item;
+    return listItem.create(null, item.content);
+  };
 
   const findFirstTextPosition = (
     doc: typeof state.doc,
     from: number,
     to: number,
   ): number | null => {
-    let found: number | null = null
+    let found: number | null = null;
 
     doc.nodesBetween(from, to, (node, pos) => {
-      if (found != null) return false
-      if (!node.isText || !node.text?.length) return
-      found = pos + 1
-      return false
-    })
+      if (found != null) return false;
+      if (!node.isText || !node.text?.length) return;
+      found = pos + 1;
+      return false;
+    });
 
-    return found
-  }
+    return found;
+  };
 
-  let tr = state.tr
-  const collapsed = selection.empty
-  let preferredSelectionPos: number | null = null
+  let tr = state.tr;
+  const collapsed = selection.empty;
+  let preferredSelectionPos: number | null = null;
 
   listRoots
     .sort((a, b) => b - a)
     .forEach((rootPos) => {
-      const mappedRootPos = tr.mapping.map(rootPos)
-      const currentRoot = tr.doc.nodeAt(mappedRootPos)
-      if (!currentRoot || !isListNodeName(currentRoot.type.name)) return
+      const mappedRootPos = tr.mapping.map(rootPos);
+      const currentRoot = tr.doc.nodeAt(mappedRootPos);
+      if (!currentRoot || !isListNodeName(currentRoot.type.name)) return;
 
-      const mappedFrom = tr.mapping.map(selection.from)
-      const mappedTo = tr.mapping.map(selection.to)
+      const mappedFrom = tr.mapping.map(selection.from);
+      const mappedTo = tr.mapping.map(selection.to);
 
-      const replacementNodes: ProseMirrorNode[] = []
-      let bufferedMode: 'unchanged' | 'converted' | null = null
-      let bufferedItems: ProseMirrorNode[] = []
-      let hasSelectedItems = false
+      const replacementNodes: ProseMirrorNode[] = [];
+      let bufferedMode: "unchanged" | "converted" | null = null;
+      let bufferedItems: ProseMirrorNode[] = [];
+      let hasSelectedItems = false;
 
       const flushBufferedItems = () => {
-        if (!bufferedMode || bufferedItems.length === 0) return
+        if (!bufferedMode || bufferedItems.length === 0) return;
 
-        const content = Fragment.fromArray(bufferedItems)
-        if (bufferedMode === 'unchanged') {
-          replacementNodes.push(currentRoot.type.create(currentRoot.attrs, content))
+        const content = Fragment.fromArray(bufferedItems);
+        if (bufferedMode === "unchanged") {
+          replacementNodes.push(currentRoot.type.create(currentRoot.attrs, content));
         } else {
-          replacementNodes.push(targetListType.create(currentRoot.attrs, content))
+          replacementNodes.push(targetListType.create(currentRoot.attrs, content));
         }
 
-        bufferedMode = null
-        bufferedItems = []
-      }
+        bufferedMode = null;
+        bufferedItems = [];
+      };
 
       currentRoot.forEach((item, offset) => {
-        const itemFrom = mappedRootPos + 1 + offset
-        const itemTo = itemFrom + item.nodeSize
+        const itemFrom = mappedRootPos + 1 + offset;
+        const itemTo = itemFrom + item.nodeSize;
 
         const isSelected = collapsed
           ? mappedFrom >= itemFrom && mappedFrom <= itemTo
-          : itemTo > mappedFrom && itemFrom < mappedTo
+          : itemTo > mappedFrom && itemFrom < mappedTo;
 
         if (!isSelected) {
-          if (bufferedMode !== 'unchanged') {
-            flushBufferedItems()
-            bufferedMode = 'unchanged'
+          if (bufferedMode !== "unchanged") {
+            flushBufferedItems();
+            bufferedMode = "unchanged";
           }
-          bufferedItems.push(item)
-          return
+          bufferedItems.push(item);
+          return;
         }
 
-        hasSelectedItems = true
+        hasSelectedItems = true;
 
         if (currentRoot.type.name === targetNodeName) {
-          flushBufferedItems()
+          flushBufferedItems();
           item.forEach((child) => {
-            replacementNodes.push(child)
-          })
-          return
+            replacementNodes.push(child);
+          });
+          return;
         }
 
-        if (bufferedMode !== 'converted') {
-          flushBufferedItems()
-          bufferedMode = 'converted'
+        if (bufferedMode !== "converted") {
+          flushBufferedItems();
+          bufferedMode = "converted";
         }
 
-        bufferedItems.push(convertSelectedItem(item))
-      })
+        bufferedItems.push(convertSelectedItem(item));
+      });
 
-      flushBufferedItems()
+      flushBufferedItems();
 
-      if (!hasSelectedItems) return
+      if (!hasSelectedItems) return;
 
       const shouldSetPreferred =
         collapsed &&
         preferredSelectionPos == null &&
         mappedFrom >= mappedRootPos &&
-        mappedFrom <= mappedRootPos + currentRoot.nodeSize
+        mappedFrom <= mappedRootPos + currentRoot.nodeSize;
 
-      const replacementFragment = Fragment.fromArray(replacementNodes)
+      const replacementFragment = Fragment.fromArray(replacementNodes);
 
-      tr = tr.replaceWith(mappedRootPos, mappedRootPos + currentRoot.nodeSize, replacementFragment)
+      tr = tr.replaceWith(mappedRootPos, mappedRootPos + currentRoot.nodeSize, replacementFragment);
 
       if (shouldSetPreferred) {
-        const insertedTo = mappedRootPos + replacementFragment.size
+        const insertedTo = mappedRootPos + replacementFragment.size;
         preferredSelectionPos =
-          findFirstTextPosition(tr.doc, mappedRootPos, insertedTo) ?? mappedRootPos + 1
+          findFirstTextPosition(tr.doc, mappedRootPos, insertedTo) ?? mappedRootPos + 1;
       }
-    })
+    });
 
-  if (!tr.docChanged) return false
+  if (!tr.docChanged) return false;
 
-  const docMax = Math.max(1, tr.doc.content.size)
-  const clamp = (pos: number) => Math.min(Math.max(pos, 1), docMax)
+  const docMax = Math.max(1, tr.doc.content.size);
+  const clamp = (pos: number) => Math.min(Math.max(pos, 1), docMax);
 
   if (preferredSelectionPos != null) {
-    const resolved = tr.doc.resolve(clamp(preferredSelectionPos))
+    const resolved = tr.doc.resolve(clamp(preferredSelectionPos));
     const nextSelection =
-      TextSelection.findFrom(resolved, 1, true) || TextSelection.near(resolved, 1)
-    tr = tr.setSelection(nextSelection)
+      TextSelection.findFrom(resolved, 1, true) || TextSelection.near(resolved, 1);
+    tr = tr.setSelection(nextSelection);
   } else {
-    const mappedAnchor = clamp(tr.mapping.map(selection.anchor, 1))
-    const mappedHead = clamp(tr.mapping.map(selection.head, 1))
+    const mappedAnchor = clamp(tr.mapping.map(selection.anchor, 1));
+    const mappedHead = clamp(tr.mapping.map(selection.head, 1));
 
     try {
-      tr = tr.setSelection(TextSelection.create(tr.doc, mappedAnchor, mappedHead))
+      tr = tr.setSelection(TextSelection.create(tr.doc, mappedAnchor, mappedHead));
     } catch {
-      tr = tr.setSelection(TextSelection.near(tr.doc.resolve(mappedAnchor), -1))
+      tr = tr.setSelection(TextSelection.near(tr.doc.resolve(mappedAnchor), -1));
     }
   }
 
-  editor.view.dispatch(tr)
-  return true
+  editor.view.dispatch(tr);
+  return true;
 }
 
 function syncEditorSelectionFromDom() {
-  if (!props.editor) return
+  if (!props.editor) return;
 
-  const domSelection = window.getSelection()
-  if (!domSelection?.anchorNode || !domSelection.focusNode) return
+  const domSelection = window.getSelection();
+  if (!domSelection?.anchorNode || !domSelection.focusNode) return;
 
-  const root = props.editor.view.dom as HTMLElement
-  if (!root.contains(domSelection.anchorNode) || !root.contains(domSelection.focusNode)) return
+  const root = props.editor.view.dom as HTMLElement;
+  if (!root.contains(domSelection.anchorNode) || !root.contains(domSelection.focusNode)) return;
 
   try {
-    const anchor = props.editor.view.posAtDOM(domSelection.anchorNode, domSelection.anchorOffset)
-    const head = props.editor.view.posAtDOM(domSelection.focusNode, domSelection.focusOffset)
+    const anchor = props.editor.view.posAtDOM(domSelection.anchorNode, domSelection.anchorOffset);
+    const head = props.editor.view.posAtDOM(domSelection.focusNode, domSelection.focusOffset);
     props.editor.commands.setTextSelection({
       from: Math.min(anchor, head),
       to: Math.max(anchor, head),
-    })
+    });
   } catch {
     // Ignore unresolvable DOM selection nodes.
   }
 }
 
 function applyRichListType(target: ListTarget) {
-  if (!props.editor) return
+  if (!props.editor) return;
 
-  syncEditorSelectionFromDom()
-  props.editor.chain().focus().run()
+  syncEditorSelectionFromDom();
+  props.editor.chain().focus().run();
 
-  if (convertListSelection(target)) return
+  if (convertListSelection(target)) return;
 
-  if (target === 'bullet') props.editor.chain().focus().toggleBulletList().run()
-  if (target === 'ordered') props.editor.chain().focus().toggleOrderedList().run()
-  if (target === 'task') props.editor.chain().focus().toggleTaskList().run()
+  if (target === "bullet") props.editor.chain().focus().toggleBulletList().run();
+  if (target === "ordered") props.editor.chain().focus().toggleOrderedList().run();
+  if (target === "task") props.editor.chain().focus().toggleTaskList().run();
 }
 
 function indentRich() {
-  if (!props.editor) return
+  if (!props.editor) return;
 
-  syncEditorSelectionFromDom()
-  if (props.editor.chain().focus().sinkListItem('taskItem').run()) return
-  props.editor.chain().focus().sinkListItem('listItem').run()
+  syncEditorSelectionFromDom();
+  if (props.editor.chain().focus().sinkListItem("taskItem").run()) return;
+  props.editor.chain().focus().sinkListItem("listItem").run();
 }
 
 function outdentRich() {
-  if (!props.editor) return
+  if (!props.editor) return;
 
-  syncEditorSelectionFromDom()
-  if (props.editor.chain().focus().liftListItem('taskItem').run()) return
-  props.editor.chain().focus().liftListItem('listItem').run()
+  syncEditorSelectionFromDom();
+  if (props.editor.chain().focus().liftListItem("taskItem").run()) return;
+  props.editor.chain().focus().liftListItem("listItem").run();
 }
 
 onMounted(() => {
-  media = window.matchMedia('(max-width: 900px)')
+  media = window.matchMedia("(max-width: 900px)");
   mediaListener = (event: MediaQueryListEvent) => {
-    isMobile.value = event.matches
-    if (!event.matches) showMobileMore.value = false
-  }
-  media.addEventListener('change', mediaListener)
-})
+    isMobile.value = event.matches;
+    if (!event.matches) showMobileMore.value = false;
+  };
+  media.addEventListener("change", mediaListener);
+});
 
 onUnmounted(() => {
-  if (media && mediaListener) media.removeEventListener('change', mediaListener)
-})
+  if (media && mediaListener) media.removeEventListener("change", mediaListener);
+});
 </script>
 
 <template>

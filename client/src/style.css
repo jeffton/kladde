@@ -1,38 +1,38 @@
 @font-face {
-  font-family: 'Fraunces';
-  src: url('/fonts/fraunces-semibold.woff2') format('woff2');
+  font-family: "Fraunces";
+  src: url("/fonts/fraunces-semibold.woff2") format("woff2");
   font-weight: 600;
   font-style: normal;
   font-display: swap;
 }
 
 @font-face {
-  font-family: 'Lora';
-  src: url('/fonts/lora-regular.woff2') format('woff2');
+  font-family: "Lora";
+  src: url("/fonts/lora-regular.woff2") format("woff2");
   font-weight: 400;
   font-style: normal;
   font-display: swap;
 }
 
 @font-face {
-  font-family: 'Lora';
-  src: url('/fonts/lora-italic.woff2') format('woff2');
+  font-family: "Lora";
+  src: url("/fonts/lora-italic.woff2") format("woff2");
   font-weight: 400;
   font-style: italic;
   font-display: swap;
 }
 
 @font-face {
-  font-family: 'Lora';
-  src: url('/fonts/lora-bold.woff2') format('woff2');
+  font-family: "Lora";
+  src: url("/fonts/lora-bold.woff2") format("woff2");
   font-weight: 700;
   font-style: normal;
   font-display: swap;
 }
 
 @font-face {
-  font-family: 'Lora';
-  src: url('/fonts/lora-bold-italic.woff2') format('woff2');
+  font-family: "Lora";
+  src: url("/fonts/lora-bold-italic.woff2") format("woff2");
   font-weight: 700;
   font-style: italic;
   font-display: swap;
@@ -73,7 +73,7 @@
   }
 }
 
-[data-theme='summer'] {
+[data-theme="summer"] {
   --bg: #faf0e4;
   --panel: #fff5eb;
   --text: #3d2517;
@@ -87,7 +87,7 @@
 }
 
 @media (prefers-color-scheme: dark) {
-  [data-theme='summer'] {
+  [data-theme="summer"] {
     --bg: #1e1510;
     --panel: #2a1e18;
     --text: #f0dcc8;
@@ -165,7 +165,7 @@ h1 {
   margin-bottom: 0;
 }
 .app-logo {
-  font-family: 'Fraunces', serif;
+  font-family: "Fraunces", serif;
   font-weight: 600;
   font-size: 1.6rem;
   letter-spacing: -0.02em;
@@ -258,7 +258,7 @@ button:disabled {
 }
 
 .collection-filter-wrap::after {
-  content: '';
+  content: "";
   position: absolute;
   right: 0.95rem;
   top: 50%;
@@ -1078,7 +1078,7 @@ button:disabled {
   transition: background-color 0.2s ease;
 }
 
-.share-toggle[aria-checked='true'] .share-toggle-track {
+.share-toggle[aria-checked="true"] .share-toggle-track {
   background: var(--accent);
 }
 
@@ -1094,7 +1094,7 @@ button:disabled {
   transition: transform 0.2s ease;
 }
 
-.share-toggle[aria-checked='true'] .share-toggle-thumb {
+.share-toggle[aria-checked="true"] .share-toggle-thumb {
   transform: translateX(0.95rem);
 }
 
@@ -1153,7 +1153,7 @@ button:disabled {
 }
 
 .tiptap-root .ProseMirror {
-  font-family: 'Lora', Georgia, serif;
+  font-family: "Lora", Georgia, serif;
   font-size: 1.08rem;
   line-height: 1.6;
 }
@@ -1190,17 +1190,17 @@ button:disabled {
   margin: 0.2rem 0;
 }
 
-.tiptap-root .ProseMirror ul[data-type='taskList'] {
+.tiptap-root .ProseMirror ul[data-type="taskList"] {
   list-style: none;
   padding-left: 0;
   margin: 0.45rem 0;
 }
 
-.tiptap-root .ProseMirror ul[data-type='taskList'] ul[data-type='taskList'] {
+.tiptap-root .ProseMirror ul[data-type="taskList"] ul[data-type="taskList"] {
   margin: 0;
 }
 
-.tiptap-root .ProseMirror ul[data-type='taskList'] > li {
+.tiptap-root .ProseMirror ul[data-type="taskList"] > li {
   display: flex;
   gap: 0.4rem;
   align-items: flex-start;
@@ -1208,23 +1208,23 @@ button:disabled {
   margin: 0.15rem 0;
 }
 
-.tiptap-root .ProseMirror ul[data-type='taskList'] li > label {
+.tiptap-root .ProseMirror ul[data-type="taskList"] li > label {
   flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
   height: 1.5em;
 }
 
-.tiptap-root .ProseMirror ul[data-type='taskList'] li > div {
+.tiptap-root .ProseMirror ul[data-type="taskList"] li > div {
   flex: 1;
   min-width: 0;
 }
 
-.tiptap-root .ProseMirror ul[data-type='taskList'] li > div p {
+.tiptap-root .ProseMirror ul[data-type="taskList"] li > div p {
   margin: 0;
 }
 
-.tiptap-root .ProseMirror ul[data-type='taskList'] li input[type='checkbox'] {
+.tiptap-root .ProseMirror ul[data-type="taskList"] li input[type="checkbox"] {
   width: 16px;
   height: 16px;
   margin: 0;
@@ -1234,18 +1234,18 @@ button:disabled {
   flex-shrink: 0;
 }
 
-.tiptap-root .ProseMirror ul[data-type='taskList'] li[data-checked='true'] > div > p {
+.tiptap-root .ProseMirror ul[data-type="taskList"] li[data-checked="true"] > div > p {
   color: var(--muted);
   text-decoration: line-through;
   text-decoration-thickness: 1px;
 }
 
-[data-theme='summer'] .tiptap-root .ProseMirror ul[data-type='taskList'] li input[type='checkbox'] {
+[data-theme="summer"] .tiptap-root .ProseMirror ul[data-type="taskList"] li input[type="checkbox"] {
   color: color-mix(in srgb, var(--accent) 44%, var(--muted) 56%);
 }
 
 .tiptap-root .ProseMirror code {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
   font-size: 0.92em;
   background: var(--code-bg);
   padding: 0.1rem 0.3rem;
@@ -1253,7 +1253,7 @@ button:disabled {
 }
 
 .tiptap-root .ProseMirror pre {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
   background: var(--code-bg);
   padding: 0.75rem;
   border-radius: 0.45rem;
@@ -1313,12 +1313,12 @@ button:disabled {
   }
 }
 
-[data-theme='summer'] .tiptap-root .ProseMirror a {
+[data-theme="summer"] .tiptap-root .ProseMirror a {
   color: #c44d20;
 }
 
 @media (prefers-color-scheme: dark) {
-  [data-theme='summer'] .tiptap-root .ProseMirror a {
+  [data-theme="summer"] .tiptap-root .ProseMirror a {
     color: #f0a070;
   }
 }

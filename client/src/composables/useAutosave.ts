@@ -1,57 +1,57 @@
-import { onMounted, onUnmounted } from 'vue'
-import type { NotesStore } from '../stores/notes'
+import { onMounted, onUnmounted } from "vue";
+import type { NotesStore } from "../stores/notes";
 
 interface UseAutosaveOptions {
-  store: NotesStore
-  onError?: (error: unknown) => void
+  store: NotesStore;
+  onError?: (error: unknown) => void;
 }
 
 export function useAutosave({ store, onError }: UseAutosaveOptions) {
-  let autosaveTimer: number | null = null
-  let syncTimer: number | null = null
-  let autosaveInProgress = false
-  let syncInProgress = false
+  let autosaveTimer: number | null = null;
+  let syncTimer: number | null = null;
+  let autosaveInProgress = false;
+  let syncInProgress = false;
 
   const flush = () => {
-    if (!store.selectedKey || !store.dirty) return
-    void store.saveCurrent().catch((err) => onError?.(err))
-  }
+    if (!store.selectedKey || !store.dirty) return;
+    void store.saveCurrent().catch((err) => onError?.(err));
+  };
 
   onMounted(() => {
     autosaveTimer = window.setInterval(async () => {
-      if (autosaveInProgress || !store.dirty) return
-      autosaveInProgress = true
+      if (autosaveInProgress || !store.dirty) return;
+      autosaveInProgress = true;
       try {
-        await store.saveCurrent()
+        await store.saveCurrent();
       } catch (err) {
-        onError?.(err)
+        onError?.(err);
       } finally {
-        autosaveInProgress = false
+        autosaveInProgress = false;
       }
-    }, 2500)
+    }, 2500);
 
     syncTimer = window.setInterval(async () => {
-      if (syncInProgress || !store.online) return
-      syncInProgress = true
+      if (syncInProgress || !store.online) return;
+      syncInProgress = true;
       try {
-        await store.syncWithServer()
+        await store.syncWithServer();
       } catch (err) {
-        onError?.(err)
+        onError?.(err);
       } finally {
-        syncInProgress = false
+        syncInProgress = false;
       }
-    }, 15000)
+    }, 15000);
 
-    window.addEventListener('beforeunload', flush)
-    window.addEventListener('pagehide', flush)
-  })
+    window.addEventListener("beforeunload", flush);
+    window.addEventListener("pagehide", flush);
+  });
 
   onUnmounted(() => {
-    if (autosaveTimer !== null) window.clearInterval(autosaveTimer)
-    if (syncTimer !== null) window.clearInterval(syncTimer)
-    window.removeEventListener('beforeunload', flush)
-    window.removeEventListener('pagehide', flush)
-  })
+    if (autosaveTimer !== null) window.clearInterval(autosaveTimer);
+    if (syncTimer !== null) window.clearInterval(syncTimer);
+    window.removeEventListener("beforeunload", flush);
+    window.removeEventListener("pagehide", flush);
+  });
 
-  return { flushNow: flush }
+  return { flushNow: flush };
 }

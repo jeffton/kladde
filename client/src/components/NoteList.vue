@@ -1,105 +1,105 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { KeyRound, LogOut, Plus, Search, Star, Sun, User, X } from 'lucide-vue-next'
-import type { NoteMeta } from '../types'
-import { t } from '../i18n'
-import { currentTheme, setTheme } from '../theme'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { KeyRound, LogOut, Plus, Search, Star, Sun, User, X } from "lucide-vue-next";
+import type { NoteMeta } from "../types";
+import { t } from "../i18n";
+import { currentTheme, setTheme } from "../theme";
 
 interface Props {
-  notes: NoteMeta[]
-  selectedKey?: string
-  noteContents: Record<string, string>
-  userLabel?: string
+  notes: NoteMeta[];
+  selectedKey?: string;
+  noteContents: Record<string, string>;
+  userLabel?: string;
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  selectedKey: '',
-  userLabel: '',
-})
+  selectedKey: "",
+  userLabel: "",
+});
 
 const emit = defineEmits<{
-  (e: 'create', collection: string): void
-  (e: 'select', key: string): void
-  (e: 'toggle-pin', key: string): void
-  (e: 'logout'): void
-}>()
+  (e: "create", collection: string): void;
+  (e: "select", key: string): void;
+  (e: "toggle-pin", key: string): void;
+  (e: "logout"): void;
+}>();
 
-const query = ref('')
-const userMenuWrap = ref<HTMLElement | null>(null)
-const showUserMenu = ref(false)
-const showPasswordForm = ref(false)
-const currentPassword = ref('')
-const newPassword = ref('')
-const confirmPassword = ref('')
-const passwordError = ref('')
-const passwordSuccess = ref('')
-const changingPassword = ref(false)
+const query = ref("");
+const userMenuWrap = ref<HTMLElement | null>(null);
+const showUserMenu = ref(false);
+const showPasswordForm = ref(false);
+const currentPassword = ref("");
+const newPassword = ref("");
+const confirmPassword = ref("");
+const passwordError = ref("");
+const passwordSuccess = ref("");
+const changingPassword = ref(false);
 
-const COLLECTION_FILTER_ALL = '__all__'
-const COLLECTION_FILTER_NONE = '__none__'
-const collectionFilter = ref<string>(COLLECTION_FILTER_ALL)
+const COLLECTION_FILTER_ALL = "__all__";
+const COLLECTION_FILTER_NONE = "__none__";
+const collectionFilter = ref<string>(COLLECTION_FILTER_ALL);
 
-const locale = typeof navigator !== 'undefined' ? navigator.language : 'en-US'
-const collator = new Intl.Collator(locale, { sensitivity: 'base' })
+const locale = typeof navigator !== "undefined" ? navigator.language : "en-US";
+const collator = new Intl.Collator(locale, { sensitivity: "base" });
 
 const availableCollections = computed(() => {
-  const values = Array.from(new Set(props.notes.map((note) => note.collection).filter(Boolean)))
-  values.sort((a, b) => collator.compare(a, b))
-  return values
-})
+  const values = Array.from(new Set(props.notes.map((note) => note.collection).filter(Boolean)));
+  values.sort((a, b) => collator.compare(a, b));
+  return values;
+});
 
 watch(availableCollections, (allCollections) => {
   if (
     collectionFilter.value === COLLECTION_FILTER_ALL ||
     collectionFilter.value === COLLECTION_FILTER_NONE
   )
-    return
+    return;
   if (!allCollections.includes(collectionFilter.value)) {
-    collectionFilter.value = COLLECTION_FILTER_ALL
+    collectionFilter.value = COLLECTION_FILTER_ALL;
   }
-})
+});
 
 const filteredNotes = computed(() => {
-  const term = query.value.trim().toLowerCase()
+  const term = query.value.trim().toLowerCase();
 
-  let base = props.notes
+  let base = props.notes;
   if (collectionFilter.value === COLLECTION_FILTER_NONE) {
-    base = base.filter((note) => !note.collection)
+    base = base.filter((note) => !note.collection);
   } else if (collectionFilter.value !== COLLECTION_FILTER_ALL) {
-    base = base.filter((note) => note.collection === collectionFilter.value)
+    base = base.filter((note) => note.collection === collectionFilter.value);
   }
 
-  if (!term) return base
+  if (!term) return base;
 
-  const titleMatches: NoteMeta[] = []
-  const contentMatches: NoteMeta[] = []
+  const titleMatches: NoteMeta[] = [];
+  const contentMatches: NoteMeta[] = [];
 
   for (const note of base) {
-    const titleMatch = note.title.toLowerCase().includes(term)
+    const titleMatch = note.title.toLowerCase().includes(term);
     if (titleMatch) {
-      titleMatches.push(note)
-      continue
+      titleMatches.push(note);
+      continue;
     }
 
-    const content = props.noteContents[note.key] || ''
+    const content = props.noteContents[note.key] || "";
     if (content.toLowerCase().includes(term)) {
-      contentMatches.push(note)
+      contentMatches.push(note);
     }
   }
 
-  return [...titleMatches, ...contentMatches]
-})
+  return [...titleMatches, ...contentMatches];
+});
 
 function clearQuery() {
-  query.value = ''
+  query.value = "";
 }
 
 function onKeydown(event: KeyboardEvent) {
-  if (event.key === 'Escape') clearQuery()
+  if (event.key === "Escape") clearQuery();
 }
 
 function onSelect(key: string) {
-  emit('select', key)
+  emit("select", key);
 }
 
 function createInCurrentFilter() {
@@ -107,84 +107,84 @@ function createInCurrentFilter() {
     collectionFilter.value === COLLECTION_FILTER_ALL ||
     collectionFilter.value === COLLECTION_FILTER_NONE
   ) {
-    emit('create', '')
-    return
+    emit("create", "");
+    return;
   }
-  emit('create', collectionFilter.value)
+  emit("create", collectionFilter.value);
 }
 
 function toggleUserMenu() {
-  showUserMenu.value = !showUserMenu.value
+  showUserMenu.value = !showUserMenu.value;
 }
 
 function onDocumentClick(event: MouseEvent) {
-  const target = event.target as Node | null
-  if (!target) return
-  if (userMenuWrap.value?.contains(target)) return
-  showUserMenu.value = false
+  const target = event.target as Node | null;
+  if (!target) return;
+  if (userMenuWrap.value?.contains(target)) return;
+  showUserMenu.value = false;
 }
 
 onMounted(() => {
-  document.addEventListener('click', onDocumentClick)
-})
+  document.addEventListener("click", onDocumentClick);
+});
 
 onBeforeUnmount(() => {
-  document.removeEventListener('click', onDocumentClick)
-})
+  document.removeEventListener("click", onDocumentClick);
+});
 
 function toggleTheme() {
-  setTheme(currentTheme.value === 'default' ? 'summer' : 'default')
+  setTheme(currentTheme.value === "default" ? "summer" : "default");
 }
 
 function togglePasswordForm() {
-  showPasswordForm.value = !showPasswordForm.value
-  passwordError.value = ''
-  passwordSuccess.value = ''
+  showPasswordForm.value = !showPasswordForm.value;
+  passwordError.value = "";
+  passwordSuccess.value = "";
   if (!showPasswordForm.value) {
-    currentPassword.value = ''
-    newPassword.value = ''
-    confirmPassword.value = ''
+    currentPassword.value = "";
+    newPassword.value = "";
+    confirmPassword.value = "";
   }
 }
 
 async function submitPasswordChange() {
-  passwordError.value = ''
-  passwordSuccess.value = ''
+  passwordError.value = "";
+  passwordSuccess.value = "";
 
   if (!currentPassword.value || !newPassword.value || !confirmPassword.value) {
-    passwordError.value = t('fillAllFields')
-    return
+    passwordError.value = t("fillAllFields");
+    return;
   }
 
   if (newPassword.value !== confirmPassword.value) {
-    passwordError.value = t('passwordMismatch')
-    return
+    passwordError.value = t("passwordMismatch");
+    return;
   }
 
-  changingPassword.value = true
+  changingPassword.value = true;
   try {
-    const res = await fetch('/client-api/me/password', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+    const res = await fetch("/client-api/me/password", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         currentPassword: currentPassword.value,
         newPassword: newPassword.value,
       }),
-    })
+    });
 
     if (!res.ok) {
-      const data = (await res.json().catch(() => null)) as { error?: string } | null
-      throw new Error(data?.error || t('couldNotChangePassword'))
+      const data = (await res.json().catch(() => null)) as { error?: string } | null;
+      throw new Error(data?.error || t("couldNotChangePassword"));
     }
 
-    passwordSuccess.value = t('passwordUpdated')
-    currentPassword.value = ''
-    newPassword.value = ''
-    confirmPassword.value = ''
+    passwordSuccess.value = t("passwordUpdated");
+    currentPassword.value = "";
+    newPassword.value = "";
+    confirmPassword.value = "";
   } catch (err) {
-    passwordError.value = (err as Error)?.message || t('couldNotChangePassword')
+    passwordError.value = (err as Error)?.message || t("couldNotChangePassword");
   } finally {
-    changingPassword.value = false
+    changingPassword.value = false;
   }
 }
 </script>
@@ -203,15 +203,15 @@ async function submitPasswordChange() {
           <div class="user-menu-label">{{ userLabel }}</div>
           <button class="user-menu-item" @click="toggleTheme">
             <Sun :size="18" />
-            {{ currentTheme === 'default' ? t('summerTheme') : t('defaultTheme') }}
+            {{ currentTheme === "default" ? t("summerTheme") : t("defaultTheme") }}
           </button>
           <button class="user-menu-item" @click="togglePasswordForm">
             <KeyRound :size="18" />
-            {{ t('changePassword') }}
+            {{ t("changePassword") }}
           </button>
           <button class="user-menu-item" @click="emit('logout')">
             <LogOut :size="18" />
-            {{ t('logout') }}
+            {{ t("logout") }}
           </button>
 
           <form
@@ -246,7 +246,7 @@ async function submitPasswordChange() {
             <p v-if="passwordError" class="password-error">{{ passwordError }}</p>
             <p v-if="passwordSuccess" class="password-success">{{ passwordSuccess }}</p>
             <button class="password-submit" type="submit" :disabled="changingPassword">
-              {{ t('updatePassword') }}
+              {{ t("updatePassword") }}
             </button>
           </form>
         </div>
@@ -287,7 +287,7 @@ async function submitPasswordChange() {
           <option v-for="collection in availableCollections" :key="collection" :value="collection">
             {{ collection }}
           </option>
-          <option :value="COLLECTION_FILTER_NONE">{{ t('noCollection') }}</option>
+          <option :value="COLLECTION_FILTER_NONE">{{ t("noCollection") }}</option>
         </select>
       </div>
     </div>
