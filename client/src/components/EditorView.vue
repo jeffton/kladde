@@ -1,19 +1,21 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import { EditorContent, useEditor } from "@tiptap/vue-3";
-import type { Editor as TiptapEditor } from "@tiptap/core";
+import type {
+  Editor as TiptapEditor,
+  JSONContent,
+  MarkdownParseHelpers,
+  MarkdownRendererHelpers,
+  MarkdownToken,
+} from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
-import TaskList from "@tiptap/extension-task-list";
-import TaskItem from "@tiptap/extension-task-item";
+import { TaskItem, TaskList } from "@tiptap/extension-list";
 import Link from "@tiptap/extension-link";
 import CodeBlock from "@tiptap/extension-code-block";
 import Strike from "@tiptap/extension-strike";
 import Paragraph from "@tiptap/extension-paragraph";
-import Table from "@tiptap/extension-table";
-import TableRow from "@tiptap/extension-table-row";
-import TableHeader from "@tiptap/extension-table-header";
-import TableCell from "@tiptap/extension-table-cell";
-import { Markdown } from "tiptap-markdown";
+import { Table, TableCell, TableHeader, TableRow } from "@tiptap/extension-table";
+import { Markdown } from "@tiptap/markdown";
 import {
   AlertTriangle,
   Check,
@@ -64,45 +66,40 @@ const plainWrap = ref<HTMLElement | null>(null);
 const wysiwygWrap = ref<HTMLElement | null>(null);
 let ignoreEditorChanges = false;
 
-// Preserve empty paragraphs through markdown round-trip.
-// ProseMirror's default serializer drops empty paragraphs.
-// We serialize them as \u00A0 (nbsp), then strip on save.
+// Preserve empty paragraphs through markdown round-trip using a literal nbsp.
 const NBSP = "\u00A0";
+const EMPTY_PARAGRAPH_HTML_ENTITY = "&nbsp;";
 
-interface MarkdownSerializerState {
-  write: (content: string) => void;
-  closeBlock: (node: unknown) => void;
-  renderInline: (node: unknown) => void;
-}
-
-interface ProseMirrorNodeLike {
-  content: { size: number };
-}
-
-// Custom paragraph extension that serializes empty paragraphs as nbsp
 const PreservingParagraph = Paragraph.extend({
-  addStorage() {
-    const parentStorage = this.parent?.() || {};
-    const parentMarkdown = parentStorage.markdown || {};
+  parseMarkdown: (token: MarkdownToken, helpers: MarkdownParseHelpers) => {
+    const tokens = token.tokens || [];
 
-    return {
-      ...parentStorage,
-      markdown: {
-        ...parentMarkdown,
-        serialize(state: MarkdownSerializerState, node: ProseMirrorNodeLike) {
-          if (node.content.size === 0) {
-            state.write(NBSP);
-            state.closeBlock(node);
-            return;
-          }
-          state.renderInline(node);
-          state.closeBlock(node);
-        },
-      },
-    };
+    if (tokens.length === 1 && tokens[0].type === "image") {
+      return helpers.parseChildren([tokens[0]]);
+    }
+
+    const content = helpers.parseInline(tokens);
+
+    if (
+      content.length === 1 &&
+      content[0].type === "text" &&
+      (content[0].text === EMPTY_PARAGRAPH_HTML_ENTITY || content[0].text === NBSP)
+    ) {
+      return helpers.createNode("paragraph", undefined, []);
+    }
+
+    return helpers.createNode("paragraph", undefined, content);
+  },
+  renderMarkdown: (node: JSONContent, helpers: MarkdownRendererHelpers) => {
+    const content = Array.isArray(node.content) ? node.content : [];
+
+    if (content.length === 0) {
+      return NBSP;
+    }
+
+    return helpers.renderChildren(content);
   },
 });
-
 // Task item extension without forced focus on checkbox toggle.
 // The upstream extension calls chain().focus() on change, which triggers
 // virtual keyboard popup on touch devices when editor is currently blurred.
@@ -442,7 +439,7 @@ const statusAriaLabel = computed(() => statusMeta.value.lines.join(", "));
 
 const editor = useEditor({
   extensions: [
-    StarterKit.configure({ strike: false, codeBlock: false, paragraph: false }),
+    StarterKit.configure({ strike: false, codeBlock: false, paragraph: false, link: false }),
     PreservingParagraph,
     Strike,
     CodeBlock,
@@ -458,7 +455,7 @@ const editor = useEditor({
       linkOnPaste: true,
       HTMLAttributes: { rel: "noopener noreferrer nofollow", target: "_blank" },
     }),
-    Markdown.configure({ html: false, transformCopiedText: true, transformPastedText: true }),
+    Markdown.configure(),
   ],
   editorProps: {
     clipboardTextSerializer: (slice) => {
@@ -474,10 +471,11 @@ const editor = useEditor({
   },
   editable: !isReadonlyMode.value,
   content: props.store.currentContent || "",
+  contentType: "markdown",
   onUpdate: ({ editor: tiptapEditor }) => {
     if (ignoreEditorChanges) return;
 
-    const nextMarkdown = tiptapEditor.storage.markdown.getMarkdown();
+    const nextMarkdown = tiptapEditor.getMarkdown();
     if (nextMarkdown === props.store.currentContent) return;
 
     void props.store.setCurrentContent(nextMarkdown).catch((err: unknown) => {
@@ -496,7 +494,10 @@ function setEditorMarkdown(markdown = "") {
   };
 
   ignoreEditorChanges = true;
-  editor.value.commands.setContent(markdown || "", false);
+  editor.value.commands.setContent(markdown || "", {
+    contentType: "markdown",
+    emitUpdate: false,
+  });
 
   const docMax = Math.max(1, editor.value.state.doc.content.size);
   const from = Math.min(Math.max(previousSelection.from, 1), docMax);
@@ -511,7 +512,7 @@ function setEditorMarkdown(markdown = "") {
 
 function syncEditorFromStore() {
   if (!editor.value || showPlain.value) return;
-  const current = editor.value.storage.markdown.getMarkdown();
+  const current = editor.value.getMarkdown();
   if (current === props.store.currentContent) return;
   setEditorMarkdown(props.store.currentContent);
 }

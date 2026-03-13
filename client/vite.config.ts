@@ -79,7 +79,7 @@ export default defineConfig({
             },
             {
               name: "markdown",
-              test: /node_modules[\\/](?:tiptap-markdown|markdown-it|mdast|micromark|remark|rehype)/,
+              test: /node_modules[\\/](?:@tiptap[\\/]markdown|marked)/,
               priority: 20,
             },
             {
