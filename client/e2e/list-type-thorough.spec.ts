@@ -58,7 +58,9 @@ test.describe('List type switching honors cursor/selection scope', () => {
     expectEntry(entries, { text: 'gamma', kind: 'task', depth: 1 })
   })
 
-  test('indented list: nested cursor item only + same-type toggle still works', async ({ page }) => {
+  test('indented list: nested cursor item only + same-type toggle still works', async ({
+    page,
+  }) => {
     await createNote(page, 'list-indent-cursor')
     await typeBaseLines(page)
     await selectAll(page)
@@ -89,7 +91,9 @@ test.describe('List type switching honors cursor/selection scope', () => {
     expect(entries.some((entry) => entry.text === 'beta')).toBeFalsy()
   })
 
-  test('indented list: text selection inside nested item only changes nested item', async ({ page }) => {
+  test('indented list: text selection inside nested item only changes nested item', async ({
+    page,
+  }) => {
     await createNote(page, 'list-indent-selection')
     await typeBaseLines(page)
     await selectAll(page)

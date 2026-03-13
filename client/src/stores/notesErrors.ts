@@ -32,7 +32,12 @@ export function isIndexedDbRuntimeError(err: unknown): boolean {
   if (!err) return false
 
   const name = (err as DOMException)?.name || ''
-  if (name === 'UnknownError' || name === 'InvalidStateError' || name === 'TransactionInactiveError' || name === 'AbortError') {
+  if (
+    name === 'UnknownError' ||
+    name === 'InvalidStateError' ||
+    name === 'TransactionInactiveError' ||
+    name === 'AbortError'
+  ) {
     return true
   }
 

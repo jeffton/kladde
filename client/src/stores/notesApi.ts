@@ -44,8 +44,15 @@ export function starNotePathApi(title: string, collection?: string | null): stri
   return withCollectionQuery(`/client-api/notes/${encodeURIComponent(title)}/star`, collection)
 }
 
-export function shareNotePathApi(title: string, collection?: string | null, mode?: ShareMode): string {
-  const base = withCollectionQuery(`/client-api/notes/${encodeURIComponent(title)}/share`, collection)
+export function shareNotePathApi(
+  title: string,
+  collection?: string | null,
+  mode?: ShareMode,
+): string {
+  const base = withCollectionQuery(
+    `/client-api/notes/${encodeURIComponent(title)}/share`,
+    collection,
+  )
   if (!mode) return base
   const separator = base.includes('?') ? '&' : '?'
   return `${base}${separator}mode=${encodeURIComponent(mode)}`
@@ -62,13 +69,17 @@ function isAbortError(err: unknown): boolean {
 }
 
 export async function apiFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
-  const method = ((init?.method || (input instanceof Request ? input.method : 'GET')) || 'GET').toUpperCase()
+  const method = (
+    init?.method ||
+    (input instanceof Request ? input.method : 'GET') ||
+    'GET'
+  ).toUpperCase()
   const controller = new AbortController()
   const timeout = window.setTimeout(() => controller.abort(), API_FETCH_TIMEOUT_MS)
 
   let requestInit: RequestInit = {
     ...init,
-    signal: init?.signal ? AbortSignal.any([init.signal, controller.signal]) : controller.signal
+    signal: init?.signal ? AbortSignal.any([init.signal, controller.signal]) : controller.signal,
   }
 
   if (method !== 'GET' && method !== 'HEAD') {

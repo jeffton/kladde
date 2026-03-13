@@ -57,7 +57,7 @@ function normalizeServerNote(note: NoteResponse): CachedNote {
     updatedAt: normalizeTs(note.updatedAt),
     dirty: false,
     starred: Boolean(note.starred),
-    existsOnServer: true
+    existsOnServer: true,
   }
 }
 
@@ -71,7 +71,7 @@ function normalizeServerMeta(meta: ServerNoteMeta): NoteMeta {
     collection,
     updatedAt: normalizeTs(meta.updatedAt),
     dirty: false,
-    starred: Boolean(meta.starred)
+    starred: Boolean(meta.starred),
   }
 }
 
@@ -111,14 +111,18 @@ export function createNotesSync(deps: NotesSyncDeps) {
       res = await deps.apiFetch('/client-api/notes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: localTitle, collection: localCollection, content: local.content })
+        body: JSON.stringify({
+          title: localTitle,
+          collection: localCollection,
+          content: local.content,
+        }),
       })
     } else {
       try {
         res = await deps.apiFetch(notePathApi(localTitle, localCollection), {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ content: local.content })
+          body: JSON.stringify({ content: local.content }),
         })
       } catch (err: unknown) {
         if (!deps.isNotFoundError(err)) throw err
@@ -127,7 +131,11 @@ export function createNotesSync(deps: NotesSyncDeps) {
         res = await deps.apiFetch('/client-api/notes', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ title: localTitle, collection: localCollection, content: local.content })
+          body: JSON.stringify({
+            title: localTitle,
+            collection: localCollection,
+            content: local.content,
+          }),
         })
       }
     }
@@ -144,7 +152,9 @@ export function createNotesSync(deps: NotesSyncDeps) {
 
     const stillDirty = activeMemoryDiffers || currentContentSnapshot !== saved.content
     const chosenContent = stillDirty
-      ? (activeMemoryDiffers ? deps.currentContent.value : currentContentSnapshot)
+      ? activeMemoryDiffers
+        ? deps.currentContent.value
+        : currentContentSnapshot
       : saved.content
     const chosenUpdatedAt = stillDirty
       ? deps.normalizeTs(current?.updatedAt ?? local.updatedAt)
@@ -160,7 +170,7 @@ export function createNotesSync(deps: NotesSyncDeps) {
         content: chosenContent,
         updatedAt: chosenUpdatedAt,
         dirty: stillDirty,
-        starred: Boolean(saved.starred)
+        starred: Boolean(saved.starred),
       })
     })
 
@@ -219,7 +229,7 @@ export function createNotesSync(deps: NotesSyncDeps) {
         await deps.apiFetch(starNotePathApi(title, collection), {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ starred: op.starred })
+          body: JSON.stringify({ starred: op.starred }),
         })
         deps.resetWsFailuresAndReconnect()
         await removePendingOp(op)
@@ -234,7 +244,7 @@ export function createNotesSync(deps: NotesSyncDeps) {
         res = await deps.apiFetch(renameNotePathApi(oldRef.title, oldRef.collection), {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ newTitle: newRef.title, newCollection: newRef.collection })
+          body: JSON.stringify({ newTitle: newRef.title, newCollection: newRef.collection }),
         })
       } catch (err: unknown) {
         if (!deps.isNotFoundError(err)) throw err
@@ -265,7 +275,7 @@ export function createNotesSync(deps: NotesSyncDeps) {
               title: payload.title,
               collection: payload.collection,
               existsOnServer: true,
-              dirty: Boolean(renamedLocal.dirty)
+              dirty: Boolean(renamedLocal.dirty),
             })
           })
           if (deps.selectedKey.value === op.newKey) {
@@ -277,7 +287,7 @@ export function createNotesSync(deps: NotesSyncDeps) {
               ...renamedLocal,
               title: payload.title,
               collection: payload.collection,
-              existsOnServer: true
+              existsOnServer: true,
             })
           })
         }
@@ -318,7 +328,7 @@ export function createNotesSync(deps: NotesSyncDeps) {
         updatedAt: deps.currentUpdatedAt.value || new Date().toISOString(),
         dirty: true,
         starred: existing?.starred,
-        existsOnServer: existing?.existsOnServer
+        existsOnServer: existing?.existsOnServer,
       })
 
       if (!deps.online.value) {
@@ -395,7 +405,11 @@ export function createNotesSync(deps: NotesSyncDeps) {
           const shouldPull = !isActiveAndDirty && (!local || (!local.dirty && serverTs > localTs))
 
           if (local && local.starred !== serverMeta.starred) {
-            await deps.putCachedNote({ ...local, starred: Boolean(serverMeta.starred), existsOnServer: true })
+            await deps.putCachedNote({
+              ...local,
+              starred: Boolean(serverMeta.starred),
+              existsOnServer: true,
+            })
           }
 
           if (!shouldPull) continue
@@ -412,7 +426,7 @@ export function createNotesSync(deps: NotesSyncDeps) {
             updatedAt: deps.normalizeTs(serverNote.updatedAt || serverMeta.updatedAt),
             dirty: false,
             starred: Boolean(serverNote.starred ?? serverMeta.starred),
-            existsOnServer: true
+            existsOnServer: true,
           })
         }
 
@@ -437,6 +451,6 @@ export function createNotesSync(deps: NotesSyncDeps) {
   return {
     mutatePendingOps,
     saveCurrent,
-    syncWithServer
+    syncWithServer,
   }
 }

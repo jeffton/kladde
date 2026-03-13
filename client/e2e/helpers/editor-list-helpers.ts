@@ -12,7 +12,10 @@ export type ListEntry = {
 
 export async function loginIfNeeded(page: Page) {
   await page.goto('http://127.0.0.1:8080', { waitUntil: 'networkidle' })
-  const loginVisible = await page.locator('.login-form').isVisible().catch(() => false)
+  const loginVisible = await page
+    .locator('.login-form')
+    .isVisible()
+    .catch(() => false)
   if (!loginVisible) return
 
   await page.locator('.login-input').nth(0).fill('admin')
@@ -69,13 +72,17 @@ export async function listEntries(page: Page): Promise<ListEntry[]> {
       const list = li.parentElement
       if (!list || (list.tagName !== 'UL' && list.tagName !== 'OL')) continue
 
-      const kind = list.tagName === 'OL'
-        ? 'ordered'
-        : (list.getAttribute('data-type') === 'taskList' ? 'task' : 'bullet')
+      const kind =
+        list.tagName === 'OL'
+          ? 'ordered'
+          : list.getAttribute('data-type') === 'taskList'
+            ? 'task'
+            : 'bullet'
 
-      const text = kind === 'task'
-        ? (li.querySelector(':scope > div > p')?.textContent || '').trim()
-        : (li.querySelector(':scope > p')?.textContent || '').trim()
+      const text =
+        kind === 'task'
+          ? (li.querySelector(':scope > div > p')?.textContent || '').trim()
+          : (li.querySelector(':scope > p')?.textContent || '').trim()
 
       if (!text) continue
 
@@ -95,9 +102,17 @@ export async function listEntries(page: Page): Promise<ListEntry[]> {
   return entries.sort((a, b) => a.text.localeCompare(b.text))
 }
 
-export function expectEntry(entries: ListEntry[], expected: { text: string; kind: ListKind; depth: number }) {
+export function expectEntry(
+  entries: ListEntry[],
+  expected: { text: string; kind: ListKind; depth: number },
+) {
   expect(
-    entries.some((entry) => entry.kind === expected.kind && entry.depth === expected.depth && entry.text.includes(expected.text))
+    entries.some(
+      (entry) =>
+        entry.kind === expected.kind &&
+        entry.depth === expected.depth &&
+        entry.text.includes(expected.text),
+    ),
   ).toBeTruthy()
 }
 

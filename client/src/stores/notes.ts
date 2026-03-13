@@ -1,13 +1,25 @@
 import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
-import { deleteCachedNote, getAllCachedNotes, getCachedNote, getPendingOps, putCachedNote, replacePendingOps } from './notesDb'
+import {
+  deleteCachedNote,
+  getAllCachedNotes,
+  getCachedNote,
+  getPendingOps,
+  putCachedNote,
+  replacePendingOps,
+} from './notesDb'
 import type { CachedNote, NoteMeta, NoteResponse, PendingOp, SyncState } from '../types'
 import { t } from '../i18n'
 import { apiFetch, clientOrigin, isNotFoundError, notePathApi } from './notesApi'
 import { createNotesWebSocket } from './notesWebSocket'
 import { createNotesPersist } from './notesPersist'
 import { createNotesSync } from './notesSync'
-import { emitUnauthorizedEvent, isNetworkError, isUnauthorizedError, toUserSyncError } from './notesErrors'
+import {
+  emitUnauthorizedEvent,
+  isNetworkError,
+  isUnauthorizedError,
+  toUserSyncError,
+} from './notesErrors'
 import {
   buildNoteKey,
   isServerBacked,
@@ -20,7 +32,7 @@ import {
   samePendingOp,
   splitNoteKey,
   toMeta,
-  tsMs
+  tsMs,
 } from './notesModel'
 
 function normalizeServerNote(note: NoteResponse): CachedNote {
@@ -35,7 +47,7 @@ function normalizeServerNote(note: NoteResponse): CachedNote {
     updatedAt: normalizeTs(note.updatedAt),
     dirty: false,
     starred: Boolean(note.starred),
-    existsOnServer: true
+    existsOnServer: true,
   }
 }
 
@@ -63,13 +75,20 @@ export const useNotesStore = defineStore('notes', () => {
   let syncRetryAttempt = 0
   const wsConnected = ref(false)
 
-  const selectedNote = computed(() => notes.value.find((note) => note.key === selectedKey.value) || null)
+  const selectedNote = computed(
+    () => notes.value.find((note) => note.key === selectedKey.value) || null,
+  )
   const selectedTitle = computed(() => selectedNote.value?.title || '')
   const selectedCollection = computed(() => selectedNote.value?.collection || '')
 
   const collections = computed(() => {
-    const collator = new Intl.Collator(typeof navigator !== 'undefined' ? navigator.language : 'en-US', { sensitivity: 'base' })
-    const all = Array.from(new Set(notes.value.map((note) => note.collection).filter((value) => Boolean(value))))
+    const collator = new Intl.Collator(
+      typeof navigator !== 'undefined' ? navigator.language : 'en-US',
+      { sensitivity: 'base' },
+    )
+    const all = Array.from(
+      new Set(notes.value.map((note) => note.collection).filter((value) => Boolean(value))),
+    )
     all.sort((a, b) => collator.compare(a, b))
     return all
   })
@@ -116,7 +135,7 @@ export const useNotesStore = defineStore('notes', () => {
       return
     }
 
-    if (isNetworkError(err) && (typeof navigator !== 'undefined' && !navigator.onLine)) {
+    if (isNetworkError(err) && typeof navigator !== 'undefined' && !navigator.onLine) {
       online.value = false
       clearSyncError()
       updateSyncStatus()
@@ -173,7 +192,7 @@ export const useNotesStore = defineStore('notes', () => {
     updateSyncStatus,
     onPersistError: (err) => {
       handleSyncFailure(err, t('couldNotSaveLocally'))
-    }
+    },
   })
 
   const setOnline = (value: boolean) => {
@@ -227,7 +246,9 @@ export const useNotesStore = defineStore('notes', () => {
 
     const newNotes = cached.filter((n) => normalizeNoteKey(n) !== activeKey).map(toMeta)
     const newNoteContents: Record<string, string> = Object.fromEntries(
-      cached.filter((n) => normalizeNoteKey(n) !== activeKey).map((n) => [normalizeNoteKey(n), n.content || ''])
+      cached
+        .filter((n) => normalizeNoteKey(n) !== activeKey)
+        .map((n) => [normalizeNoteKey(n), n.content || '']),
     )
 
     if (activeKey) {
@@ -243,22 +264,26 @@ export const useNotesStore = defineStore('notes', () => {
             ...inMemoryActive,
             key: activeKey,
             dirty: isLocallyDirty,
-            updatedAt: isLocallyDirty ? inMemoryUpdatedAt || cachedUpdatedAt : cachedUpdatedAt || inMemoryUpdatedAt
+            updatedAt: isLocallyDirty
+              ? inMemoryUpdatedAt || cachedUpdatedAt
+              : cachedUpdatedAt || inMemoryUpdatedAt,
           }
         : {
             key: activeKey,
             title: cachedActive?.title || fallbackRef.title,
             collection: normalizeCollection(cachedActive?.collection || fallbackRef.collection),
-            updatedAt: isLocallyDirty ? inMemoryUpdatedAt || cachedUpdatedAt : cachedUpdatedAt || inMemoryUpdatedAt,
+            updatedAt: isLocallyDirty
+              ? inMemoryUpdatedAt || cachedUpdatedAt
+              : cachedUpdatedAt || inMemoryUpdatedAt,
             dirty: isLocallyDirty || Boolean(cachedActive?.dirty),
-            starred: Boolean(cachedActive?.starred)
+            starred: Boolean(cachedActive?.starred),
           }
 
       newNotes.push(activeMeta)
 
       newNoteContents[activeKey] = isLocallyDirty
-        ? noteContents.value[activeKey] ?? currentContent.value ?? cachedActive?.content ?? ''
-        : cachedActive?.content ?? currentContent.value ?? noteContents.value[activeKey] ?? ''
+        ? (noteContents.value[activeKey] ?? currentContent.value ?? cachedActive?.content ?? '')
+        : (cachedActive?.content ?? currentContent.value ?? noteContents.value[activeKey] ?? '')
     }
 
     notes.value = newNotes
@@ -324,7 +349,7 @@ export const useNotesStore = defineStore('notes', () => {
         await putCachedNote({
           ...serverNote,
           dirty: false,
-          existsOnServer: true
+          existsOnServer: true,
         })
       }
 
@@ -359,14 +384,22 @@ export const useNotesStore = defineStore('notes', () => {
     void refreshSelectedNoteFromServer(key, cached)
   }
 
-  const applyLocalRename = async (oldKey: string, desiredTitle: string, desiredCollection: string) => {
+  const applyLocalRename = async (
+    oldKey: string,
+    desiredTitle: string,
+    desiredCollection: string,
+  ) => {
     const local = await getCachedNote(oldKey)
     if (!local) throw new Error(t('noNoteSelected'))
 
     const normalizedCollection = normalizeCollection(desiredCollection)
     const targetTitle = resolveUniqueTitle(
-      new Set(notes.value.filter((note) => note.collection === normalizedCollection && note.key !== oldKey).map((note) => note.title)),
-      desiredTitle
+      new Set(
+        notes.value
+          .filter((note) => note.collection === normalizedCollection && note.key !== oldKey)
+          .map((note) => note.title),
+      ),
+      desiredTitle,
     )
     const targetKey = buildNoteKey(targetTitle, normalizedCollection)
 
@@ -378,7 +411,7 @@ export const useNotesStore = defineStore('notes', () => {
       title: targetTitle,
       collection: normalizedCollection,
       dirty: Boolean(local.dirty),
-      existsOnServer: local.existsOnServer
+      existsOnServer: local.existsOnServer,
     }
 
     await queueWrite(async () => {
@@ -436,7 +469,7 @@ export const useNotesStore = defineStore('notes', () => {
     updateSyncStatus,
     clearSyncRetry,
     clearSyncError,
-    handleSyncFailure
+    handleSyncFailure,
   })
 
   const wsController = createNotesWebSocket({
@@ -455,14 +488,18 @@ export const useNotesStore = defineStore('notes', () => {
     deleteCachedNote,
     normalizeTs,
     isServerBacked,
-    isActiveNoteLocallyDirty
+    isActiveNoteLocallyDirty,
   })
   const { connectWebSocket, disconnectWebSocket } = wsController
   resetWsFailuresAndReconnect = wsController.resetWsFailuresAndReconnect
 
   const generateDefaultTitle = (base = t('newNote'), collection = '') => {
     const normalizedCollection = normalizeCollection(collection)
-    const existing = new Set(notes.value.filter((note) => note.collection === normalizedCollection).map((note) => note.title))
+    const existing = new Set(
+      notes.value
+        .filter((note) => note.collection === normalizedCollection)
+        .map((note) => note.title),
+    )
     if (!existing.has(base)) return base
     let i = 2
     while (existing.has(`${base} ${i}`)) i += 1
@@ -483,7 +520,7 @@ export const useNotesStore = defineStore('notes', () => {
       content: '',
       updatedAt: new Date().toISOString(),
       dirty: true,
-      existsOnServer: false
+      existsOnServer: false,
     })
 
     await refreshStateFromCache()
@@ -571,14 +608,21 @@ export const useNotesStore = defineStore('notes', () => {
         deleteTarget = renameToDeleted.oldKey
         shouldDeleteOnServer = true
         pruned = pruned.filter(
-          (op) => !(op.type === 'rename' && op.oldKey === renameToDeleted.oldKey && op.newKey === renameToDeleted.newKey)
+          (op) =>
+            !(
+              op.type === 'rename' &&
+              op.oldKey === renameToDeleted.oldKey &&
+              op.newKey === renameToDeleted.newKey
+            ),
         )
       }
 
       pruned = pruned.filter((op) => {
         if (op.type === 'star' && (op.key === deleteTarget || op.key === keyToDelete)) return false
-        if (op.type === 'delete' && (op.key === keyToDelete || op.key === deleteTarget)) return false
-        if (op.type === 'rename' && (op.oldKey === keyToDelete || op.newKey === keyToDelete)) return false
+        if (op.type === 'delete' && (op.key === keyToDelete || op.key === deleteTarget))
+          return false
+        if (op.type === 'rename' && (op.oldKey === keyToDelete || op.newKey === keyToDelete))
+          return false
         return true
       })
 
@@ -624,7 +668,7 @@ export const useNotesStore = defineStore('notes', () => {
     createNote,
     renameCurrent,
     moveCurrentToCollection,
-    deleteCurrent
+    deleteCurrent,
   }
 })
 

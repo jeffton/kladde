@@ -15,7 +15,7 @@ import {
   ChevronDown,
   Indent,
   Outdent,
-  Quote
+  Quote,
 } from 'lucide-vue-next'
 import type { Editor } from '@tiptap/vue-3'
 import { Fragment } from '@tiptap/pm/model'
@@ -36,7 +36,7 @@ const props = withDefaults(defineProps<Props>(), {
   editor: null,
   isPlain: false,
   showModeToggle: true,
-  readonly: false
+  readonly: false,
 })
 
 const emit = defineEmits<{
@@ -80,10 +80,13 @@ function convertListSelection(target: ListTarget): boolean {
 
   if (!bulletList || !orderedList || !taskList || !listItem || !taskItem) return false
 
-  const isListNodeName = (name: string) => name === 'bulletList' || name === 'orderedList' || name === 'taskList'
+  const isListNodeName = (name: string) =>
+    name === 'bulletList' || name === 'orderedList' || name === 'taskList'
 
-  const targetNodeName = target === 'bullet' ? 'bulletList' : target === 'ordered' ? 'orderedList' : 'taskList'
-  const targetListType = target === 'bullet' ? bulletList : target === 'ordered' ? orderedList : taskList
+  const targetNodeName =
+    target === 'bullet' ? 'bulletList' : target === 'ordered' ? 'orderedList' : 'taskList'
+  const targetListType =
+    target === 'bullet' ? bulletList : target === 'ordered' ? orderedList : taskList
 
   const addNearestListRoot = ($pos: typeof selection.$from, roots: number[]) => {
     for (let depth = $pos.depth; depth >= 1; depth--) {
@@ -120,7 +123,11 @@ function convertListSelection(target: ListTarget): boolean {
     return listItem.create(null, item.content)
   }
 
-  const findFirstTextPosition = (doc: typeof state.doc, from: number, to: number): number | null => {
+  const findFirstTextPosition = (
+    doc: typeof state.doc,
+    from: number,
+    to: number,
+  ): number | null => {
     let found: number | null = null
 
     doc.nodesBetween(from, to, (node, pos) => {
@@ -205,22 +212,20 @@ function convertListSelection(target: ListTarget): boolean {
 
       if (!hasSelectedItems) return
 
-      const shouldSetPreferred = collapsed
-        && preferredSelectionPos == null
-        && mappedFrom >= mappedRootPos
-        && mappedFrom <= mappedRootPos + currentRoot.nodeSize
+      const shouldSetPreferred =
+        collapsed &&
+        preferredSelectionPos == null &&
+        mappedFrom >= mappedRootPos &&
+        mappedFrom <= mappedRootPos + currentRoot.nodeSize
 
       const replacementFragment = Fragment.fromArray(replacementNodes)
 
-      tr = tr.replaceWith(
-        mappedRootPos,
-        mappedRootPos + currentRoot.nodeSize,
-        replacementFragment
-      )
+      tr = tr.replaceWith(mappedRootPos, mappedRootPos + currentRoot.nodeSize, replacementFragment)
 
       if (shouldSetPreferred) {
         const insertedTo = mappedRootPos + replacementFragment.size
-        preferredSelectionPos = findFirstTextPosition(tr.doc, mappedRootPos, insertedTo) ?? (mappedRootPos + 1)
+        preferredSelectionPos =
+          findFirstTextPosition(tr.doc, mappedRootPos, insertedTo) ?? mappedRootPos + 1
       }
     })
 
@@ -231,7 +236,8 @@ function convertListSelection(target: ListTarget): boolean {
 
   if (preferredSelectionPos != null) {
     const resolved = tr.doc.resolve(clamp(preferredSelectionPos))
-    const nextSelection = TextSelection.findFrom(resolved, 1, true) || TextSelection.near(resolved, 1)
+    const nextSelection =
+      TextSelection.findFrom(resolved, 1, true) || TextSelection.near(resolved, 1)
     tr = tr.setSelection(nextSelection)
   } else {
     const mappedAnchor = clamp(tr.mapping.map(selection.anchor, 1))
@@ -262,7 +268,7 @@ function syncEditorSelectionFromDom() {
     const head = props.editor.view.posAtDOM(domSelection.focusNode, domSelection.focusOffset)
     props.editor.commands.setTextSelection({
       from: Math.min(anchor, head),
-      to: Math.max(anchor, head)
+      to: Math.max(anchor, head),
     })
   } catch {
     // Ignore unresolvable DOM selection nodes.
@@ -315,38 +321,141 @@ onUnmounted(() => {
 <template>
   <div class="editor-toolbar" :aria-label="t('editorToolbar')">
     <div class="toolbar-row">
-      <button :title="t('heading1')" :disabled="isDisabled()" :class="{ active: !isPlain && editor?.isActive('heading', { level: 1 }) }" @click="run('h1', () => editor?.chain().focus().toggleHeading({ level: 1 }).run())"><Heading1 :size="18" /></button>
-      <button :title="t('heading2')" :disabled="isDisabled()" :class="{ active: !isPlain && editor?.isActive('heading', { level: 2 }) }" @click="run('h2', () => editor?.chain().focus().toggleHeading({ level: 2 }).run())"><Heading2 :size="18" /></button>
-      <button :title="t('heading3')" :disabled="isDisabled()" :class="{ active: !isPlain && editor?.isActive('heading', { level: 3 }) }" @click="run('h3', () => editor?.chain().focus().toggleHeading({ level: 3 }).run())"><Heading3 :size="18" /></button>
+      <button
+        :title="t('heading1')"
+        :disabled="isDisabled()"
+        :class="{ active: !isPlain && editor?.isActive('heading', { level: 1 }) }"
+        @click="run('h1', () => editor?.chain().focus().toggleHeading({ level: 1 }).run())"
+      >
+        <Heading1 :size="18" />
+      </button>
+      <button
+        :title="t('heading2')"
+        :disabled="isDisabled()"
+        :class="{ active: !isPlain && editor?.isActive('heading', { level: 2 }) }"
+        @click="run('h2', () => editor?.chain().focus().toggleHeading({ level: 2 }).run())"
+      >
+        <Heading2 :size="18" />
+      </button>
+      <button
+        :title="t('heading3')"
+        :disabled="isDisabled()"
+        :class="{ active: !isPlain && editor?.isActive('heading', { level: 3 }) }"
+        @click="run('h3', () => editor?.chain().focus().toggleHeading({ level: 3 }).run())"
+      >
+        <Heading3 :size="18" />
+      </button>
 
-      <button :title="t('bulletList')" :disabled="isDisabled()" :class="{ active: !isPlain && editor?.isActive('bulletList') }" @pointerdown.prevent @mousedown.prevent @click="run('bullet', () => applyRichListType('bullet'))"><List :size="18" /></button>
+      <button
+        :title="t('bulletList')"
+        :disabled="isDisabled()"
+        :class="{ active: !isPlain && editor?.isActive('bulletList') }"
+        @pointerdown.prevent
+        @mousedown.prevent
+        @click="run('bullet', () => applyRichListType('bullet'))"
+      >
+        <List :size="18" />
+      </button>
 
-      <button :title="t('orderedList')" :disabled="isDisabled()" :class="{ active: !isPlain && editor?.isActive('orderedList') }" @pointerdown.prevent @mousedown.prevent @click="run('ordered', () => applyRichListType('ordered'))"><ListOrdered :size="18" /></button>
+      <button
+        :title="t('orderedList')"
+        :disabled="isDisabled()"
+        :class="{ active: !isPlain && editor?.isActive('orderedList') }"
+        @pointerdown.prevent
+        @mousedown.prevent
+        @click="run('ordered', () => applyRichListType('ordered'))"
+      >
+        <ListOrdered :size="18" />
+      </button>
 
-      <button :title="t('taskList')" :disabled="isDisabled()" :class="{ active: !isPlain && editor?.isActive('taskList') }" @pointerdown.prevent @mousedown.prevent @click="run('task', () => applyRichListType('task'))"><ListTodo :size="18" /></button>
+      <button
+        :title="t('taskList')"
+        :disabled="isDisabled()"
+        :class="{ active: !isPlain && editor?.isActive('taskList') }"
+        @pointerdown.prevent
+        @mousedown.prevent
+        @click="run('task', () => applyRichListType('task'))"
+      >
+        <ListTodo :size="18" />
+      </button>
 
-      <button v-if="isMobile" class="toolbar-more" :class="{ expanded: showMobileMore }" :title="showMobileMore ? t('hideMoreTools') : t('showMoreTools')" :aria-expanded="showMobileMore" @click="toggleMore"><ChevronDown :size="20" /></button>
+      <button
+        v-if="isMobile"
+        class="toolbar-more"
+        :class="{ expanded: showMobileMore }"
+        :title="showMobileMore ? t('hideMoreTools') : t('showMoreTools')"
+        :aria-expanded="showMobileMore"
+        @click="toggleMore"
+      >
+        <ChevronDown :size="20" />
+      </button>
     </div>
 
     <div
       class="toolbar-row toolbar-row-secondary"
       :class="{ collapsed: isMobile && !showMobileMore }"
-      :aria-hidden="isMobile && !showMobileMore">
-      <button :title="t('indent')" :disabled="isDisabled()" @click="run('indent', indentRich)"><Indent :size="18" /></button>
+      :aria-hidden="isMobile && !showMobileMore"
+    >
+      <button :title="t('indent')" :disabled="isDisabled()" @click="run('indent', indentRich)">
+        <Indent :size="18" />
+      </button>
 
-      <button :title="t('outdent')" :disabled="isDisabled()" @click="run('outdent', outdentRich)"><Outdent :size="18" /></button>
+      <button :title="t('outdent')" :disabled="isDisabled()" @click="run('outdent', outdentRich)">
+        <Outdent :size="18" />
+      </button>
 
-      <button :title="t('bold')" :disabled="isDisabled()" :class="{ active: !isPlain && editor?.isActive('bold') }" @click="run('bold', () => editor?.chain().focus().toggleBold().run())"><Bold :size="18" /></button>
+      <button
+        :title="t('bold')"
+        :disabled="isDisabled()"
+        :class="{ active: !isPlain && editor?.isActive('bold') }"
+        @click="run('bold', () => editor?.chain().focus().toggleBold().run())"
+      >
+        <Bold :size="18" />
+      </button>
 
-      <button :title="t('italic')" :disabled="isDisabled()" :class="{ active: !isPlain && editor?.isActive('italic') }" @click="run('italic', () => editor?.chain().focus().toggleItalic().run())"><Italic :size="18" /></button>
+      <button
+        :title="t('italic')"
+        :disabled="isDisabled()"
+        :class="{ active: !isPlain && editor?.isActive('italic') }"
+        @click="run('italic', () => editor?.chain().focus().toggleItalic().run())"
+      >
+        <Italic :size="18" />
+      </button>
 
-      <button :title="t('quote')" :disabled="isDisabled()" :class="{ active: !isPlain && editor?.isActive('blockquote') }" @click="run('blockquote', () => editor?.chain().focus().toggleBlockquote().run())"><Quote :size="18" /></button>
+      <button
+        :title="t('quote')"
+        :disabled="isDisabled()"
+        :class="{ active: !isPlain && editor?.isActive('blockquote') }"
+        @click="run('blockquote', () => editor?.chain().focus().toggleBlockquote().run())"
+      >
+        <Quote :size="18" />
+      </button>
 
-      <button :title="t('inlineCode')" :disabled="isDisabled()" :class="{ active: !isPlain && editor?.isActive('code') }" @click="run('code', () => editor?.chain().focus().toggleCode().run())"><Code :size="18" /></button>
+      <button
+        :title="t('inlineCode')"
+        :disabled="isDisabled()"
+        :class="{ active: !isPlain && editor?.isActive('code') }"
+        @click="run('code', () => editor?.chain().focus().toggleCode().run())"
+      >
+        <Code :size="18" />
+      </button>
 
-      <button :title="t('codeBlock')" :disabled="isDisabled()" :class="{ active: !isPlain && editor?.isActive('codeBlock') }" @click="run('codeBlock', () => editor?.chain().focus().toggleCodeBlock().run())"><FileCode :size="18" /></button>
+      <button
+        :title="t('codeBlock')"
+        :disabled="isDisabled()"
+        :class="{ active: !isPlain && editor?.isActive('codeBlock') }"
+        @click="run('codeBlock', () => editor?.chain().focus().toggleCodeBlock().run())"
+      >
+        <FileCode :size="18" />
+      </button>
 
-      <button v-if="showModeToggle && !isMobile" class="mode-toggle" :title="t('toggleMarkdownWysiwyg')" :class="{ active: isPlain }" @click="emit('toggle-plain')">
+      <button
+        v-if="showModeToggle && !isMobile"
+        class="mode-toggle"
+        :title="t('toggleMarkdownWysiwyg')"
+        :class="{ active: isPlain }"
+        @click="emit('toggle-plain')"
+      >
         <FileText :size="18" />
       </button>
     </div>

@@ -6,7 +6,10 @@ test.describe('Share flow', () => {
     await loginIfNeeded(page)
   })
 
-  test('owner can create readonly + edit links and guest can edit collaboratively', async ({ browser, page }) => {
+  test('owner can create readonly + edit links and guest can edit collaboratively', async ({
+    browser,
+    page,
+  }) => {
     await createNote(page, 'share-flow')
 
     await editor(page).click()
@@ -53,7 +56,10 @@ test.describe('Share flow', () => {
     const collectionName = `deling-${Date.now()}`
     page.once('dialog', (dialog) => dialog.accept(collectionName))
     await page.locator('.note-menu-button').click()
-    await page.locator('.note-menu-item').filter({ has: page.locator('.lucide-folder-plus') }).click()
+    await page
+      .locator('.note-menu-item')
+      .filter({ has: page.locator('.lucide-folder-plus') })
+      .click()
 
     await page.waitForTimeout(800)
 
@@ -66,7 +72,10 @@ test.describe('Share flow', () => {
     await expect(readonlyEditor).toContainText('første linje')
     await expect(readonlyEditor).toHaveAttribute('contenteditable', 'false')
     await expect(readonlyPage.locator('.note-title-input')).toHaveValue(renamedTitle)
-    await readonlyPage.screenshot({ path: '../screenshots/playwright-share-readonly.png', fullPage: true })
+    await readonlyPage.screenshot({
+      path: '../screenshots/playwright-share-readonly.png',
+      fullPage: true,
+    })
 
     const guestContext = await browser.newContext()
     const guestPage = await guestContext.newPage()
@@ -76,7 +85,10 @@ test.describe('Share flow', () => {
     await expect(guestEditor).toBeVisible()
     await expect(guestEditor).toHaveAttribute('contenteditable', 'true')
     await expect(guestPage.locator('.note-title-input')).toHaveValue(renamedTitle)
-    await guestPage.screenshot({ path: '../screenshots/playwright-share-editor.png', fullPage: true })
+    await guestPage.screenshot({
+      path: '../screenshots/playwright-share-editor.png',
+      fullPage: true,
+    })
 
     await guestEditor.click()
     await guestPage.keyboard.press(isMac ? 'Meta+A' : 'Control+A')

@@ -14,7 +14,7 @@ interface Props {
 
 const props = withDefaults(defineProps<Props>(), {
   selectedKey: '',
-  userLabel: ''
+  userLabel: '',
 })
 
 const emit = defineEmits<{
@@ -49,7 +49,11 @@ const availableCollections = computed(() => {
 })
 
 watch(availableCollections, (allCollections) => {
-  if (collectionFilter.value === COLLECTION_FILTER_ALL || collectionFilter.value === COLLECTION_FILTER_NONE) return
+  if (
+    collectionFilter.value === COLLECTION_FILTER_ALL ||
+    collectionFilter.value === COLLECTION_FILTER_NONE
+  )
+    return
   if (!allCollections.includes(collectionFilter.value)) {
     collectionFilter.value = COLLECTION_FILTER_ALL
   }
@@ -99,7 +103,10 @@ function onSelect(key: string) {
 }
 
 function createInCurrentFilter() {
-  if (collectionFilter.value === COLLECTION_FILTER_ALL || collectionFilter.value === COLLECTION_FILTER_NONE) {
+  if (
+    collectionFilter.value === COLLECTION_FILTER_ALL ||
+    collectionFilter.value === COLLECTION_FILTER_NONE
+  ) {
     emit('create', '')
     return
   }
@@ -161,8 +168,8 @@ async function submitPasswordChange() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         currentPassword: currentPassword.value,
-        newPassword: newPassword.value
-      })
+        newPassword: newPassword.value,
+      }),
     })
 
     if (!res.ok) {
@@ -207,13 +214,40 @@ async function submitPasswordChange() {
             {{ t('logout') }}
           </button>
 
-          <form v-if="showPasswordForm" class="password-form" @submit.prevent="submitPasswordChange">
-            <input v-model="currentPassword" class="password-input" type="password" autocomplete="current-password" :placeholder="t('currentPassword')" required />
-            <input v-model="newPassword" class="password-input" type="password" autocomplete="new-password" :placeholder="t('newPassword')" required />
-            <input v-model="confirmPassword" class="password-input" type="password" autocomplete="new-password" :placeholder="t('confirmNewPassword')" required />
+          <form
+            v-if="showPasswordForm"
+            class="password-form"
+            @submit.prevent="submitPasswordChange"
+          >
+            <input
+              v-model="currentPassword"
+              class="password-input"
+              type="password"
+              autocomplete="current-password"
+              :placeholder="t('currentPassword')"
+              required
+            />
+            <input
+              v-model="newPassword"
+              class="password-input"
+              type="password"
+              autocomplete="new-password"
+              :placeholder="t('newPassword')"
+              required
+            />
+            <input
+              v-model="confirmPassword"
+              class="password-input"
+              type="password"
+              autocomplete="new-password"
+              :placeholder="t('confirmNewPassword')"
+              required
+            />
             <p v-if="passwordError" class="password-error">{{ passwordError }}</p>
             <p v-if="passwordSuccess" class="password-success">{{ passwordSuccess }}</p>
-            <button class="password-submit" type="submit" :disabled="changingPassword">{{ t('updatePassword') }}</button>
+            <button class="password-submit" type="submit" :disabled="changingPassword">
+              {{ t('updatePassword') }}
+            </button>
           </form>
         </div>
 
@@ -231,16 +265,28 @@ async function submitPasswordChange() {
           class="search-input"
           type="text"
           placeholder=""
-          @keydown="onKeydown" />
-        <button v-if="query" class="search-clear" :aria-label="t('clearSearch')" @click="clearQuery">
+          @keydown="onKeydown"
+        />
+        <button
+          v-if="query"
+          class="search-clear"
+          :aria-label="t('clearSearch')"
+          @click="clearQuery"
+        >
           <X :size="18" />
         </button>
       </div>
 
       <div class="collection-filter-wrap">
-        <select v-model="collectionFilter" class="collection-filter-select" :aria-label="t('filterByCollection')">
+        <select
+          v-model="collectionFilter"
+          class="collection-filter-select"
+          :aria-label="t('filterByCollection')"
+        >
           <option :value="COLLECTION_FILTER_ALL"></option>
-          <option v-for="collection in availableCollections" :key="collection" :value="collection">{{ collection }}</option>
+          <option v-for="collection in availableCollections" :key="collection" :value="collection">
+            {{ collection }}
+          </option>
           <option :value="COLLECTION_FILTER_NONE">{{ t('noCollection') }}</option>
         </select>
       </div>
@@ -252,7 +298,8 @@ async function submitPasswordChange() {
         :key="note.key"
         class="note-item"
         :class="{ active: note.key === selectedKey }"
-        @click="onSelect(note.key)">
+        @click="onSelect(note.key)"
+      >
         <div class="note-item-main">
           <strong>
             <span class="note-title-text">{{ note.title }}</span>
@@ -265,7 +312,8 @@ async function submitPasswordChange() {
             class="pin"
             type="button"
             :aria-label="note.starred ? t('unpinNote') : t('pinNote')"
-            @click.stop="emit('toggle-pin', note.key)">
+            @click.stop="emit('toggle-pin', note.key)"
+          >
             <Star :size="18" :fill="note.starred ? 'currentColor' : 'none'" />
           </button>
         </div>

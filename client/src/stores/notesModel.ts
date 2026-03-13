@@ -27,7 +27,7 @@ export function splitNoteKey(key: string): { title: string; collection: string }
 
   return {
     collection: normalized.slice(0, slashIdx),
-    title: normalized.slice(slashIdx + 1)
+    title: normalized.slice(slashIdx + 1),
   }
 }
 
@@ -43,7 +43,7 @@ export function toMeta(note: CachedNote): NoteMeta {
     collection: normalizeCollection(note.collection),
     updatedAt: normalizeTs(note.updatedAt),
     dirty: Boolean(note.dirty),
-    starred: Boolean(note.starred)
+    starred: Boolean(note.starred),
   }
 }
 
@@ -63,7 +63,8 @@ export function isServerBacked(note?: CachedNote | null): boolean {
 
 export function samePendingOp(a: PendingOp, b: PendingOp): boolean {
   if (a.type !== b.type) return false
-  if (a.type === 'rename' && b.type === 'rename') return a.oldKey === b.oldKey && a.newKey === b.newKey
+  if (a.type === 'rename' && b.type === 'rename')
+    return a.oldKey === b.oldKey && a.newKey === b.newKey
   if (a.type === 'delete' && b.type === 'delete') return a.key === b.key
   if (a.type === 'star' && b.type === 'star') return a.key === b.key && a.starred === b.starred
   return false
@@ -75,7 +76,7 @@ export function retargetPendingKey(ops: PendingOp[], fromKey: string, toKey: str
       return {
         ...op,
         oldKey: op.oldKey === fromKey ? toKey : op.oldKey,
-        newKey: op.newKey === fromKey ? toKey : op.newKey
+        newKey: op.newKey === fromKey ? toKey : op.newKey,
       }
     }
 

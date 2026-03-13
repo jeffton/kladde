@@ -1,19 +1,20 @@
 {
   "name": "kladde",
-  "license": "MIT",
-  "private": true,
   "version": "0.0.0",
+  "private": true,
+  "license": "MIT",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "lint": "eslint . --max-warnings=0",
-    "lint:fix": "eslint . --fix",
-    "typecheck": "vue-tsc --noEmit",
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "build": "vue-tsc --noEmit && vite build",
-    "check": "npm run lint && npm run typecheck && npm run test && npm run build",
-    "preview": "vite preview"
+    "dev": "vp dev",
+    "lint": "vp lint",
+    "lint:fix": "vp lint --fix",
+    "fmt": "vp fmt",
+    "fmt:check": "vp fmt --check",
+    "test": "vp test",
+    "test:watch": "vp test watch",
+    "build": "vp build",
+    "check": "vp check",
+    "preview": "vp preview"
   },
   "dependencies": {
     "@tiptap/extension-code-block": "^2.11.7",
@@ -36,17 +37,15 @@
     "vue-router": "^4.5.1"
   },
   "devDependencies": {
-    "@eslint/js": "^10.0.1",
     "@vitejs/plugin-vue": "^6.0.5",
-    "eslint": "^10.0.3",
-    "eslint-plugin-vue": "^10.8.0",
-    "globals": "^17.4.0",
     "typescript": "^5.9.3",
-    "typescript-eslint": "^8.57.0",
-    "vite": "^8.0.0",
+    "vite": "npm:@voidzero-dev/vite-plus-core@0.1.11",
     "vite-plugin-pwa": "^1.2.0",
-    "vitest": "^4.1.0",
-    "vue-eslint-parser": "^10.4.0",
-    "vue-tsc": "^3.2.5"
-  }
+    "vite-plus": "^0.1.11"
+  },
+  "overrides": {
+    "vite": "npm:@voidzero-dev/vite-plus-core@0.1.11",
+    "vitest": "npm:@voidzero-dev/vite-plus-test@0.1.11"
+  },
+  "packageManager": "npm@11.11.1"
 }

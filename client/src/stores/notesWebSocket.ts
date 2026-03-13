@@ -35,7 +35,7 @@ function normalizeServerNote(note: NoteResponse): CachedNote {
     updatedAt: note.updatedAt,
     dirty: false,
     starred: Boolean(note.starred),
-    existsOnServer: true
+    existsOnServer: true,
   }
 }
 
@@ -46,7 +46,10 @@ export function createNotesWebSocket(deps: NotesWebSocketDeps) {
   let wsConsecutiveFailures = 0
   let wsReconnectDisabled = false
   let lastMeUnauthorized = false
-  const pendingRemoteChanges = new Map<string, { title: string; collection: string; action: string }>()
+  const pendingRemoteChanges = new Map<
+    string,
+    { title: string; collection: string; action: string }
+  >()
   let remoteChangeTimer: number | null = null
 
   const clearWsReconnect = () => {
@@ -74,7 +77,12 @@ export function createNotesWebSocket(deps: NotesWebSocketDeps) {
     await deps.refreshStateFromCache()
   }
 
-  const handleRemoteNoteChange = async (key: string, title: string, collection: string, action: string) => {
+  const handleRemoteNoteChange = async (
+    key: string,
+    title: string,
+    collection: string,
+    action: string,
+  ) => {
     if (action === 'deleted') {
       await handleRemoteDelete(key)
       return
@@ -100,7 +108,7 @@ export function createNotesWebSocket(deps: NotesWebSocketDeps) {
         updatedAt: deps.normalizeTs(serverNote.updatedAt),
         dirty: false,
         starred: Boolean(serverNote.starred),
-        existsOnServer: true
+        existsOnServer: true,
       })
     } catch {
       // If note disappeared between event and fetch, reconcile via full sync.
@@ -120,7 +128,12 @@ export function createNotesWebSocket(deps: NotesWebSocketDeps) {
 
       void (async () => {
         for (const [changedKey, changed] of changes) {
-          await handleRemoteNoteChange(changedKey, changed.title, changed.collection, changed.action)
+          await handleRemoteNoteChange(
+            changedKey,
+            changed.title,
+            changed.collection,
+            changed.action,
+          )
         }
         await deps.refreshStateFromCache()
       })().catch(() => {
@@ -255,6 +268,6 @@ export function createNotesWebSocket(deps: NotesWebSocketDeps) {
   return {
     connectWebSocket,
     resetWsFailuresAndReconnect,
-    disconnectWebSocket
+    disconnectWebSocket,
   }
 }

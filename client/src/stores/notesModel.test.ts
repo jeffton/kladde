@@ -1,11 +1,11 @@
-import { describe, expect, test } from 'vitest'
+import { describe, expect, test } from 'vite-plus/test'
 import {
   buildNoteKey,
   normalizeTs,
   resolveUniqueTitle,
   retargetPendingKey,
   samePendingOp,
-  splitNoteKey
+  splitNoteKey,
 } from './notesModel'
 
 describe('notesModel helpers', () => {
@@ -28,15 +28,15 @@ describe('notesModel helpers', () => {
         [
           { type: 'rename', oldKey: 'work/old', newKey: 'work/new' },
           { type: 'delete', key: 'work/old' },
-          { type: 'star', key: 'work/old', starred: true }
+          { type: 'star', key: 'work/old', starred: true },
         ],
         'work/old',
-        'work/final'
-      )
+        'work/final',
+      ),
     ).toEqual([
       { type: 'rename', oldKey: 'work/final', newKey: 'work/new' },
       { type: 'delete', key: 'work/final' },
-      { type: 'star', key: 'work/final', starred: true }
+      { type: 'star', key: 'work/final', starred: true },
     ])
   })
 
@@ -46,8 +46,8 @@ describe('notesModel helpers', () => {
     expect(
       samePendingOp(
         { type: 'rename', oldKey: 'a', newKey: 'b' },
-        { type: 'rename', oldKey: 'a', newKey: 'b' }
-      )
+        { type: 'rename', oldKey: 'a', newKey: 'b' },
+      ),
     ).toBe(true)
   })
 

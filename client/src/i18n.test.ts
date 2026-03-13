@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'vitest'
+import { describe, expect, test } from 'vite-plus/test'
 import { resolveUiLocale } from './i18n'
 
 describe('resolveUiLocale', () => {

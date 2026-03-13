@@ -28,7 +28,7 @@ import {
   RefreshCw,
   Share2,
   Trash2,
-  X
+  X,
 } from 'lucide-vue-next'
 import EditorToolbar from './EditorToolbar.vue'
 import { apiFetch, shareNotePathApi } from '../stores/notesApi'
@@ -43,7 +43,7 @@ interface Props {
 
 const props = withDefaults(defineProps<Props>(), {
   showBack: false,
-  mode: 'full'
+  mode: 'full',
 })
 
 const emit = defineEmits<{
@@ -68,7 +68,6 @@ let ignoreEditorChanges = false
 // ProseMirror's default serializer drops empty paragraphs.
 // We serialize them as \u00A0 (nbsp), then strip on save.
 const NBSP = '\u00A0'
-
 
 interface MarkdownSerializerState {
   write: (content: string) => void
@@ -117,8 +116,9 @@ const FocusSafeTaskItem = TaskItem.extend({
       const content = document.createElement('div')
 
       const updateA11Y = () => {
-        checkbox.ariaLabel = this.options.a11y?.checkboxLabel?.(node, checkbox.checked)
-          || `Task item checkbox for ${node.textContent || 'empty task item'}`
+        checkbox.ariaLabel =
+          this.options.a11y?.checkboxLabel?.(node, checkbox.checked) ||
+          `Task item checkbox for ${node.textContent || 'empty task item'}`
       }
 
       updateA11Y()
@@ -202,7 +202,7 @@ const showNoteMenu = ref(false)
 const showShareDialog = ref(false)
 const shareLinks = ref<ShareLinksResponse>({
   view: { enabled: false },
-  edit: { enabled: false }
+  edit: { enabled: false },
 })
 const shareBusyMode = ref<ShareMode | ''>('')
 const shareCopyMode = ref<ShareMode | ''>('')
@@ -216,7 +216,11 @@ let shouldBlurAfterTaskCheckboxTap = false
 let menuCopyFeedbackTimeout: ReturnType<typeof setTimeout> | null = null
 
 function isSameDay(a: Date, b: Date) {
-  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate()
+  return (
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
+  )
 }
 
 const locale = intlLocale
@@ -225,8 +229,7 @@ function isTouchDevice(): boolean {
   if (typeof window === 'undefined' || typeof navigator === 'undefined') return false
 
   return (
-    navigator.maxTouchPoints > 0 ||
-    window.matchMedia('(hover: none), (pointer: coarse)').matches
+    navigator.maxTouchPoints > 0 || window.matchMedia('(hover: none), (pointer: coarse)').matches
   )
 }
 
@@ -312,7 +315,7 @@ function syncEditorSelectionFromDom(tiptap: TiptapEditor) {
     const head = tiptap.view.posAtDOM(domSelection.focusNode, domSelection.focusOffset)
     tiptap.commands.setTextSelection({
       from: Math.min(anchor, head),
-      to: Math.max(anchor, head)
+      to: Math.max(anchor, head),
     })
   } catch {
     // Ignore unresolvable DOM selection nodes.
@@ -382,13 +385,16 @@ function formatUpdatedAt(value: string) {
     month: 'long',
     year: 'numeric',
     hour: '2-digit',
-    minute: '2-digit'
+    minute: '2-digit',
   }).format(date)
 }
 
 const statusMeta = computed(() => {
   const syncState = props.store.syncState
-  const modifiedRaw = props.store.currentUpdatedAt || props.store.notes.find((n) => n.key === props.store.selectedKey)?.updatedAt || ''
+  const modifiedRaw =
+    props.store.currentUpdatedAt ||
+    props.store.notes.find((n) => n.key === props.store.selectedKey)?.updatedAt ||
+    ''
   const modifiedText = modifiedRaw ? formatUpdatedAt(modifiedRaw) : ''
   const modifiedLine = modifiedText ? `${t('modified')} ${modifiedText}` : ''
 
@@ -403,7 +409,9 @@ const statusMeta = computed(() => {
   if (syncState === 'offline') {
     lines.push(t('offline'))
     if (modifiedLine) lines.push(modifiedLine)
-    lines.push(lastSyncTime.value ? `${t('synced')} ${lastSyncTime.value}` : t('changesSavedLocally'))
+    lines.push(
+      lastSyncTime.value ? `${t('synced')} ${lastSyncTime.value}` : t('changesSavedLocally'),
+    )
     return { state: 'offline' as const, lines }
   }
 
@@ -416,7 +424,9 @@ const statusMeta = computed(() => {
   if (syncState === 'error') {
     if (modifiedLine) lines.push(modifiedLine)
     lines.push(props.store.syncStatus || t('syncError'))
-    lines.push(lastSyncTime.value ? `${t('synced')} ${lastSyncTime.value}` : t('noSuccessfulSyncYet'))
+    lines.push(
+      lastSyncTime.value ? `${t('synced')} ${lastSyncTime.value}` : t('noSuccessfulSyncYet'),
+    )
     return { state: 'error' as const, lines }
   }
 
@@ -444,9 +454,9 @@ const editor = useEditor({
       autolink: true,
       openOnClick: true,
       linkOnPaste: true,
-      HTMLAttributes: { rel: 'noopener noreferrer nofollow', target: '_blank' }
+      HTMLAttributes: { rel: 'noopener noreferrer nofollow', target: '_blank' },
     }),
-    Markdown.configure({ html: false, transformCopiedText: true, transformPastedText: true })
+    Markdown.configure({ html: false, transformCopiedText: true, transformPastedText: true }),
   ],
   editorProps: {
     clipboardTextSerializer: (slice) => {
@@ -457,8 +467,8 @@ const editor = useEditor({
       pointerdown: (_view, event) => handleTaskCheckboxPointerStart(event),
       touchstart: (_view, event) => handleTaskCheckboxPointerStart(event),
       mousedown: (_view, event) => handleTaskCheckboxPointerStart(event),
-      click: (_view, event) => handleTaskCheckboxClick(event)
-    }
+      click: (_view, event) => handleTaskCheckboxClick(event),
+    },
   },
   editable: !isReadonlyMode.value,
   content: props.store.currentContent || '',
@@ -471,7 +481,7 @@ const editor = useEditor({
     void props.store.setCurrentContent(nextMarkdown).catch((err: unknown) => {
       emit('ui-error', (err as Error)?.message || t('couldNotSaveLocally'))
     })
-  }
+  },
 })
 
 function setEditorMarkdown(markdown = '') {
@@ -480,7 +490,7 @@ function setEditorMarkdown(markdown = '') {
   const wasFocused = editor.value.isFocused
   const previousSelection = {
     from: editor.value.state.selection.from,
-    to: editor.value.state.selection.to
+    to: editor.value.state.selection.to,
   }
 
   ignoreEditorChanges = true
@@ -576,14 +586,16 @@ function unprefixLines(prefix: string) {
   let removedBeforeStart = 0
   let removedBeforeEnd = 0
 
-  const unprefixed = lines.map((line, index) => {
-    const hadPrefix = line.startsWith(prefix)
-    if (!hadPrefix) return line
+  const unprefixed = lines
+    .map((line, index) => {
+      const hadPrefix = line.startsWith(prefix)
+      if (!hadPrefix) return line
 
-    if (index === 0) removedBeforeStart = prefix.length
-    removedBeforeEnd += prefix.length
-    return line.slice(prefix.length)
-  }).join('\n')
+      if (index === 0) removedBeforeStart = prefix.length
+      removedBeforeEnd += prefix.length
+      return line.slice(prefix.length)
+    })
+    .join('\n')
 
   const nextValue = value.slice(0, blockStart) + unprefixed + value.slice(blockEnd)
   const nextStart = Math.max(blockStart, start - removedBeforeStart)
@@ -630,22 +642,54 @@ function applyPlainLink() {
 
 function applyPlainAction(action: string) {
   switch (action) {
-    case 'bold': wrapSelection('**'); break
-    case 'italic': wrapSelection('*'); break
-    case 'strike': wrapSelection('~~'); break
-    case 'h1': prefixLines('# '); break
-    case 'h2': prefixLines('## '); break
-    case 'h3': prefixLines('### '); break
-    case 'bullet': prefixLines('- '); break
-    case 'ordered': prefixLines('1. '); break
-    case 'task': prefixLines('- [ ] '); break
-    case 'link': applyPlainLink(); break
-    case 'code': wrapSelection('`'); break
-    case 'codeBlock': wrapSelection('```\n', '\n```'); break
-    case 'blockquote': prefixLines('> '); break
-    case 'indent': prefixLines('  '); break
-    case 'outdent': unprefixLines('  '); break
-    case 'hr': insertHr(); break
+    case 'bold':
+      wrapSelection('**')
+      break
+    case 'italic':
+      wrapSelection('*')
+      break
+    case 'strike':
+      wrapSelection('~~')
+      break
+    case 'h1':
+      prefixLines('# ')
+      break
+    case 'h2':
+      prefixLines('## ')
+      break
+    case 'h3':
+      prefixLines('### ')
+      break
+    case 'bullet':
+      prefixLines('- ')
+      break
+    case 'ordered':
+      prefixLines('1. ')
+      break
+    case 'task':
+      prefixLines('- [ ] ')
+      break
+    case 'link':
+      applyPlainLink()
+      break
+    case 'code':
+      wrapSelection('`')
+      break
+    case 'codeBlock':
+      wrapSelection('```\n', '\n```')
+      break
+    case 'blockquote':
+      prefixLines('> ')
+      break
+    case 'indent':
+      prefixLines('  ')
+      break
+    case 'outdent':
+      unprefixLines('  ')
+      break
+    case 'hr':
+      insertHr()
+      break
   }
 }
 
@@ -726,7 +770,9 @@ async function loadShareLinks() {
   shareLoading.value = true
 
   try {
-    const response = await apiFetch(shareNotePathApi(props.store.selectedTitle, props.store.selectedCollection))
+    const response = await apiFetch(
+      shareNotePathApi(props.store.selectedTitle, props.store.selectedCollection),
+    )
     shareLinks.value = (await response.json()) as ShareLinksResponse
   } catch (err) {
     emit('ui-error', (err as Error).message || t('genericError'))
@@ -759,14 +805,20 @@ async function toggleShareLink(mode: ShareMode) {
   try {
     const link = shareLinks.value[mode]
     const response = link.enabled
-      ? await apiFetch(shareNotePathApi(props.store.selectedTitle, props.store.selectedCollection, mode), {
-          method: 'DELETE'
-        })
-      : await apiFetch(shareNotePathApi(props.store.selectedTitle, props.store.selectedCollection), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ mode })
-        })
+      ? await apiFetch(
+          shareNotePathApi(props.store.selectedTitle, props.store.selectedCollection, mode),
+          {
+            method: 'DELETE',
+          },
+        )
+      : await apiFetch(
+          shareNotePathApi(props.store.selectedTitle, props.store.selectedCollection),
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ mode }),
+          },
+        )
 
     shareLinks.value = (await response.json()) as ShareLinksResponse
   } catch (err) {
@@ -894,7 +946,7 @@ watch(
   (mode) => {
     editor.value?.setEditable(mode !== 'share-readonly')
   },
-  { immediate: true }
+  { immediate: true },
 )
 
 watch(showPlain, (isPlain) => {
@@ -913,10 +965,10 @@ watch(
 
     lastSyncTime.value = new Date().toLocaleTimeString(locale, {
       hour: '2-digit',
-      minute: '2-digit'
+      minute: '2-digit',
     })
   },
-  { immediate: true }
+  { immediate: true },
 )
 
 function fallbackTitleFromKey(key: string): string {
@@ -926,26 +978,37 @@ function fallbackTitleFromKey(key: string): string {
   return key.slice(slashIndex + 1)
 }
 
-watch(() => props.store.currentContent, () => syncEditorFromStore())
-watch(() => props.store.selectedKey, () => {
-  if (!(document.activeElement === titleInput.value && editableTitle.value.trim() !== '')) {
-    editableTitle.value = props.store.selectedTitle || fallbackTitleFromKey(props.store.selectedKey)
-  }
-  showNoteMenu.value = false
-  showShareDialog.value = false
-  syncEditorFromStore()
-  nextTick(() => resetEditorScrollPosition())
-}, { immediate: true })
+watch(
+  () => props.store.currentContent,
+  () => syncEditorFromStore(),
+)
+watch(
+  () => props.store.selectedKey,
+  () => {
+    if (!(document.activeElement === titleInput.value && editableTitle.value.trim() !== '')) {
+      editableTitle.value =
+        props.store.selectedTitle || fallbackTitleFromKey(props.store.selectedKey)
+    }
+    showNoteMenu.value = false
+    showShareDialog.value = false
+    syncEditorFromStore()
+    nextTick(() => resetEditorScrollPosition())
+  },
+  { immediate: true },
+)
 
-watch(() => props.store.selectedTitle, (title) => {
-  if (!props.store.selectedKey) {
-    editableTitle.value = ''
-    return
-  }
-  if (!title) return
-  if (document.activeElement === titleInput.value) return
-  editableTitle.value = title
-})
+watch(
+  () => props.store.selectedTitle,
+  (title) => {
+    if (!props.store.selectedKey) {
+      editableTitle.value = ''
+      return
+    }
+    if (!title) return
+    if (document.activeElement === titleInput.value) return
+    editableTitle.value = title
+  },
+)
 
 onMounted(() => {
   updateInputMode()
@@ -966,7 +1029,12 @@ onUnmounted(() => {
 <template>
   <main class="editor-area">
     <div class="note-title-wrap" v-if="store.selectedKey">
-      <button v-if="showBack" class="mobile-title-back" @click="emit('back')" :aria-label="t('back')">
+      <button
+        v-if="showBack"
+        class="mobile-title-back"
+        @click="emit('back')"
+        :aria-label="t('back')"
+      >
         <ChevronLeft :size="20" />
       </button>
       <input
@@ -977,7 +1045,8 @@ onUnmounted(() => {
         spellcheck="false"
         :readonly="!isFullMode"
         @blur="commitTitleChange"
-        @keydown.enter.prevent="($event.target as HTMLInputElement).blur()" />
+        @keydown.enter.prevent="($event.target as HTMLInputElement).blur()"
+      />
 
       <div class="status-indicator-wrap">
         <button
@@ -989,7 +1058,8 @@ onUnmounted(() => {
           @mouseleave="closeTooltip"
           @focus="handleStatusFocus"
           @blur="closeTooltip"
-          @click="handleStatusClick">
+          @click="handleStatusClick"
+        >
           <CloudCheck v-if="statusMeta.state === 'synced'" :size="18" />
           <RefreshCw v-else-if="statusMeta.state === 'syncing'" :size="18" class="spin" />
           <CloudOff v-else-if="statusMeta.state === 'offline'" :size="18" />
@@ -1002,7 +1072,12 @@ onUnmounted(() => {
       </div>
 
       <div v-if="isFullMode" ref="noteMenuWrap" class="note-menu-wrap">
-        <button class="note-menu-button" :aria-label="t('more')" :aria-expanded="showNoteMenu" @click="toggleNoteMenu">
+        <button
+          class="note-menu-button"
+          :aria-label="t('more')"
+          :aria-expanded="showNoteMenu"
+          @click="toggleNoteMenu"
+        >
           <MoreVertical :size="20" />
         </button>
         <div v-if="showNoteMenu" class="note-menu-dropdown" role="menu">
@@ -1013,7 +1088,8 @@ onUnmounted(() => {
               class="note-menu-item"
               role="menuitemradio"
               :aria-checked="selectedCollection === collection"
-              @click="moveCurrentToCollection(collection)">
+              @click="moveCurrentToCollection(collection)"
+            >
               <span class="note-menu-leading" aria-hidden="true">
                 <Check :size="16" :class="{ 'is-hidden': selectedCollection !== collection }" />
               </span>
@@ -1065,7 +1141,12 @@ onUnmounted(() => {
       <div v-if="showShareDialog" class="share-dialog-backdrop" @click.self="closeShareDialog">
         <div class="share-dialog" role="dialog" aria-modal="true" :aria-label="t('shareNote')">
           <h2 class="share-dialog-title">{{ t('shareNote') }}</h2>
-          <button class="icon-button share-dialog-close" type="button" :aria-label="t('close')" @click="closeShareDialog">
+          <button
+            class="icon-button share-dialog-close"
+            type="button"
+            :aria-label="t('close')"
+            @click="closeShareDialog"
+          >
             <X :size="20" />
           </button>
 
@@ -1082,10 +1163,16 @@ onUnmounted(() => {
                 role="switch"
                 :aria-checked="shareLinks.view.enabled"
                 :disabled="shareBusyMode === 'view' || shareLoading"
-                @click="toggleShareLink('view')">
+                @click="toggleShareLink('view')"
+              >
                 <span class="share-toggle-track"><span class="share-toggle-thumb" /></span>
               </button>
-              <button class="icon-button share-link-copy" :disabled="!shareLinks.view.url" :aria-label="t('copyLink')" @click="copyShareLink('view')">
+              <button
+                class="icon-button share-link-copy"
+                :disabled="!shareLinks.view.url"
+                :aria-label="t('copyLink')"
+                @click="copyShareLink('view')"
+              >
                 <ClipboardCheck v-if="shareCopyMode === 'view'" :size="18" />
                 <Copy v-else :size="18" />
               </button>
@@ -1105,10 +1192,16 @@ onUnmounted(() => {
                 role="switch"
                 :aria-checked="shareLinks.edit.enabled"
                 :disabled="shareBusyMode === 'edit' || shareLoading"
-                @click="toggleShareLink('edit')">
+                @click="toggleShareLink('edit')"
+              >
                 <span class="share-toggle-track"><span class="share-toggle-thumb" /></span>
               </button>
-              <button class="icon-button share-link-copy" :disabled="!shareLinks.edit.url" :aria-label="t('copyLink')" @click="copyShareLink('edit')">
+              <button
+                class="icon-button share-link-copy"
+                :disabled="!shareLinks.edit.url"
+                :aria-label="t('copyLink')"
+                @click="copyShareLink('edit')"
+              >
                 <ClipboardCheck v-if="shareCopyMode === 'edit'" :size="18" />
                 <Copy v-else :size="18" />
               </button>
@@ -1123,14 +1216,16 @@ onUnmounted(() => {
       :is-plain="showPlain"
       :readonly="isReadonlyMode"
       @toggle-plain="showPlain = !showPlain"
-      @plain-action="applyPlainAction" />
+      @plain-action="applyPlainAction"
+    />
 
     <section v-if="showPlain" ref="plainWrap" class="plain-wrap">
       <textarea
         ref="plainTextarea"
         :value="store.currentContent"
         :readonly="isReadonlyMode"
-        @input="onPlainInput"></textarea>
+        @input="onPlainInput"
+      ></textarea>
     </section>
     <section v-else ref="wysiwygWrap" class="wysiwyg-wrap">
       <EditorContent v-if="editor" :editor="editor || null" class="tiptap-root" />

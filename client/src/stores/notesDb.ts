@@ -25,7 +25,12 @@ function isRetriableIdbError(err: unknown): boolean {
   if (!err) return false
 
   const name = (err as DOMException)?.name || ''
-  if (name === 'UnknownError' || name === 'InvalidStateError' || name === 'TransactionInactiveError' || name === 'AbortError') {
+  if (
+    name === 'UnknownError' ||
+    name === 'InvalidStateError' ||
+    name === 'TransactionInactiveError' ||
+    name === 'AbortError'
+  ) {
     return true
   }
 
@@ -84,7 +89,7 @@ function createDbPromise() {
     },
     terminated() {
       dbPromise = null
-    }
+    },
   })
 }
 
@@ -117,13 +122,14 @@ async function runWithIdbRetry<T>(operation: () => Promise<T>): Promise<T> {
 function normalizeCachedNote(note: CachedNote): CachedNote {
   const normalizedCollection = normalizeCollection(note.collection)
   const normalizedTitle = (note.title || '').trim()
-  const normalizedKey = (note.key || '').trim() || buildNoteKey(normalizedTitle, normalizedCollection)
+  const normalizedKey =
+    (note.key || '').trim() || buildNoteKey(normalizedTitle, normalizedCollection)
 
   return {
     ...note,
     key: normalizedKey,
     title: normalizedTitle,
-    collection: normalizedCollection
+    collection: normalizedCollection,
   }
 }
 

@@ -18,7 +18,9 @@ test.describe('List type switching on touch input', () => {
     await loginIfNeeded(page)
   })
 
-  test('tapping ordered list on nested todo subitem only converts that subitem', async ({ page }) => {
+  test('tapping ordered list on nested todo subitem only converts that subitem', async ({
+    page,
+  }) => {
     await createNote(page, 'list-touch-nested-ordered')
     await typeBaseLines(page)
 
@@ -37,7 +39,7 @@ test.describe('List type switching on touch input', () => {
     expectEntry(entries, { text: 'gamma', kind: 'task', depth: 1 })
 
     const nestedOrderedStyle = await editor(page).evaluate((root) => {
-      const item = root.querySelector("ol li") as HTMLElement | null
+      const item = root.querySelector('ol li') as HTMLElement | null
       if (!item) return null
       const style = window.getComputedStyle(item)
       return {

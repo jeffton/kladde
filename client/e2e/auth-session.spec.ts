@@ -10,7 +10,7 @@ test.describe('Session handling on API failures', () => {
       await route.fulfill({
         status: 401,
         contentType: 'application/json',
-        body: JSON.stringify({ error: 'unauthorized' })
+        body: JSON.stringify({ error: 'unauthorized' }),
       })
     })
 
@@ -28,7 +28,7 @@ test.describe('Session handling on API failures', () => {
       await route.fulfill({
         status: 500,
         contentType: 'application/json',
-        body: JSON.stringify({ error: 'boom' })
+        body: JSON.stringify({ error: 'boom' }),
       })
     })
 
@@ -36,6 +36,9 @@ test.describe('Session handling on API failures', () => {
 
     await expect(page.locator('.create-fab')).toBeVisible({ timeout: 10000 })
     await expect(page.locator('.login-form')).not.toBeVisible()
-    await page.screenshot({ path: '../screenshots/playwright-500-stays-logged-in.png', fullPage: true })
+    await page.screenshot({
+      path: '../screenshots/playwright-500-stays-logged-in.png',
+      fullPage: true,
+    })
   })
 })

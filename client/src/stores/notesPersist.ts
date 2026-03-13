@@ -36,9 +36,12 @@ export function createNotesPersist(deps: NotesPersistDeps) {
       const existing = await deps.getCachedNote(snapshot.key)
       await deps.putCachedNote({
         ...snapshot,
-        existsOnServer: existing?.existsOnServer
+        existsOnServer: existing?.existsOnServer,
       })
-      if (deps.selectedKey.value === snapshot.key && deps.contentVersion.value === snapshot.version) {
+      if (
+        deps.selectedKey.value === snapshot.key &&
+        deps.contentVersion.value === snapshot.version
+      ) {
         deps.updateSyncStatus()
       }
     })
@@ -82,11 +85,14 @@ export function createNotesPersist(deps: NotesPersistDeps) {
 
     deps.noteContents.value = {
       ...deps.noteContents.value,
-      [deps.selectedKey.value]: deps.currentContent.value
+      [deps.selectedKey.value]: deps.currentContent.value,
     }
 
     const fallback = deps.selectedKey.value.includes('/')
-      ? { collection: deps.selectedKey.value.split('/')[0], title: deps.selectedKey.value.split('/').slice(1).join('/') }
+      ? {
+          collection: deps.selectedKey.value.split('/')[0],
+          title: deps.selectedKey.value.split('/').slice(1).join('/'),
+        }
       : { collection: '', title: deps.selectedKey.value }
 
     pendingContentSnapshot = {
@@ -97,7 +103,7 @@ export function createNotesPersist(deps: NotesPersistDeps) {
       updatedAt: nowIso,
       dirty: true,
       version: deps.contentVersion.value,
-      starred: selectedMeta?.starred
+      starred: selectedMeta?.starred,
     }
 
     scheduleContentPersist()
@@ -106,6 +112,6 @@ export function createNotesPersist(deps: NotesPersistDeps) {
   return {
     queueWrite,
     flushPendingWrites,
-    setCurrentContent
+    setCurrentContent,
   }
 }

@@ -19,14 +19,14 @@ Kladde is an agent-friendly notes app that syncs to a folder with plain markdown
 
 ## Stack
 
-- **Frontend:** Vue 3, TypeScript (strict), Tiptap, Pinia, Vue Router, Vite 8, Vitest, ESLint flat config, Workbox
+- **Frontend:** Vue 3, TypeScript (strict), Tiptap, Pinia, Vue Router, Vite+ (Vite, Vitest, Oxlint, Oxfmt, Rolldown), Workbox
 - **Backend:** Go — serves API + built PWA, stores notes as plain `.md` files
 - **Icons:** Lucide
 
 ## Structure
 
 ```
-client/   Vue + Vite PWA
+client/   Vue + Vite+ PWA
 server/   Go server
 ```
 
@@ -43,7 +43,8 @@ From repo root:
 # Install frontend deps + run full frontend checks
 cd client
 npm ci
-npm run check
+npx vp check
+npx vp build
 
 # Build backend
 cd ../server

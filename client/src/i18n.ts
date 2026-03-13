@@ -8,7 +8,9 @@ export function resolveUiLocale(language?: string): UiLocale {
   return 'en-US'
 }
 
-export const uiLocale: UiLocale = resolveUiLocale(typeof navigator !== 'undefined' ? navigator.language : 'en-US')
+export const uiLocale: UiLocale = resolveUiLocale(
+  typeof navigator !== 'undefined' ? navigator.language : 'en-US',
+)
 export const intlLocale: string = uiLocale
 
 const messages = {
@@ -106,7 +108,7 @@ const messages = {
     noNoteSelected: 'Ingen note valgt',
     invalidServerTitle: 'Server returnerede ugyldig titel',
     summerTheme: 'Sommertema',
-    defaultTheme: 'Standardtema'
+    defaultTheme: 'Standardtema',
   },
   sv: {
     genericError: 'Ett fel uppstod',
@@ -202,7 +204,7 @@ const messages = {
     noNoteSelected: 'Ingen anteckning vald',
     invalidServerTitle: 'Servern returnerade ogiltig titel',
     summerTheme: 'Sommartema',
-    defaultTheme: 'Standardtema'
+    defaultTheme: 'Standardtema',
   },
   'en-US': {
     genericError: 'Something went wrong',
@@ -298,7 +300,7 @@ const messages = {
     noNoteSelected: 'No note selected',
     invalidServerTitle: 'Server returned an invalid title',
     summerTheme: 'Summer theme',
-    defaultTheme: 'Default theme'
+    defaultTheme: 'Default theme',
   },
   fr: {
     genericError: 'Une erreur est survenue',
@@ -394,11 +396,11 @@ const messages = {
     noNoteSelected: 'Aucune note sélectionnée',
     invalidServerTitle: 'Le serveur a renvoyé un titre invalide',
     summerTheme: 'Thème été',
-    defaultTheme: 'Thème par défaut'
-  }
+    defaultTheme: 'Thème par défaut',
+  },
 } as const
 
-export type MessageKey = keyof typeof messages['en-US']
+export type MessageKey = keyof (typeof messages)['en-US']
 
 export function t(key: MessageKey): string {
   return messages[uiLocale][key] || messages['en-US'][key]

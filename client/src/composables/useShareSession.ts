@@ -2,7 +2,14 @@ import { computed, onUnmounted, reactive, ref, type ComputedRef } from 'vue'
 import { ApiError, apiFetch, clientOrigin, sharedNotePathApi } from '../stores/notesApi'
 import { isUnauthorizedError } from '../stores/notesErrors'
 import { t } from '../i18n'
-import type { AppMode, EditorStoreLike, NoteMeta, SharedNoteResponse, ShareMode, SyncState } from '../types'
+import type {
+  AppMode,
+  EditorStoreLike,
+  NoteMeta,
+  SharedNoteResponse,
+  ShareMode,
+  SyncState,
+} from '../types'
 
 interface UseShareSessionOptions {
   isShareRoute: ComputedRef<boolean>
@@ -31,10 +38,12 @@ export function useShareSession({ isShareRoute, shareToken }: UseShareSessionOpt
     setCurrentContent: async () => undefined,
     renameCurrent: async () => '',
     moveCurrentToCollection: async () => '',
-    deleteCurrent: async () => undefined
+    deleteCurrent: async () => undefined,
   })
 
-  const shareAppMode = computed<AppMode>(() => (shareMode.value === 'edit' ? 'share-edit' : 'share-readonly'))
+  const shareAppMode = computed<AppMode>(() =>
+    shareMode.value === 'edit' ? 'share-edit' : 'share-readonly',
+  )
 
   let shareSaveTimer: number | null = null
   let shareWs: WebSocket | null = null
@@ -114,7 +123,7 @@ export function useShareSession({ isShareRoute, shareToken }: UseShareSessionOpt
       collection,
       updatedAt,
       dirty: false,
-      starred: Boolean(note.starred)
+      starred: Boolean(note.starred),
     }
 
     shareStore.selectedKey = key
@@ -194,7 +203,8 @@ export function useShareSession({ isShareRoute, shareToken }: UseShareSessionOpt
   }
 
   async function saveSharedNote() {
-    if (!shareToken.value || shareMode.value !== 'edit' || !shareDirty.value || shareSaving.value) return
+    if (!shareToken.value || shareMode.value !== 'edit' || !shareDirty.value || shareSaving.value)
+      return
 
     shareSaving.value = true
     setShareSync('syncing', t('syncingShort'))
@@ -203,7 +213,7 @@ export function useShareSession({ isShareRoute, shareToken }: UseShareSessionOpt
       const response = await apiFetch(sharedNotePathApi(shareToken.value), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: shareStore.currentContent })
+        body: JSON.stringify({ content: shareStore.currentContent }),
       })
 
       const note = (await response.json()) as SharedNoteResponse
@@ -234,7 +244,13 @@ export function useShareSession({ isShareRoute, shareToken }: UseShareSessionOpt
   }
 
   function scheduleShareReconnect() {
-    if (shareDestroyed || shareReconnectTimer !== null || !isShareRoute.value || shareReconnectHalted) return
+    if (
+      shareDestroyed ||
+      shareReconnectTimer !== null ||
+      !isShareRoute.value ||
+      shareReconnectHalted
+    )
+      return
 
     const delay = Math.min(30000, 1000 * 2 ** shareReconnectAttempt)
     shareReconnectTimer = window.setTimeout(() => {
@@ -261,7 +277,11 @@ export function useShareSession({ isShareRoute, shareToken }: UseShareSessionOpt
 
   function connectShareSocket() {
     if (!shareToken.value || shareDestroyed || !isShareRoute.value || shareReconnectHalted) return
-    if (shareWs && (shareWs.readyState === WebSocket.OPEN || shareWs.readyState === WebSocket.CONNECTING)) return
+    if (
+      shareWs &&
+      (shareWs.readyState === WebSocket.OPEN || shareWs.readyState === WebSocket.CONNECTING)
+    )
+      return
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
     const wsUrl = `${protocol}//${window.location.host}/client-api/ws?shareToken=${encodeURIComponent(shareToken.value)}`
@@ -347,7 +367,7 @@ export function useShareSession({ isShareRoute, shareToken }: UseShareSessionOpt
     if (shareStore.selectedKey) {
       shareStore.noteContents = {
         ...shareStore.noteContents,
-        [shareStore.selectedKey]: content
+        [shareStore.selectedKey]: content,
       }
     }
 
@@ -358,8 +378,8 @@ export function useShareSession({ isShareRoute, shareToken }: UseShareSessionOpt
         {
           ...current,
           updatedAt,
-          dirty: true
-        }
+          dirty: true,
+        },
       ]
       shareStore.currentUpdatedAt = updatedAt
     }
@@ -395,6 +415,6 @@ export function useShareSession({ isShareRoute, shareToken }: UseShareSessionOpt
     clearShareError,
     setShareUiErrorMessage,
     initializeShareSession,
-    teardownShareSession
+    teardownShareSession,
   }
 }

@@ -8,14 +8,21 @@ import { useAutosave } from './composables/useAutosave'
 import { useShareSession } from './composables/useShareSession'
 import type { AppMode, AuthUser } from './types'
 import { t } from './i18n'
-import { isIndexedDbRuntimeError, isNetworkError, isUnauthorizedError, UNAUTHORIZED_EVENT } from './stores/notesErrors'
+import {
+  isIndexedDbRuntimeError,
+  isNetworkError,
+  isUnauthorizedError,
+  UNAUTHORIZED_EVENT,
+} from './stores/notesErrors'
 
 const store = useNotesStore()
 const route = useRoute()
 const router = useRouter()
 
 const isShareRoute = computed(() => route.name === 'share')
-const shareToken = computed(() => (typeof route.params.token === 'string' ? route.params.token : ''))
+const shareToken = computed(() =>
+  typeof route.params.token === 'string' ? route.params.token : '',
+)
 
 const error = ref('')
 const authChecked = ref(false)
@@ -44,7 +51,7 @@ function readCachedAuthUser(): AuthUser | null {
 
     return {
       username: usernameValue,
-      displayName: displayNameValue
+      displayName: displayNameValue,
     }
   } catch {
     return null
@@ -154,7 +161,7 @@ async function login() {
     const res = await fetch('/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username: username.value, password: password.value })
+      body: JSON.stringify({ username: username.value, password: password.value }),
     })
 
     if (res.status === 401) {
@@ -192,7 +199,7 @@ const mobileTransitionName = ref<'' | 'slide-from-right' | 'slide-from-left'>(''
 
 const appShellClass = computed(() => ({
   'mobile-list-view': isMobile.value && isListRoute.value,
-  'mobile-editor-view': isMobile.value && !isListRoute.value
+  'mobile-editor-view': isMobile.value && !isListRoute.value,
 }))
 
 function setMobileTransition(name: '' | 'slide-from-right' | 'slide-from-left') {
@@ -262,7 +269,7 @@ useAutosave({
   store,
   onError: (err) => {
     setUiError(err)
-  }
+  },
 })
 
 watch(
@@ -273,7 +280,7 @@ watch(
     const key = typeof value === 'string' ? value : ''
     if (!key) return
     if (key !== store.selectedKey) await selectNote(key, true, false)
-  }
+  },
 )
 
 watch(
@@ -286,7 +293,7 @@ watch(
     if (routeKey === key) return
 
     await router.replace({ name: 'note', params: { key } })
-  }
+  },
 )
 
 const removeAfterEach = router.afterEach(() => {
@@ -360,7 +367,7 @@ const {
   clearShareError,
   setShareUiErrorMessage,
   initializeShareSession,
-  teardownShareSession
+  teardownShareSession,
 } = useShareSession({ isShareRoute, shareToken })
 
 const appMode = computed<AppMode>(() => {
@@ -382,7 +389,7 @@ watch(
     authChecked.value = true
     void initializeShareSession()
   },
-  { immediate: true }
+  { immediate: true },
 )
 
 onMounted(async () => {
@@ -445,7 +452,14 @@ onUnmounted(() => {
     <Transition name="error-overlay">
       <div v-if="shareError" class="error-overlay" role="alert" aria-live="assertive">
         <p class="error-overlay-text">{{ shareError }}</p>
-        <button class="error-overlay-close" type="button" :aria-label="t('dismissError')" @click="clearShareError">×</button>
+        <button
+          class="error-overlay-close"
+          type="button"
+          :aria-label="t('dismissError')"
+          @click="clearShareError"
+        >
+          ×
+        </button>
       </div>
     </Transition>
 
@@ -459,7 +473,8 @@ onUnmounted(() => {
       :store="shareStore"
       :mode="appMode"
       :show-back="false"
-      @ui-error="setShareUiErrorMessage" />
+      @ui-error="setShareUiErrorMessage"
+    />
 
     <main v-else class="editor-area share-loading-state">
       <h1 class="app-logo">kladde</h1>
@@ -476,15 +491,25 @@ onUnmounted(() => {
     <div class="login-card">
       <h1 class="app-logo">kladde</h1>
       <form class="login-form" @submit.prevent="login">
-        <input v-model="username" class="login-input" type="text" autocomplete="username" :placeholder="t('username')" required />
+        <input
+          v-model="username"
+          class="login-input"
+          type="text"
+          autocomplete="username"
+          :placeholder="t('username')"
+          required
+        />
         <input
           v-model="password"
           class="login-input"
           type="password"
           autocomplete="current-password"
           :placeholder="t('password')"
-          required />
-        <p v-if="loginError" class="login-error" role="alert" aria-live="assertive">{{ loginError }}</p>
+          required
+        />
+        <p v-if="loginError" class="login-error" role="alert" aria-live="assertive">
+          {{ loginError }}
+        </p>
         <button class="login-button" type="submit" :disabled="loggingIn">{{ t('login') }}</button>
       </form>
     </div>
@@ -494,7 +519,14 @@ onUnmounted(() => {
     <Transition name="error-overlay">
       <div v-if="error" class="error-overlay" role="alert" aria-live="assertive">
         <p class="error-overlay-text">{{ error }}</p>
-        <button class="error-overlay-close" type="button" :aria-label="t('dismissError')" @click="clearUiError">×</button>
+        <button
+          class="error-overlay-close"
+          type="button"
+          :aria-label="t('dismissError')"
+          @click="clearUiError"
+        >
+          ×
+        </button>
       </div>
     </Transition>
 
@@ -509,7 +541,8 @@ onUnmounted(() => {
           @create="createNote"
           @select="selectNote"
           @toggle-pin="togglePin"
-          @logout="logout" />
+          @logout="logout"
+        />
       </Transition>
 
       <Transition :name="mobileTransitionName">
@@ -521,7 +554,8 @@ onUnmounted(() => {
           @rename="onRename"
           @back="goBackToList"
           @deleted="onDeleted"
-          @ui-error="setUiErrorMessage" />
+          @ui-error="setUiErrorMessage"
+        />
       </Transition>
     </template>
 
@@ -534,7 +568,8 @@ onUnmounted(() => {
         @create="createNote"
         @select="selectNote"
         @toggle-pin="togglePin"
-        @logout="logout" />
+        @logout="logout"
+      />
 
       <EditorView
         :store="store"
@@ -543,7 +578,8 @@ onUnmounted(() => {
         @rename="onRename"
         @back="goBackToList"
         @deleted="onDeleted"
-        @ui-error="setUiErrorMessage" />
+        @ui-error="setUiErrorMessage"
+      />
     </template>
   </div>
 </template>
