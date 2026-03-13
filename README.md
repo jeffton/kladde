@@ -19,14 +19,14 @@ Kladde is an agent-friendly notes app that syncs to a folder with plain markdown
 
 ## Stack
 
-- **Frontend:** Vue 3, TypeScript (strict), Tiptap, Pinia, Vue Router, Vite, Workbox
+- **Frontend:** Vue 3, TypeScript (strict), Tiptap, Pinia, Vue Router, Vite+ (Vite, Vitest, Oxlint, Oxfmt, Rolldown), Workbox
 - **Backend:** Go — serves API + built PWA, stores notes as plain `.md` files
 - **Icons:** Lucide
 
 ## Structure
 
 ```
-client/   Vue + Vite PWA
+client/   Vue + Vite+ PWA
 server/   Go server
 ```
 
@@ -40,16 +40,34 @@ server/   Go server
 From repo root:
 
 ```bash
-# Build frontend
+# Install frontend deps + run frontend static checks
 cd client
 npm ci
-npm run build
+npx vp check
+npx vp build
 
 # Build backend
 cd ../server
 mkdir -p dist
 go build -o ./dist/kladde-server .
 ```
+
+## Testing
+
+From `client/`:
+
+```bash
+# Unit + static validation
+npm run check
+
+# Browser install (once per machine)
+npm run test:e2e:install
+
+# End-to-end tests
+npm run test:e2e
+```
+
+The Playwright suite runs separately from `vp check` because it needs a browser plus the Go backend; `vp check` stays the fast static/unit gate.
 
 This produces:
 
