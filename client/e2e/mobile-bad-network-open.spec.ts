@@ -23,9 +23,11 @@ test.describe("Mobile note opening on poor network", () => {
     await expect(noteItem).toBeVisible();
 
     const notePath = `**/client-api/notes/${encodeURIComponent(title)}*`;
-    let releaseFetch = () => undefined;
+    let releaseFetch: () => void = () => {};
     const releaseFetchPromise = new Promise<void>((resolve) => {
-      releaseFetch = resolve;
+      releaseFetch = () => {
+        resolve();
+      };
     });
 
     const routeHandler = async (route: Route) => {

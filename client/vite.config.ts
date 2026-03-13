@@ -56,7 +56,7 @@ export default defineConfig({
     ignorePatterns: ["dist/**"],
   },
   lint: {
-    ignorePatterns: ["dist/**", "e2e/**"],
+    ignorePatterns: ["dist/**"],
     options: {
       typeAware: true,
       typeCheck: true,

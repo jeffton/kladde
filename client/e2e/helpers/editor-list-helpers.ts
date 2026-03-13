@@ -11,7 +11,7 @@ export type ListEntry = {
 };
 
 export async function loginIfNeeded(page: Page) {
-  await page.goto("http://127.0.0.1:8080", { waitUntil: "networkidle" });
+  await page.goto("/", { waitUntil: "networkidle" });
   const loginVisible = await page
     .locator(".login-form")
     .isVisible()

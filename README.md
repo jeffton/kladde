@@ -40,7 +40,7 @@ server/   Go server
 From repo root:
 
 ```bash
-# Install frontend deps + run full frontend checks
+# Install frontend deps + run frontend static checks
 cd client
 npm ci
 npx vp check
@@ -51,6 +51,23 @@ cd ../server
 mkdir -p dist
 go build -o ./dist/kladde-server .
 ```
+
+## Testing
+
+From `client/`:
+
+```bash
+# Unit + static validation
+npm run check
+
+# Browser install (once per machine)
+npm run test:e2e:install
+
+# End-to-end tests
+npm run test:e2e
+```
+
+The Playwright suite runs separately from `vp check` because it needs a browser plus the Go backend; `vp check` stays the fast static/unit gate.
 
 This produces:
 

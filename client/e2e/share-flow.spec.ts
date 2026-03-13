@@ -26,7 +26,7 @@ test.describe("Share flow", () => {
 
     const dialog = page.locator(".share-dialog");
     await expect(dialog).toBeVisible();
-    await page.screenshot({ path: "../screenshots/playwright-share-dialog.png", fullPage: true });
+    await page.screenshot({ path: "screenshots/playwright-share-dialog.png", fullPage: true });
 
     const viewRow = page.locator(".share-link-row").nth(0);
     const editRow = page.locator(".share-link-row").nth(1);
@@ -73,7 +73,7 @@ test.describe("Share flow", () => {
     await expect(readonlyEditor).toHaveAttribute("contenteditable", "false");
     await expect(readonlyPage.locator(".note-title-input")).toHaveValue(renamedTitle);
     await readonlyPage.screenshot({
-      path: "../screenshots/playwright-share-readonly.png",
+      path: "screenshots/playwright-share-readonly.png",
       fullPage: true,
     });
 
@@ -86,7 +86,7 @@ test.describe("Share flow", () => {
     await expect(guestEditor).toHaveAttribute("contenteditable", "true");
     await expect(guestPage.locator(".note-title-input")).toHaveValue(renamedTitle);
     await guestPage.screenshot({
-      path: "../screenshots/playwright-share-editor.png",
+      path: "screenshots/playwright-share-editor.png",
       fullPage: true,
     });
 
