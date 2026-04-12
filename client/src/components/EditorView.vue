@@ -868,8 +868,8 @@ async function copyCurrentPath() {
   if (!isFullMode.value || !props.store.selectedTitle) return;
 
   const notePath = selectedCollection.value
-    ? `${selectedCollection.value}/${props.store.selectedTitle}`
-    : props.store.selectedTitle;
+    ? `${selectedCollection.value}/${props.store.selectedTitle}.md`
+    : `${props.store.selectedTitle}.md`;
 
   try {
     await navigator.clipboard.writeText(`"${notePath}"`);
