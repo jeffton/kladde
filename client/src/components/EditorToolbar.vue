@@ -16,7 +16,7 @@ import {
   Indent,
   Outdent,
   Quote,
-} from "lucide-vue-next";
+} from "@lucide/vue";
 import type { Editor } from "@tiptap/vue-3";
 import { Fragment } from "@tiptap/pm/model";
 import type { Node as ProseMirrorNode } from "@tiptap/pm/model";

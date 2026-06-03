@@ -31,7 +31,7 @@ import {
   Share2,
   Trash2,
   X,
-} from "lucide-vue-next";
+} from "@lucide/vue";
 import EditorToolbar from "./EditorToolbar.vue";
 import { apiFetch, shareNotePathApi } from "../stores/notesApi";
 import type { AppMode, EditorStoreLike, ShareLinksResponse, ShareMode } from "../types";

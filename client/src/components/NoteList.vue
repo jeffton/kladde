@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import { KeyRound, LogOut, Plus, Search, Star, Sun, User, X } from "lucide-vue-next";
+import { KeyRound, LogOut, Plus, Search, Star, Sun, User, X } from "@lucide/vue";
 import type { NoteMeta } from "../types";
 import { t } from "../i18n";
 import { currentTheme, setTheme } from "../theme";
