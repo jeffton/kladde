@@ -172,9 +172,6 @@ func (s *Server) startFileWatcher() error {
 					}
 					knownMu.Unlock()
 
-					if _, found := s.consumeRecentChangeOrigin(username, collection, title); found {
-						return
-					}
 					s.broadcastNoteChange(username, NoteChangeEvent{
 						Type:       "note_changed",
 						Key:        key,

@@ -520,7 +520,6 @@ func (s *Server) handleSharedNoteAPI(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		s.recordRecentChangeOrigin(username, collection, title, origin)
 		s.broadcastNoteChange(username, NoteChangeEvent{
 			Type:       "note_changed",
 			Key:        note.Key,

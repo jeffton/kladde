@@ -36,6 +36,7 @@ export function createNotesPersist(deps: NotesPersistDeps) {
       const existing = await deps.getCachedNote(snapshot.key);
       await deps.putCachedNote({
         ...snapshot,
+        starred: existing?.starred ?? snapshot.starred,
         existsOnServer: existing?.existsOnServer,
       });
       if (

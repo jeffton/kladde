@@ -37,6 +37,9 @@ const loggingIn = ref(false);
 
 const AUTH_USER_STORAGE_KEY = "kladde.auth.user";
 const ME_REQUEST_TIMEOUT_MS = 2000;
+let sessionVerified = false;
+let sessionVerificationRetryTimer: number | null = null;
+let teardownInFlight: Promise<void> | null = null;
 
 function readCachedAuthUser(): AuthUser | null {
   try {
@@ -47,7 +50,7 @@ function readCachedAuthUser(): AuthUser | null {
     const usernameValue = typeof parsed?.username === "string" ? parsed.username : "";
     const displayNameValue = typeof parsed?.displayName === "string" ? parsed.displayName : "";
 
-    if (!usernameValue && !displayNameValue) return null;
+    if (!usernameValue) return null;
 
     return {
       username: usernameValue,
@@ -72,6 +75,7 @@ function writeCachedAuthUser(nextUser: AuthUser | null) {
 }
 
 const cachedAuthUser = readCachedAuthUser();
+const legacyCacheUsername = cachedAuthUser?.username || "";
 if (cachedAuthUser) {
   user.value = cachedAuthUser;
 }
@@ -80,12 +84,42 @@ function isAbortError(err: unknown): boolean {
   return err instanceof DOMException && err.name === "AbortError";
 }
 
+function clearSessionVerificationRetry() {
+  if (sessionVerificationRetryTimer !== null) {
+    window.clearTimeout(sessionVerificationRetryTimer);
+    sessionVerificationRetryTimer = null;
+  }
+}
+
+function scheduleSessionVerificationRetry() {
+  if (
+    sessionVerified ||
+    !user.value ||
+    !navigator.onLine ||
+    sessionVerificationRetryTimer !== null
+  ) {
+    return;
+  }
+
+  sessionVerificationRetryTimer = window.setTimeout(() => {
+    sessionVerificationRetryTimer = null;
+    void loadMe(true);
+  }, 5000);
+}
+
 function handleUnauthorizedSession() {
+  clearSessionVerificationRetry();
   user.value = null;
   writeCachedAuthUser(null);
   clearUiError();
   loginError.value = "";
   storeInitialized = false;
+  sessionVerified = false;
+  if (!teardownInFlight) {
+    teardownInFlight = store.teardown().finally(() => {
+      teardownInFlight = null;
+    });
+  }
 }
 
 function clearUiError() {
@@ -115,7 +149,7 @@ function setUiErrorMessage(message: string) {
   error.value = message || t("genericError");
 }
 
-async function loadMe(background = false) {
+async function loadMeOnce(background: boolean) {
   try {
     const controller = new AbortController();
     const timer = window.setTimeout(() => controller.abort(), ME_REQUEST_TIMEOUT_MS);
@@ -135,10 +169,26 @@ async function loadMe(background = false) {
     if (!res.ok) throw new Error(t("couldNotLoadUser"));
 
     const me = (await res.json()) as AuthUser;
+    const identityChanged = Boolean(
+      storeInitialized && user.value?.username && user.value.username !== me.username,
+    );
+    if (identityChanged) {
+      await store.teardown();
+      storeInitialized = false;
+    }
+
     user.value = me;
+    sessionVerified = true;
+    clearSessionVerificationRetry();
     writeCachedAuthUser(me);
+    if (background && identityChanged) {
+      await initializeAuthenticatedSession();
+    } else if (storeInitialized) {
+      await store.activateSync(me.username === legacyCacheUsername);
+    }
   } catch (err: unknown) {
     if (isAbortError(err) || isNetworkError(err)) {
+      scheduleSessionVerificationRetry();
       return;
     }
 
@@ -153,11 +203,26 @@ async function loadMe(background = false) {
   }
 }
 
+let meRequestInFlight: Promise<void> | null = null;
+async function loadMe(background = false) {
+  if (meRequestInFlight) return meRequestInFlight;
+
+  const task = loadMeOnce(background);
+  meRequestInFlight = task;
+  try {
+    await task;
+  } finally {
+    if (meRequestInFlight === task) meRequestInFlight = null;
+  }
+}
+
 async function login() {
   loginError.value = "";
   loggingIn.value = true;
 
   try {
+    if (teardownInFlight) await teardownInFlight;
+
     const res = await fetch("/auth/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -171,9 +236,11 @@ async function login() {
     if (!res.ok) throw new Error(t("couldNotLogin"));
 
     user.value = (await res.json()) as AuthUser;
+    sessionVerified = true;
+    clearSessionVerificationRetry();
     writeCachedAuthUser(user.value);
     password.value = "";
-    await store.initialize();
+    await initializeAuthenticatedSession();
   } catch {
     loginError.value = t("couldNotLoginNow");
   } finally {
@@ -182,13 +249,23 @@ async function login() {
 }
 
 async function logout() {
+  let teardownError: unknown;
+  try {
+    await store.teardown();
+  } catch (err: unknown) {
+    teardownError = err;
+  }
+  storeInitialized = false;
+  clearSessionVerificationRetry();
+
   try {
     await fetch("/auth/logout", { method: "POST" });
   } finally {
     user.value = null;
+    sessionVerified = false;
     writeCachedAuthUser(null);
     clearUiError();
-    loginError.value = "";
+    loginError.value = teardownError ? (teardownError as Error).message : "";
   }
 }
 
@@ -259,7 +336,10 @@ async function togglePin(key: string) {
   }
 }
 
-const online = () => store.setOnline(true);
+const online = () => {
+  store.setOnline(true);
+  if (isAuthenticated.value && !sessionVerified) void loadMe(true);
+};
 const offline = () => store.setOnline(false);
 const onUnauthorizedEvent = () => {
   handleUnauthorizedSession();
@@ -339,13 +419,22 @@ function updateIOSViewportHeight() {
 }
 
 let storeInitialized = false;
+let storeInitializationInFlight: Promise<void> | null = null;
 
 async function initializeAuthenticatedSession() {
-  if (!isAuthenticated.value || storeInitialized) return;
+  if (!isAuthenticated.value) return;
+  if (storeInitializationInFlight) return storeInitializationInFlight;
+  if (storeInitialized) return;
 
-  try {
-    storeInitialized = true;
-    await store.initialize();
+  storeInitialized = true;
+  const usernameAtStart = user.value.username;
+  storeInitializationInFlight = (async () => {
+    await store.initialize(
+      usernameAtStart,
+      sessionVerified,
+      usernameAtStart === legacyCacheUsername,
+    );
+    if (user.value?.username !== usernameAtStart) return;
 
     const key = typeof route.params.key === "string" ? route.params.key : "";
     if (key) {
@@ -353,9 +442,15 @@ async function initializeAuthenticatedSession() {
     } else if (!isMobile.value && store.selectedKey) {
       await router.replace({ name: "note", params: { key: store.selectedKey } });
     }
+  })();
+
+  try {
+    await storeInitializationInFlight;
   } catch (e) {
     storeInitialized = false;
     setUiError(e);
+  } finally {
+    storeInitializationInFlight = null;
   }
 }
 
@@ -375,13 +470,18 @@ const appMode = computed<AppMode>(() => {
   return shareAppMode.value;
 });
 
+let appMounted = false;
 watch(
   [isShareRoute, shareToken],
   ([isShare]) => {
     if (!isShare) {
       teardownShareSession();
-      if (isAuthenticated.value && !storeInitialized) {
-        void initializeAuthenticatedSession();
+      if (isAuthenticated.value) {
+        const verifyAfterInitialization = appMounted;
+        void (async () => {
+          await initializeAuthenticatedSession();
+          if (verifyAfterInitialization && !sessionVerified) await loadMe(true);
+        })();
       }
       return;
     }
@@ -393,6 +493,7 @@ watch(
 );
 
 onMounted(async () => {
+  appMounted = true;
   window.addEventListener(UNAUTHORIZED_EVENT, onUnauthorizedEvent);
 
   if (isShareRoute.value) {
@@ -431,6 +532,8 @@ onMounted(async () => {
 });
 
 onUnmounted(() => {
+  appMounted = false;
+  clearSessionVerificationRetry();
   window.removeEventListener(UNAUTHORIZED_EVENT, onUnauthorizedEvent);
 
   if (media && mediaListener) media.removeEventListener("change", mediaListener);

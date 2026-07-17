@@ -1,8 +1,9 @@
-import { openDB } from "idb";
+import { deleteDB, openDB } from "idb";
 import type { CachedNote, PendingOp, StoredPendingOp } from "../types";
 import { buildNoteKey, normalizeCollection } from "./notesModel";
 
-const DB_NAME = "kladde-db";
+const LEGACY_DB_NAME = "kladde-db";
+const DB_NAME_PREFIX = "kladde-db:";
 const DB_VERSION = 3;
 const NOTES_STORE = "notes";
 const OPS_STORE = "ops";
@@ -19,6 +20,7 @@ interface NoteAppDb {
   };
 }
 
+let activeDbName = "";
 let dbPromise: ReturnType<typeof openDB<NoteAppDb>> | null = null;
 
 function isRetriableIdbError(err: unknown): boolean {
@@ -62,7 +64,9 @@ async function closeAndResetDb(): Promise<void> {
 }
 
 function createDbPromise() {
-  return openDB<NoteAppDb>(DB_NAME, DB_VERSION, {
+  if (!activeDbName) throw new Error("notes database is not initialized");
+
+  return openDB<NoteAppDb>(activeDbName, DB_VERSION, {
     upgrade(database, oldVersion) {
       if (!database.objectStoreNames.contains(NOTES_STORE)) {
         database.createObjectStore(NOTES_STORE, { keyPath: "key" });
@@ -99,6 +103,57 @@ function db() {
   }
 
   return dbPromise;
+}
+
+export async function configureNotesDb(username: string): Promise<void> {
+  const normalizedUsername = username.trim();
+  if (!normalizedUsername) throw new Error("username is required for notes database");
+
+  const nextDbName = `${DB_NAME_PREFIX}${encodeURIComponent(normalizedUsername)}`;
+  if (activeDbName === nextDbName) return;
+
+  await closeAndResetDb();
+  activeDbName = nextDbName;
+}
+
+export async function closeNotesDb(): Promise<void> {
+  await closeAndResetDb();
+  activeDbName = "";
+}
+
+export async function migrateLegacyNotesDb(): Promise<boolean> {
+  const database = await db();
+  if ((await database.count(NOTES_STORE)) > 0 || (await database.count(OPS_STORE)) > 0) {
+    return false;
+  }
+
+  const legacy = await openDB<NoteAppDb>(LEGACY_DB_NAME);
+  if (
+    !legacy.objectStoreNames.contains(NOTES_STORE) ||
+    !legacy.objectStoreNames.contains(OPS_STORE)
+  ) {
+    legacy.close();
+    await deleteDB(LEGACY_DB_NAME);
+    return false;
+  }
+
+  const legacyNotes = await legacy.getAll(NOTES_STORE);
+  const legacyOps = await legacy.getAll(OPS_STORE);
+  legacy.close();
+
+  if (legacyNotes.length > 0 || legacyOps.length > 0) {
+    const tx = database.transaction([NOTES_STORE, OPS_STORE], "readwrite");
+    for (const note of legacyNotes) {
+      await tx.objectStore(NOTES_STORE).put(normalizeCachedNote(note));
+    }
+    for (const op of legacyOps) {
+      await tx.objectStore(OPS_STORE).put(op);
+    }
+    await tx.done;
+  }
+
+  await deleteDB(LEGACY_DB_NAME);
+  return legacyNotes.length > 0 || legacyOps.length > 0;
 }
 
 async function runWithIdbRetry<T>(operation: () => Promise<T>): Promise<T> {

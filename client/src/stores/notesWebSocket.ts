@@ -18,9 +18,11 @@ interface NotesWebSocketDeps {
   getCachedNote: (key: string) => Promise<CachedNote | undefined>;
   putCachedNote: (note: CachedNote) => Promise<IDBValidKey>;
   deleteCachedNote: (key: string) => Promise<void>;
+  queueWrite: (task: () => Promise<unknown>) => Promise<unknown>;
   normalizeTs: (value?: string | null) => string;
   isServerBacked: (note?: CachedNote | null) => boolean;
   isActiveNoteLocallyDirty: (key: string) => boolean;
+  getSessionGeneration: () => number;
 }
 
 function normalizeServerNote(note: NoteResponse): CachedNote {
@@ -43,8 +45,9 @@ export function createNotesWebSocket(deps: NotesWebSocketDeps) {
   let ws: WebSocket | null = null;
   let wsReconnectTimer: number | null = null;
   let wsReconnectAttempt = 0;
-  let wsConsecutiveFailures = 0;
   let wsReconnectDisabled = false;
+  let manuallyDisconnected = true;
+  let wsGeneration = 0;
   let lastMeUnauthorized = false;
   const pendingRemoteChanges = new Map<
     string,
@@ -59,15 +62,22 @@ export function createNotesWebSocket(deps: NotesWebSocketDeps) {
     }
   };
 
-  const handleRemoteDelete = async (key: string) => {
-    const local = await deps.getCachedNote(key);
-    const isCurrentDirty = deps.isActiveNoteLocallyDirty(key);
-    if (isCurrentDirty) return;
-    if (local && !deps.isServerBacked(local)) return;
+  const handleRemoteDelete = async (key: string, generation: number) => {
+    let deleted = false;
+    await deps.queueWrite(async () => {
+      if (generation !== deps.getSessionGeneration()) return;
+      const local = await deps.getCachedNote(key);
+      if (generation !== deps.getSessionGeneration()) return;
+      if (deps.isActiveNoteLocallyDirty(key)) return;
+      if (local && !deps.isServerBacked(local)) return;
 
-    if (local && !local.dirty) {
-      await deps.deleteCachedNote(key);
-    }
+      if (local && !local.dirty) {
+        await deps.deleteCachedNote(key);
+      }
+      deleted = true;
+    });
+    if (!deleted || generation !== deps.getSessionGeneration()) return;
+
     if (deps.selectedKey.value === key) {
       deps.selectedKey.value = "";
       deps.currentContent.value = "";
@@ -82,9 +92,10 @@ export function createNotesWebSocket(deps: NotesWebSocketDeps) {
     title: string,
     collection: string,
     action: string,
+    generation: number,
   ) => {
     if (action === "deleted") {
-      await handleRemoteDelete(key);
+      await handleRemoteDelete(key, generation);
       return;
     }
 
@@ -93,24 +104,28 @@ export function createNotesWebSocket(deps: NotesWebSocketDeps) {
     try {
       const noteRes = await deps.apiFetch(notePathApi(title, collection));
       const serverNote = normalizeServerNote((await noteRes.json()) as NoteResponse);
+      if (generation !== deps.getSessionGeneration()) return;
 
-      if (deps.isActiveNoteLocallyDirty(key)) return;
+      await deps.queueWrite(async () => {
+        if (generation !== deps.getSessionGeneration()) return;
+        const local = await deps.getCachedNote(key);
+        if (generation !== deps.getSessionGeneration()) return;
+        if (local?.dirty || deps.isActiveNoteLocallyDirty(key)) return;
 
-      const local = await deps.getCachedNote(key);
-      if (local?.dirty || deps.isActiveNoteLocallyDirty(key)) return;
+        if (serverNote.key !== key) {
+          await deps.deleteCachedNote(key);
+        }
 
-      if (serverNote.key !== key) {
-        await deps.deleteCachedNote(key);
-      }
-
-      await deps.putCachedNote({
-        ...serverNote,
-        updatedAt: deps.normalizeTs(serverNote.updatedAt),
-        dirty: false,
-        starred: Boolean(serverNote.starred),
-        existsOnServer: true,
+        await deps.putCachedNote({
+          ...serverNote,
+          updatedAt: deps.normalizeTs(serverNote.updatedAt),
+          dirty: false,
+          starred: Boolean(serverNote.starred),
+          existsOnServer: true,
+        });
       });
     } catch {
+      if (generation !== deps.getSessionGeneration()) return;
       // If note disappeared between event and fetch, reconcile via full sync.
       if (action === "created" || action === "updated") {
         void deps.syncWithServer();
@@ -127,14 +142,17 @@ export function createNotesWebSocket(deps: NotesWebSocketDeps) {
       pendingRemoteChanges.clear();
 
       void (async () => {
+        const generation = deps.getSessionGeneration();
         for (const [changedKey, changed] of changes) {
           await handleRemoteNoteChange(
             changedKey,
             changed.title,
             changed.collection,
             changed.action,
+            generation,
           );
         }
+        if (generation !== deps.getSessionGeneration()) return;
         await deps.refreshStateFromCache();
       })().catch(() => {
         void deps.syncWithServer();
@@ -153,30 +171,24 @@ export function createNotesWebSocket(deps: NotesWebSocketDeps) {
   };
 
   const connectWebSocket = async () => {
+    manuallyDisconnected = false;
     if (!deps.online.value || wsReconnectDisabled) return;
     if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
 
     const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     const wsUrl = `${protocol}//${window.location.host}/client-api/ws`;
-    let opened = false;
-
+    const generation = wsGeneration;
     try {
       ws = new WebSocket(wsUrl);
     } catch {
-      wsConsecutiveFailures += 1;
-      if (wsConsecutiveFailures >= 5) {
-        wsReconnectDisabled = true;
-        return;
-      }
       scheduleWsReconnect();
       return;
     }
 
+    const socket = ws;
     ws.onopen = () => {
-      opened = true;
       deps.wsConnected.value = true;
       wsReconnectAttempt = 0;
-      wsConsecutiveFailures = 0;
       wsReconnectDisabled = false;
       lastMeUnauthorized = false;
       clearWsReconnect();
@@ -205,12 +217,10 @@ export function createNotesWebSocket(deps: NotesWebSocketDeps) {
     };
 
     ws.onclose = (event) => {
-      deps.wsConnected.value = false;
-      ws = null;
+      if (generation !== wsGeneration) return;
 
-      if (!opened) {
-        wsConsecutiveFailures += 1;
-      }
+      deps.wsConnected.value = false;
+      if (ws === socket) ws = null;
 
       if (event.code === 1008) {
         wsReconnectDisabled = true;
@@ -231,11 +241,6 @@ export function createNotesWebSocket(deps: NotesWebSocketDeps) {
           return;
         }
 
-        if (wsConsecutiveFailures >= 5) {
-          wsReconnectDisabled = true;
-          return;
-        }
-
         scheduleWsReconnect();
       })();
     };
@@ -246,7 +251,7 @@ export function createNotesWebSocket(deps: NotesWebSocketDeps) {
   };
 
   const resetWsFailuresAndReconnect = () => {
-    wsConsecutiveFailures = 0;
+    if (manuallyDisconnected) return;
     wsReconnectDisabled = false;
     lastMeUnauthorized = false;
     wsReconnectAttempt = 0;
@@ -257,12 +262,19 @@ export function createNotesWebSocket(deps: NotesWebSocketDeps) {
   };
 
   const disconnectWebSocket = () => {
+    manuallyDisconnected = true;
+    wsGeneration += 1;
     deps.wsConnected.value = false;
     if (ws) {
       ws.close();
       ws = null;
     }
     clearWsReconnect();
+    if (remoteChangeTimer !== null) {
+      window.clearTimeout(remoteChangeTimer);
+      remoteChangeTimer = null;
+    }
+    pendingRemoteChanges.clear();
   };
 
   return {

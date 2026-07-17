@@ -49,15 +49,14 @@ func main() {
 	}
 
 	s := &Server{
-		notesBaseDir:        opts.Notes,
-		clientDir:           opts.Client,
-		usersFile:           opts.UsersFile,
-		apiKeysFile:         opts.APIKeysFile,
-		sharesFile:          sharesFile,
-		shares:              make(map[string]ShareRecord),
-		sessions:            make(map[string]Session),
-		hub:                 NewHub(),
-		recentChangeOrigins: NewRecentChangeOrigins(),
+		notesBaseDir: opts.Notes,
+		clientDir:    opts.Client,
+		usersFile:    opts.UsersFile,
+		apiKeysFile:  opts.APIKeysFile,
+		sharesFile:   sharesFile,
+		shares:       make(map[string]ShareRecord),
+		sessions:     make(map[string]Session),
+		hub:          NewHub(),
 	}
 
 	if err := s.loadShares(); err != nil {

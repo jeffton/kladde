@@ -26,7 +26,6 @@ interface NotesSyncDeps {
   samePendingOp: (a: PendingOp, b: PendingOp) => boolean;
   retargetPendingKey: (ops: PendingOp[], fromKey: string, toKey: string) => PendingOp[];
   normalizeTs: (value?: string | null) => string;
-  newerTs: (a?: string | null, b?: string | null) => string;
   tsMs: (value?: string | null) => number;
   apiFetch: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
   isNotFoundError: (err: unknown) => boolean;
@@ -77,8 +76,9 @@ function normalizeServerMeta(meta: ServerNoteMeta): NoteMeta {
 
 export function createNotesSync(deps: NotesSyncDeps) {
   let syncInFlight: Promise<void> | null = null;
-  let pushInFlight: Promise<void> | null = null;
-  let saveInFlight: Promise<void> | null = null;
+  let pushQueue: Promise<void> = Promise.resolve();
+  const activeSaves = new Set<Promise<void>>();
+  let stopped = true;
 
   const mutatePendingOps = async (mutator: (ops: PendingOp[]) => PendingOp[]) => {
     await deps.queueWrite(async () => {
@@ -158,7 +158,7 @@ export function createNotesSync(deps: NotesSyncDeps) {
       : saved.content;
     const chosenUpdatedAt = stillDirty
       ? deps.normalizeTs(current?.updatedAt ?? local.updatedAt)
-      : deps.newerTs(current?.updatedAt ?? local.updatedAt, saved.updatedAt ?? local.updatedAt);
+      : deps.normalizeTs(saved.updatedAt);
 
     await deps.queueWrite(async () => {
       if (savedKey !== originalKey) {
@@ -195,17 +195,10 @@ export function createNotesSync(deps: NotesSyncDeps) {
     }
   };
 
-  const runPushDirtyNote = async (key: string) => {
-    if (pushInFlight) await pushInFlight;
-
-    const task = pushDirtyNote(key);
-    pushInFlight = task;
-
-    try {
-      await task;
-    } finally {
-      if (pushInFlight === task) pushInFlight = null;
-    }
+  const runPushDirtyNote = (key: string) => {
+    const task = pushQueue.then(() => pushDirtyNote(key));
+    pushQueue = task.catch(() => undefined);
+    return task;
   };
 
   const processPendingOps = async () => {
@@ -226,12 +219,16 @@ export function createNotesSync(deps: NotesSyncDeps) {
 
       if (op.type === "star") {
         const { title, collection } = splitNoteKey(op.key);
-        await deps.apiFetch(starNotePathApi(title, collection), {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ starred: op.starred }),
-        });
-        deps.resetWsFailuresAndReconnect();
+        try {
+          await deps.apiFetch(starNotePathApi(title, collection), {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ starred: op.starred }),
+          });
+          deps.resetWsFailuresAndReconnect();
+        } catch (err: unknown) {
+          if (!deps.isNotFoundError(err)) throw err;
+        }
         await removePendingOp(op);
         continue;
       }
@@ -252,7 +249,11 @@ export function createNotesSync(deps: NotesSyncDeps) {
         const localMissingRename = await deps.getCachedNote(op.newKey);
         if (localMissingRename) {
           await deps.queueWrite(async () => {
-            await deps.putCachedNote({ ...localMissingRename, existsOnServer: false });
+            await deps.putCachedNote({
+              ...localMissingRename,
+              dirty: true,
+              existsOnServer: false,
+            });
           });
         }
 
@@ -263,6 +264,28 @@ export function createNotesSync(deps: NotesSyncDeps) {
 
       const payload = normalizeServerNote((await res.json()) as RenameResponse);
       const serverKey = payload.key;
+      const queuedRename = deps.pendingOps.value.find(
+        (candidate) => candidate.type === "rename" && candidate.oldKey === op.oldKey,
+      );
+
+      if (queuedRename?.type === "rename" && !deps.samePendingOp(queuedRename, op)) {
+        const desiredKey = queuedRename.newKey;
+        const desiredLocal = await deps.getCachedNote(desiredKey);
+        if (desiredLocal) {
+          await deps.queueWrite(async () => {
+            await deps.putCachedNote({ ...desiredLocal, existsOnServer: true });
+          });
+        }
+
+        await mutatePendingOps((ops) => {
+          const next = ops.filter(
+            (candidate) => !(candidate.type === "rename" && candidate.oldKey === op.oldKey),
+          );
+          next.unshift({ type: "rename", oldKey: serverKey, newKey: desiredKey });
+          return next;
+        });
+        continue;
+      }
 
       const renamedLocal = await deps.getCachedNote(op.newKey);
       if (renamedLocal) {
@@ -310,26 +333,29 @@ export function createNotesSync(deps: NotesSyncDeps) {
   };
 
   const saveCurrent = async () => {
-    if (!deps.selectedKey.value) return;
-    if (saveInFlight) return saveInFlight;
+    if (stopped || !deps.selectedKey.value) return;
 
     const keyAtStart = deps.selectedKey.value;
+    const contentAtStart = deps.currentContent.value;
+    const updatedAtStart = deps.currentUpdatedAt.value || new Date().toISOString();
+    const metaAtStart = deps.notes.value.find((note) => note.key === keyAtStart);
 
-    saveInFlight = (async () => {
+    const task = (async () => {
       await deps.flushPendingWrites();
       const existing = await deps.getCachedNote(keyAtStart);
-      const { title, collection } = existing || splitNoteKey(keyAtStart);
-
-      await deps.putCachedNote({
-        key: keyAtStart,
-        title,
-        collection,
-        content: deps.currentContent.value,
-        updatedAt: deps.currentUpdatedAt.value || new Date().toISOString(),
-        dirty: true,
-        starred: existing?.starred,
-        existsOnServer: existing?.existsOnServer,
-      });
+      if (!existing?.dirty) {
+        const fallback = splitNoteKey(keyAtStart);
+        await deps.putCachedNote({
+          key: keyAtStart,
+          title: existing?.title || metaAtStart?.title || fallback.title,
+          collection: existing?.collection || metaAtStart?.collection || fallback.collection,
+          content: contentAtStart,
+          updatedAt: updatedAtStart,
+          dirty: true,
+          starred: existing?.starred ?? metaAtStart?.starred,
+          existsOnServer: existing?.existsOnServer,
+        });
+      }
 
       if (!deps.online.value) {
         deps.updateSyncStatus();
@@ -350,14 +376,16 @@ export function createNotesSync(deps: NotesSyncDeps) {
       }
     })();
 
+    activeSaves.add(task);
     try {
-      await saveInFlight;
+      await task;
     } finally {
-      saveInFlight = null;
+      activeSaves.delete(task);
     }
   };
 
   const syncWithServer = async () => {
+    if (stopped) return;
     if (syncInFlight) return syncInFlight;
 
     syncInFlight = (async () => {
@@ -371,10 +399,15 @@ export function createNotesSync(deps: NotesSyncDeps) {
       deps.updateSyncStatus();
 
       try {
-        await processPendingOps();
-
         const localNotes = await deps.getAllCachedNotes();
         for (const local of localNotes) {
+          if (!local.dirty || local.existsOnServer !== false) continue;
+          await runPushDirtyNote(local.key);
+        }
+
+        await processPendingOps();
+
+        for (const local of await deps.getAllCachedNotes()) {
           if (!local.dirty) continue;
           await runPushDirtyNote(local.key);
         }
@@ -387,7 +420,14 @@ export function createNotesSync(deps: NotesSyncDeps) {
         for (const local of currentLocalMap.values()) {
           if (local.dirty || !deps.isServerBacked(local) || serverKeys.has(local.key)) continue;
 
-          await deps.deleteCachedNote(local.key);
+          let deleted = false;
+          await deps.queueWrite(async () => {
+            const latest = await deps.getCachedNote(local.key);
+            if (latest?.dirty || deps.isActiveNoteLocallyDirty(local.key)) return;
+            await deps.deleteCachedNote(local.key);
+            deleted = true;
+          });
+          if (!deleted) continue;
 
           if (deps.selectedKey.value === local.key) {
             deps.selectedKey.value = "";
@@ -417,10 +457,14 @@ export function createNotesSync(deps: NotesSyncDeps) {
           let noteRes: Response;
           try {
             noteRes = await deps.apiFetch(notePathApi(serverMeta.title, serverMeta.collection));
-          } catch {
-            continue;
+          } catch (err: unknown) {
+            if (deps.isNotFoundError(err)) continue;
+            throw err;
           }
           const serverNote = normalizeServerNote((await noteRes.json()) as NoteResponse);
+          const latestLocal = await deps.getCachedNote(serverMeta.key);
+          if (latestLocal?.dirty || deps.isActiveNoteLocallyDirty(serverMeta.key)) continue;
+
           await deps.putCachedNote({
             ...serverNote,
             updatedAt: deps.normalizeTs(serverNote.updatedAt || serverMeta.updatedAt),
@@ -448,9 +492,22 @@ export function createNotesSync(deps: NotesSyncDeps) {
     }
   };
 
+  const start = () => {
+    stopped = false;
+  };
+
+  const stop = async () => {
+    stopped = true;
+    await Promise.allSettled(Array.from(activeSaves));
+    await syncInFlight;
+    await pushQueue;
+  };
+
   return {
     mutatePendingOps,
     saveCurrent,
     syncWithServer,
+    start,
+    stop,
   };
 }

@@ -104,17 +104,17 @@ type ShareLinksResponse struct {
 }
 
 type Server struct {
-	notesBaseDir        string
-	clientDir           string
-	usersFile           string
-	apiKeysFile         string
-	sharesFile          string
-	shares              map[string]ShareRecord
-	sharesMu            sync.RWMutex
-	sessions            map[string]Session
-	sessionsMu          sync.RWMutex
-	usersMu             sync.Mutex
-	hub                 *Hub
-	recentChangeOrigins *RecentChangeOrigins
-	gitBackup           *GitBackup
+	notesBaseDir string
+	clientDir    string
+	usersFile    string
+	apiKeysFile  string
+	sharesFile   string
+	shares       map[string]ShareRecord
+	sharesMu     sync.RWMutex
+	starsMu      sync.Mutex
+	sessions     map[string]Session
+	sessionsMu   sync.RWMutex
+	usersMu      sync.Mutex
+	hub          *Hub
+	gitBackup    *GitBackup
 }

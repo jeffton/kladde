@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"net/http"
 	"net/url"
@@ -131,7 +132,6 @@ func (s *Server) handleNotes(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		s.recordRecentChangeOrigin(session.User.Username, note.Collection, note.Title, origin)
 		s.broadcastNoteChange(session.User.Username, NoteChangeEvent{
 			Type:       "note_changed",
 			Key:        note.Key,
@@ -227,8 +227,6 @@ func (s *Server) handleNoteByTitle(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		s.recordRecentChangeOrigin(session.User.Username, oldCollection, oldTitle, origin)
-		s.recordRecentChangeOrigin(session.User.Username, note.Collection, note.Title, origin)
 		s.broadcastNoteChange(session.User.Username, NoteChangeEvent{
 			Type:       "note_changed",
 			Key:        oldKey,
@@ -290,20 +288,34 @@ func (s *Server) handleNoteByTitle(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		key := noteStorageKey(title, oldCollection)
-		stars := loadStars(userDir)
 		if payload.Starred {
-			stars[key] = true
-		} else {
-			delete(stars, key)
+			path, err := s.notePath(userDir, title, oldCollection)
+			if err == nil {
+				err = rejectSymlink(path)
+			}
+			if err == nil {
+				var info fs.FileInfo
+				info, err = os.Stat(path)
+				if err == nil && !info.Mode().IsRegular() {
+					err = fs.ErrNotExist
+				}
+			}
+			if err != nil {
+				if errors.Is(err, fs.ErrNotExist) {
+					writeError(w, http.StatusNotFound, errors.New("note not found"))
+				} else {
+					writeError(w, http.StatusInternalServerError, err)
+				}
+				return
+			}
 		}
 
-		if err := saveStars(userDir, stars); err != nil {
+		key := noteStorageKey(title, oldCollection)
+		if err := s.setNoteStarred(userDir, key, payload.Starred); err != nil {
 			writeError(w, http.StatusInternalServerError, err)
 			return
 		}
 
-		s.recordRecentChangeOrigin(session.User.Username, oldCollection, title, origin)
 		s.broadcastNoteChange(session.User.Username, NoteChangeEvent{
 			Type:       "note_changed",
 			Key:        key,
@@ -365,7 +377,6 @@ func (s *Server) handleNoteByTitle(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		s.recordRecentChangeOrigin(session.User.Username, note.Collection, note.Title, origin)
 		s.broadcastNoteChange(session.User.Username, NoteChangeEvent{
 			Type:       "note_changed",
 			Key:        note.Key,
@@ -391,7 +402,6 @@ func (s *Server) handleNoteByTitle(w http.ResponseWriter, r *http.Request) {
 		}
 
 		key := noteStorageKey(title, oldCollection)
-		s.recordRecentChangeOrigin(session.User.Username, oldCollection, title, origin)
 		s.broadcastNoteChange(session.User.Username, NoteChangeEvent{
 			Type:       "note_changed",
 			Key:        key,
@@ -412,51 +422,68 @@ func (s *Server) listNotes(notesDir string) ([]NoteMeta, error) {
 		return nil, err
 	}
 
-	stars := loadStars(notesDir)
+	stars, err := loadStars(notesDir)
+	if err != nil {
+		return nil, err
+	}
 	result := make([]NoteMeta, 0)
+	collections := make([]struct {
+		name string
+		path string
+	}, 0)
 
-	appendFromDir := func(dir, collection string) {
-		dirEntries, err := os.ReadDir(dir)
-		if err != nil {
-			return
-		}
-		for _, entry := range dirEntries {
-			if strings.HasPrefix(entry.Name(), ".") {
-				continue
-			}
-			if entry.IsDir() || filepath.Ext(entry.Name()) != ".md" {
-				continue
-			}
-			info, infoErr := entry.Info()
-			if infoErr != nil {
-				continue
-			}
-			title := strings.TrimSuffix(entry.Name(), ".md")
-			key := noteStorageKey(title, collection)
-			result = append(result, NoteMeta{
-				Key:        key,
-				Title:      title,
-				Collection: collection,
-				UpdatedAt:  info.ModTime(),
-				Starred:    stars[key],
-			})
-		}
+	appendNote := func(entry fs.DirEntry, info fs.FileInfo, collection string) {
+		title := strings.TrimSuffix(entry.Name(), ".md")
+		key := noteStorageKey(title, collection)
+		result = append(result, NoteMeta{
+			Key:        key,
+			Title:      title,
+			Collection: collection,
+			UpdatedAt:  info.ModTime(),
+			Starred:    stars[key],
+		})
 	}
 
-	appendFromDir(notesDir, "")
-
 	for _, entry := range entries {
-		if !entry.IsDir() {
-			continue
-		}
 		if strings.HasPrefix(entry.Name(), ".") {
 			continue
 		}
-		collection := normalizeCollection(entry.Name())
-		if err := validateCollection(collection); err != nil {
+		info, err := entry.Info()
+		if err != nil {
+			return nil, err
+		}
+		if info.IsDir() {
+			collection := normalizeCollection(entry.Name())
+			if err := validateCollection(collection); err == nil {
+				collections = append(collections, struct {
+					name string
+					path string
+				}{name: collection, path: filepath.Join(notesDir, entry.Name())})
+			}
 			continue
 		}
-		appendFromDir(filepath.Join(notesDir, entry.Name()), collection)
+		if filepath.Ext(entry.Name()) == ".md" {
+			appendNote(entry, info, "")
+		}
+	}
+
+	for _, collection := range collections {
+		collectionEntries, err := os.ReadDir(collection.path)
+		if err != nil {
+			return nil, err
+		}
+		for _, entry := range collectionEntries {
+			if strings.HasPrefix(entry.Name(), ".") {
+				continue
+			}
+			info, err := entry.Info()
+			if err != nil {
+				return nil, err
+			}
+			if !info.IsDir() && filepath.Ext(entry.Name()) == ".md" {
+				appendNote(entry, info, collection.name)
+			}
+		}
 	}
 
 	sort.Slice(result, func(i, j int) bool {
@@ -478,17 +505,26 @@ func (s *Server) getNote(notesDir, title, collection string) (*Note, error) {
 		return nil, err
 	}
 
-	content, err := os.ReadFile(path)
+	file, err := os.Open(path)
 	if err != nil {
 		return nil, err
 	}
-	info, err := os.Stat(path)
+	defer file.Close()
+
+	info, err := file.Stat()
+	if err != nil {
+		return nil, err
+	}
+	content, err := io.ReadAll(file)
 	if err != nil {
 		return nil, err
 	}
 
 	key := noteStorageKey(title, collection)
-	stars := loadStars(notesDir)
+	stars, err := loadStars(notesDir)
+	if err != nil {
+		return nil, err
+	}
 	return &Note{
 		Key:        key,
 		Title:      title,
@@ -499,19 +535,22 @@ func (s *Server) getNote(notesDir, title, collection string) (*Note, error) {
 	}, nil
 }
 
-func loadStars(notesDir string) map[string]bool {
+func loadStars(notesDir string) (map[string]bool, error) {
 	path := filepath.Join(notesDir, ".stars.json")
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
-			return map[string]bool{}
+			return map[string]bool{}, nil
 		}
-		return map[string]bool{}
+		return nil, err
 	}
 
 	var titles []string
 	if err := json.Unmarshal(data, &titles); err != nil {
-		return map[string]bool{}
+		if removeErr := os.Remove(path); removeErr != nil && !errors.Is(removeErr, fs.ErrNotExist) {
+			return nil, removeErr
+		}
+		return map[string]bool{}, nil
 	}
 
 	stars := make(map[string]bool, len(titles))
@@ -523,7 +562,23 @@ func loadStars(notesDir string) map[string]bool {
 		stars[title] = true
 	}
 
-	return stars
+	return stars, nil
+}
+
+func (s *Server) setNoteStarred(notesDir, key string, starred bool) error {
+	s.starsMu.Lock()
+	defer s.starsMu.Unlock()
+
+	stars, err := loadStars(notesDir)
+	if err != nil {
+		return err
+	}
+	if starred {
+		stars[key] = true
+	} else {
+		delete(stars, key)
+	}
+	return saveStars(notesDir, stars)
 }
 
 func saveStars(notesDir string, stars map[string]bool) error {
@@ -634,6 +689,10 @@ func (s *Server) saveNote(notesDir, title, collection, content string) (*Note, s
 	if err != nil {
 		return nil, "", err
 	}
+	stars, err := loadStars(notesDir)
+	if err != nil {
+		return nil, "", err
+	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return nil, "", err
 	}
@@ -652,7 +711,6 @@ func (s *Server) saveNote(notesDir, title, collection, content string) (*Note, s
 	}
 
 	key := noteStorageKey(title, collection)
-	stars := loadStars(notesDir)
 	return &Note{
 		Key:        key,
 		Title:      title,
@@ -677,6 +735,9 @@ func removeCollectionDirIfEmpty(notesDir, collection string) {
 }
 
 func (s *Server) deleteNote(notesDir, title, collection string) error {
+	s.starsMu.Lock()
+	defer s.starsMu.Unlock()
+
 	path, err := s.notePath(notesDir, title, collection)
 	if err != nil {
 		return err
@@ -684,12 +745,15 @@ func (s *Server) deleteNote(notesDir, title, collection string) error {
 	if err := rejectSymlink(path); err != nil {
 		return err
 	}
+	stars, err := loadStars(notesDir)
+	if err != nil {
+		return err
+	}
 	if err := os.Remove(path); err != nil {
 		return err
 	}
 
 	key := noteStorageKey(title, collection)
-	stars := loadStars(notesDir)
 	if stars[key] {
 		delete(stars, key)
 		if err := saveStars(notesDir, stars); err != nil {
@@ -709,6 +773,9 @@ func (s *Server) deleteNote(notesDir, title, collection string) error {
 }
 
 func (s *Server) renameNote(notesDir, oldTitle, oldCollection, newTitle, newCollection string) (*Note, error) {
+	s.starsMu.Lock()
+	defer s.starsMu.Unlock()
+
 	if err := validateTitle(newTitle); err != nil {
 		return nil, err
 	}
@@ -724,6 +791,10 @@ func (s *Server) renameNote(notesDir, oldTitle, oldCollection, newTitle, newColl
 		return nil, err
 	}
 	if _, err := os.Stat(oldPath); err != nil {
+		return nil, err
+	}
+	stars, err := loadStars(notesDir)
+	if err != nil {
 		return nil, err
 	}
 
@@ -761,7 +832,6 @@ func (s *Server) renameNote(notesDir, oldTitle, oldCollection, newTitle, newColl
 		}
 	}
 
-	stars := loadStars(notesDir)
 	oldKey := noteStorageKey(oldTitle, oldCollection)
 	newKey := noteStorageKey(finalTitle, finalCollection)
 	if stars[oldKey] {

@@ -1,10 +1,13 @@
 import { computed, ref } from "vue";
 import { defineStore } from "pinia";
 import {
+  closeNotesDb,
+  configureNotesDb,
   deleteCachedNote,
   getAllCachedNotes,
   getCachedNote,
   getPendingOps,
+  migrateLegacyNotesDb,
   putCachedNote,
   replacePendingOps,
 } from "./notesDb";
@@ -23,7 +26,6 @@ import {
 import {
   buildNoteKey,
   isServerBacked,
-  newerTs,
   normalizeCollection,
   normalizeNoteKey,
   normalizeTs,
@@ -74,6 +76,8 @@ export const useNotesStore = defineStore("notes", () => {
   let syncRetryTimer: number | null = null;
   let syncRetryAttempt = 0;
   const wsConnected = ref(false);
+  let sessionGeneration = 0;
+  let syncActivated = false;
 
   const selectedNote = computed(
     () => notes.value.find((note) => note.key === selectedKey.value) || null,
@@ -200,8 +204,10 @@ export const useNotesStore = defineStore("notes", () => {
     updateSyncStatus();
     if (value) {
       clearSyncRetry();
-      triggerBackgroundSync();
-      void connectWebSocket();
+      if (syncActivated) {
+        triggerBackgroundSync();
+        void connectWebSocket();
+      }
       return;
     }
     clearSyncRetry();
@@ -302,22 +308,6 @@ export const useNotesStore = defineStore("notes", () => {
     }
   };
 
-  const initialize = async () => {
-    const storedOps = await getPendingOps();
-    pendingOps.value = storedOps.map((storedOp) => {
-      const { id, ...op } = storedOp;
-      void id;
-      return op;
-    });
-
-    await refreshStateFromCache();
-    updateSyncStatus();
-    if (online.value) {
-      triggerBackgroundSync();
-    }
-    void connectWebSocket();
-  };
-
   const hydrateSelectedNoteFromCache = (cached: CachedNote | undefined) => {
     if (cached) {
       currentContent.value = cached.content || "";
@@ -331,15 +321,22 @@ export const useNotesStore = defineStore("notes", () => {
     dirty.value = false;
   };
 
-  const refreshSelectedNoteFromServer = async (key: string, cached: CachedNote | undefined) => {
-    if (!online.value) return;
+  const refreshSelectedNoteFromServer = async (
+    key: string,
+    cached: CachedNote | undefined,
+    generation: number,
+  ) => {
+    if (!online.value || !syncActivated) return;
 
     const ref = cached || splitNoteKey(key);
 
     try {
       const noteRes = await apiFetch(notePathApi(ref.title, ref.collection));
       const serverNote = normalizeServerNote((await noteRes.json()) as NoteResponse);
+      if (generation !== sessionGeneration) return;
+
       const latestLocal = await getCachedNote(key);
+      if (generation !== sessionGeneration) return;
 
       if (!latestLocal?.dirty) {
         if (serverNote.key !== key) {
@@ -353,6 +350,8 @@ export const useNotesStore = defineStore("notes", () => {
         });
       }
 
+      if (generation !== sessionGeneration) return;
+
       if (selectedKey.value === key && !dirty.value) {
         currentContent.value = serverNote.content || "";
         currentUpdatedAt.value = normalizeTs(serverNote.updatedAt);
@@ -365,6 +364,7 @@ export const useNotesStore = defineStore("notes", () => {
       await refreshStateFromCache();
       clearSyncError();
     } catch (err: unknown) {
+      if (generation !== sessionGeneration) return;
       if (!isNotFoundError(err)) {
         handleSyncFailure(err, t("couldNotFetchNote"));
       }
@@ -373,15 +373,19 @@ export const useNotesStore = defineStore("notes", () => {
   };
 
   const selectNote = async (key: string) => {
+    const generation = sessionGeneration;
     await flushPendingWrites();
+    if (generation !== sessionGeneration) return;
+
     selectedKey.value = key;
 
     const cached = await getCachedNote(key);
+    if (generation !== sessionGeneration || selectedKey.value !== key) return;
     hydrateSelectedNoteFromCache(cached);
 
     if (!online.value) return;
 
-    void refreshSelectedNoteFromServer(key, cached);
+    void refreshSelectedNoteFromServer(key, cached, generation);
   };
 
   const applyLocalRename = async (
@@ -439,7 +443,13 @@ export const useNotesStore = defineStore("notes", () => {
 
   let resetWsFailuresAndReconnect: () => void = () => undefined;
 
-  const { mutatePendingOps, saveCurrent, syncWithServer } = createNotesSync({
+  const {
+    mutatePendingOps,
+    saveCurrent,
+    syncWithServer,
+    start: startSync,
+    stop: stopSync,
+  } = createNotesSync({
     pendingOps,
     selectedKey,
     currentContent,
@@ -461,7 +471,6 @@ export const useNotesStore = defineStore("notes", () => {
     samePendingOp,
     retargetPendingKey,
     normalizeTs,
-    newerTs,
     tsMs,
     apiFetch,
     isNotFoundError,
@@ -486,12 +495,115 @@ export const useNotesStore = defineStore("notes", () => {
     getCachedNote,
     putCachedNote,
     deleteCachedNote,
+    queueWrite,
     normalizeTs,
     isServerBacked,
     isActiveNoteLocallyDirty,
+    getSessionGeneration: () => sessionGeneration,
   });
   const { connectWebSocket, disconnectWebSocket } = wsController;
   resetWsFailuresAndReconnect = wsController.resetWsFailuresAndReconnect;
+
+  const loadPendingOps = async () => {
+    const storedOps = await getPendingOps();
+    pendingOps.value = storedOps.map((storedOp) => {
+      const { id, ...op } = storedOp;
+      void id;
+      return op;
+    });
+  };
+
+  const activateSync = async (migrateLegacy = false) => {
+    if (syncActivated) return;
+    const generation = sessionGeneration;
+    const migrated = migrateLegacy ? await migrateLegacyNotesDb() : false;
+    if (generation !== sessionGeneration) return;
+
+    if (migrated) {
+      await loadPendingOps();
+      await refreshStateFromCache();
+      if (generation !== sessionGeneration) return;
+    }
+
+    syncActivated = true;
+    startSync();
+    if (online.value) {
+      triggerBackgroundSync();
+      void connectWebSocket();
+    }
+  };
+
+  let initializationInFlight: Promise<void> | null = null;
+  const initialize = async (username: string, enableSync = true, migrateLegacy = false) => {
+    const generation = ++sessionGeneration;
+    syncActivated = false;
+    const task = (async () => {
+      await configureNotesDb(username);
+      if (generation !== sessionGeneration) return;
+      await loadPendingOps();
+      if (generation !== sessionGeneration) return;
+      await refreshStateFromCache();
+      if (generation !== sessionGeneration) return;
+      updateSyncStatus();
+      if (enableSync) await activateSync(migrateLegacy);
+    })();
+    initializationInFlight = task;
+
+    try {
+      await task;
+    } finally {
+      if (initializationInFlight === task) initializationInFlight = null;
+    }
+  };
+
+  const resetState = () => {
+    notes.value = [];
+    selectedKey.value = "";
+    currentContent.value = "";
+    currentUpdatedAt.value = null;
+    dirty.value = false;
+    syncing.value = false;
+    syncError.value = "";
+    contentVersion.value = 0;
+    noteContents.value = {};
+    pendingOps.value = [];
+    updateSyncStatus();
+  };
+
+  let teardownInFlight: Promise<void> | null = null;
+  const teardown = async () => {
+    if (teardownInFlight) return teardownInFlight;
+
+    sessionGeneration += 1;
+    syncActivated = false;
+    teardownInFlight = (async () => {
+      disconnectWebSocket();
+      clearSyncRetry();
+      try {
+        let initializationError: unknown;
+        try {
+          await initializationInFlight;
+        } catch (err: unknown) {
+          initializationError = err;
+        }
+        await stopSync();
+        await flushPendingWrites();
+        if (initializationError) throw initializationError;
+      } finally {
+        try {
+          await closeNotesDb();
+        } finally {
+          resetState();
+        }
+      }
+    })();
+
+    try {
+      await teardownInFlight;
+    } finally {
+      teardownInFlight = null;
+    }
+  };
 
   const generateDefaultTitle = (base = t("newNote"), collection = "") => {
     const normalizedCollection = normalizeCollection(collection);
@@ -561,7 +673,14 @@ export const useNotesStore = defineStore("notes", () => {
       let next = retargetPendingKey(ops, oldKey, renamedKey);
 
       if (wasServerBacked && chainIdx === -1) {
-        next = [...next, { type: "rename", oldKey, newKey: renamedKey }];
+        const dependencyIndex = next.findIndex((op) => {
+          if (op.type === "rename") {
+            return op.oldKey === renamedKey || op.newKey === renamedKey;
+          }
+          return op.key === renamedKey;
+        });
+        const insertAt = dependencyIndex === -1 ? next.length : dependencyIndex;
+        next.splice(insertAt, 0, { type: "rename", oldKey, newKey: renamedKey });
       }
 
       return next;
@@ -662,6 +781,8 @@ export const useNotesStore = defineStore("notes", () => {
     setOnline,
     togglePin,
     initialize,
+    activateSync,
+    teardown,
     selectNote,
     setCurrentContent,
     saveCurrent,
