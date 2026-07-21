@@ -1,7 +1,7 @@
 {
   "addr": ":8080",
   "notes": "/var/data/kladde/notes",
-  "client": "/var/www/kladde/client/dist",
+  "client": "/var/lib/kladde/dist",
   "gitBackup": {
     "enabled": true,
     "remote": "https://github.com/your-org/kladde-backup.git",

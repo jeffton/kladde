@@ -79,13 +79,13 @@ This produces:
 The server reads runtime configuration from a JSON options file.
 For normal startup, `--options <directory>` is the only runtime CLI argument (it loads `<directory>/options.json`).
 
-Example production file (`/etc/kladde/options.json`):
+Example production file (`/var/data/kladde/options.json`):
 
 ```json
 {
   "addr": ":8080",
   "notes": "/var/data/kladde/notes",
-  "client": "/var/www/kladde/client/dist",
+  "client": "/var/lib/kladde/dist",
   "gitBackup": {
     "enabled": true,
     "remote": "https://github.com/your-org/kladde-backup.git",
@@ -219,8 +219,8 @@ curl -X PUT \
 ## Deploy (production)
 
 ```bash
-# Build client
-cd client && npm run build
+# Build + deploy client
+cd client && npm run build && sudo rsync -a --delete-delay --delay-updates --chown=kladde:kladde dist/ /var/lib/kladde/dist/
 
 # Build + deploy server
 cd ../server && go build -o server .
