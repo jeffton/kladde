@@ -910,21 +910,55 @@ button:disabled {
   right: 0;
   top: calc(100% + 0.35rem);
   width: min(260px, calc(100vw - 1rem));
+  max-height: calc(
+    var(--app-height, 100dvh) - max(0.75rem, var(--safe-top)) - max(0.75rem, var(--safe-bottom)) -
+      3.1rem
+  );
   border: 1px solid var(--border);
   border-radius: 0.5rem;
   background: color-mix(in srgb, var(--panel) 95%, var(--bg));
   box-shadow: 0 8px 20px color-mix(in srgb, #000 16%, transparent);
   padding: 0.3rem;
+  overflow-y: hidden;
+  display: flex;
+  flex-direction: column;
   z-index: 9999;
 }
 
 .note-menu-collections {
-  max-height: 220px;
+  min-height: 0;
+  max-height: none;
   overflow-y: auto;
   margin: 0.2rem 0;
   display: flex;
+  flex: 0 1 auto;
   flex-direction: column;
   gap: 0.1rem;
+}
+
+.note-menu-dropdown > .note-menu-item,
+.note-menu-dropdown > .note-menu-delete {
+  flex-shrink: 0;
+}
+
+.ios-keyboard-open .note-menu-dropdown {
+  overflow-y: auto;
+}
+
+.ios-keyboard-open .note-menu-collections {
+  overflow-y: visible;
+  flex-shrink: 0;
+}
+
+@media (max-height: 320px) {
+  .note-menu-dropdown {
+    overflow-y: auto;
+  }
+
+  .note-menu-collections {
+    overflow-y: visible;
+    flex-shrink: 0;
+  }
 }
 
 .note-menu-item,
