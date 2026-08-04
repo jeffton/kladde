@@ -33,7 +33,7 @@ server/   Go server
 ## Prerequisites
 
 - Node.js + npm (for `client/`)
-- Go 1.22+ (for `server/`)
+- Go 1.25+ (for `server/`)
 
 ## Build
 
@@ -218,15 +218,12 @@ curl -X PUT \
 
 ## Deploy (production)
 
-```bash
-# Build + deploy client
-cd client && npm run build && sudo rsync -a --delete-delay --delay-updates --chown=kladde:kladde dist/ /var/lib/kladde/dist/
+Deploy the client and server together from the repository root:
 
-# Build + deploy server
-cd ../server && go build -o server .
-sudo systemctl stop kladde
-sudo cp server /usr/local/bin/kladde
-sudo systemctl start kladde
+```bash
+./scripts/deploy.sh
 ```
+
+The script builds both components before changing production, synchronizes the client bundle to `/var/lib/kladde/dist/`, installs the server at `/usr/local/bin/kladde`, restarts the service, and verifies its health endpoint.
 
 Optionally served behind a reverse proxy (nginx, Caddy, etc.) for TLS and domain routing.
