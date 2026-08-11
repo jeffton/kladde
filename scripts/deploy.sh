@@ -6,7 +6,7 @@ server_binary=$(mktemp)
 trap 'rm -f "$server_binary"' EXIT
 
 cd "$repo_root/client"
-npm run build
+corepack pnpm run build
 
 cd "$repo_root/server"
 go build -o "$server_binary" .

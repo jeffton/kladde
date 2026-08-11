@@ -16,7 +16,7 @@ cat > "$TMP_DIR/options.json" <<JSON
 JSON
 
 cd "$ROOT/client"
-npm run build
+corepack pnpm run build
 
 cd "$ROOT/server"
 go run . adduser \

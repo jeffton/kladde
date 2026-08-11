@@ -32,7 +32,7 @@ server/   Go server
 
 ## Prerequisites
 
-- Node.js + npm (for `client/`)
+- Node.js + Corepack (for `client/`; Corepack uses the pnpm version pinned in `package.json`)
 - Go 1.25+ (for `server/`)
 
 ## Build
@@ -42,9 +42,9 @@ From repo root:
 ```bash
 # Install frontend deps + run frontend static checks
 cd client
-npm ci
-npx vp check
-npx vp build
+corepack pnpm install --frozen-lockfile
+corepack pnpm run check
+corepack pnpm run build
 
 # Build backend
 cd ../server
@@ -58,16 +58,16 @@ From `client/`:
 
 ```bash
 # Unit + static validation
-npm run check
+corepack pnpm run check
 
 # Browser install (once per machine)
-npm run test:e2e:install
+corepack pnpm run test:e2e:install
 
 # End-to-end tests
-npm run test:e2e
+corepack pnpm run test:e2e
 ```
 
-The Playwright suite runs separately from `vp check` because it needs a browser plus the Go backend; `vp check` stays the fast static/unit gate.
+Dependency lifecycle scripts are disabled during installation. The Playwright suite runs separately from `vp check` because it needs a browser plus the Go backend; `vp check` stays the fast static/unit gate.
 
 This produces:
 
