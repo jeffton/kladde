@@ -24,7 +24,7 @@ test("note menu uses available viewport height before collections scroll", async
     }
   });
 
-  await page.reload({ waitUntil: "networkidle" });
+  await page.reload();
   await page.locator(".note-item").first().click();
   await page.locator(".note-menu-button").click();
 

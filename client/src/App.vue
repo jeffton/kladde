@@ -162,6 +162,7 @@ async function loadMeOnce(background: boolean) {
     }
 
     if (res.status === 401) {
+      await res.json();
       handleUnauthorizedSession();
       return;
     }
@@ -230,6 +231,7 @@ async function login() {
     });
 
     if (res.status === 401) {
+      await res.json();
       loginError.value = t("wrongCredentials");
       return;
     }

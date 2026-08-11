@@ -105,6 +105,7 @@ export async function apiFetch(input: RequestInfo | URL, init?: RequestInit): Pr
   }
 
   if (res.status === 401) {
+    await res.json();
     throw new Error("UNAUTHORIZED");
   }
 

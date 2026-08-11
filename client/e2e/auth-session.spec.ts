@@ -14,7 +14,7 @@ test.describe("Session handling on API failures", () => {
       });
     });
 
-    await page.reload({ waitUntil: "networkidle" });
+    await page.reload();
 
     await expect(page.locator(".login-form")).toBeVisible({ timeout: 10000 });
     await page.screenshot({ path: "screenshots/playwright-401-logs-out.png", fullPage: true });
@@ -32,7 +32,7 @@ test.describe("Session handling on API failures", () => {
       });
     });
 
-    await page.reload({ waitUntil: "networkidle" });
+    await page.reload();
 
     await expect(page.locator(".create-fab")).toBeVisible({ timeout: 10000 });
     await expect(page.locator(".login-form")).not.toBeVisible();

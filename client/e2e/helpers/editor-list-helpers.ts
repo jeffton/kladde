@@ -11,16 +11,17 @@ export type ListEntry = {
 };
 
 export async function loginIfNeeded(page: Page) {
-  await page.goto("/", { waitUntil: "networkidle" });
-  const loginVisible = await page
-    .locator(".login-form")
-    .isVisible()
-    .catch(() => false);
-  if (!loginVisible) return;
+  await page.goto("/");
+
+  const loginForm = page.locator(".login-form");
+  const createButton = page.locator(".create-fab");
+  await expect(loginForm.or(createButton).first()).toBeVisible();
+  if (!(await loginForm.isVisible())) return;
 
   await page.locator(".login-input").nth(0).fill("admin");
   await page.locator(".login-input").nth(1).fill("testpass123");
   await page.locator(".login-button").click();
+  await expect(createButton).toBeVisible();
 }
 
 export async function createNote(page: Page, titlePrefix: string) {

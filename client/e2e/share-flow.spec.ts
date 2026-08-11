@@ -65,7 +65,7 @@ test.describe("Share flow", () => {
 
     const readonlyContext = await browser.newContext();
     const readonlyPage = await readonlyContext.newPage();
-    await readonlyPage.goto(String(viewUrl), { waitUntil: "networkidle" });
+    await readonlyPage.goto(String(viewUrl));
 
     const readonlyEditor = readonlyPage.locator(".tiptap-root .ProseMirror");
     await expect(readonlyEditor).toBeVisible();
@@ -79,7 +79,7 @@ test.describe("Share flow", () => {
 
     const guestContext = await browser.newContext();
     const guestPage = await guestContext.newPage();
-    await guestPage.goto(String(editUrl), { waitUntil: "networkidle" });
+    await guestPage.goto(String(editUrl));
 
     const guestEditor = guestPage.locator(".tiptap-root .ProseMirror");
     await expect(guestEditor).toBeVisible();
