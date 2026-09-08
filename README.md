@@ -33,7 +33,7 @@ server/   Go server
 ## Prerequisites
 
 - Node.js + Corepack (for `client/`; Corepack uses the pnpm version pinned in `package.json`)
-- Go 1.25+ (for `server/`)
+- Go 1.26+ (for `server/`)
 
 ## Build
 
