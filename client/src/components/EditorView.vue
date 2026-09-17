@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import { EditorContent, useEditor } from "@tiptap/vue-3";
+import { generateHTML } from "@tiptap/core";
 import type {
   Editor as TiptapEditor,
   JSONContent,
@@ -22,6 +23,7 @@ import {
   ChevronLeft,
   ClipboardCheck,
   CloudCheck,
+  CodeXml,
   CloudOff,
   Copy,
   FileText,
@@ -203,7 +205,7 @@ const shareLinks = ref<ShareLinksResponse>({
 });
 const shareBusyMode = ref<ShareMode | "">("");
 const shareCopyMode = ref<ShareMode | "">("");
-const menuCopyFeedback = ref<"markdown" | "path" | "">("");
+const menuCopyFeedback = ref<"markdown" | "html" | "path" | "">("");
 const shareLoading = ref(false);
 const lastSyncTime = ref("");
 const noteMenuWrap = ref<HTMLElement | null>(null);
@@ -843,7 +845,7 @@ async function copyShareLink(mode: ShareMode) {
   }
 }
 
-function setMenuCopyFeedback(type: "markdown" | "path") {
+function setMenuCopyFeedback(type: "markdown" | "html" | "path") {
   menuCopyFeedback.value = type;
   if (menuCopyFeedbackTimeout) clearTimeout(menuCopyFeedbackTimeout);
   menuCopyFeedbackTimeout = setTimeout(() => {
@@ -860,7 +862,28 @@ async function copyCurrentAsMarkdown() {
     setMenuCopyFeedback("markdown");
     showNoteMenu.value = false;
   } catch {
-    emit("ui-error", t("couldNotCopyLink"));
+    emit("ui-error", t("couldNotCopy"));
+  }
+}
+
+async function copyCurrentAsHtml() {
+  if (!isFullMode.value || !editor.value) return;
+
+  const markdown = props.store.currentContent || "";
+  const document = editor.value.markdown.parse(markdown);
+  const html = generateHTML(document, editor.value.extensionManager.extensions);
+
+  try {
+    await navigator.clipboard.write([
+      new ClipboardItem({
+        "text/html": new Blob([html], { type: "text/html" }),
+        "text/plain": new Blob([markdown], { type: "text/plain" }),
+      }),
+    ]);
+    setMenuCopyFeedback("html");
+    showNoteMenu.value = false;
+  } catch {
+    emit("ui-error", t("couldNotCopy"));
   }
 }
 
@@ -876,7 +899,7 @@ async function copyCurrentPath() {
     setMenuCopyFeedback("path");
     showNoteMenu.value = false;
   } catch {
-    emit("ui-error", t("couldNotCopyLink"));
+    emit("ui-error", t("couldNotCopy"));
   }
 }
 
@@ -1113,6 +1136,14 @@ onUnmounted(() => {
               <FileText v-else :size="16" />
             </span>
             <span class="note-menu-label">{{ t("copyAsMarkdown") }}</span>
+          </button>
+
+          <button class="note-menu-item" role="menuitem" @click="copyCurrentAsHtml">
+            <span class="note-menu-leading" aria-hidden="true">
+              <ClipboardCheck v-if="menuCopyFeedback === 'html'" :size="16" />
+              <CodeXml v-else :size="16" />
+            </span>
+            <span class="note-menu-label">{{ t("copyAsHtml") }}</span>
           </button>
 
           <button class="note-menu-item" role="menuitem" @click="copyCurrentPath">
