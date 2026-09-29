@@ -21,7 +21,7 @@
     "preview": "vp preview"
   },
   "dependencies": {
-    "@lucide/vue": "^1.47.0",
+    "@lucide/vue": "^1.48.0",
     "@tiptap/core": "3.31.3",
     "@tiptap/extension-code-block": "3.31.3",
     "@tiptap/extension-link": "3.31.3",
@@ -41,7 +41,7 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0",
-    "@types/node": "^26.6.2",
+    "@types/node": "^26.6.3",
     "@vitejs/plugin-vue": "^6.0.9",
     "typescript": "^6.0.3",
     "vite": "npm:@voidzero-dev/vite-plus-core@0.3.3",
