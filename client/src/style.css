@@ -179,10 +179,11 @@ h1 {
   -webkit-user-select: none;
 }
 .sidebar-header {
-  /* Sticky top headers suppress iOS's native scroll-edge blur. */
+  /* iOS suppresses its scroll-edge blur for an opaque, pinned top header. */
   position: sticky;
   top: 0;
   z-index: 1;
+  background: var(--panel);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -662,15 +663,27 @@ button:disabled {
   padding-bottom: 0;
 }
 
+.editor-area:has(> .note-title-wrap) {
+  /* Put the top inset inside the pinned header, keeping its box at the viewport edge. */
+  padding-top: 0;
+}
+
+.ios-keyboard-open .editor-area:has(> .note-title-wrap:not(:focus-within)) {
+  /* Preserve the toolbar's top inset while the title is hidden. */
+  padding-top: max(0.75rem, var(--safe-top));
+}
+
 .ios-keyboard-open .note-title-wrap:not(:focus-within) {
   display: none;
 }
 
 .note-title-wrap {
-  /* Keep the top edge sticky and title popovers above the sticky toolbar. */
+  /* Keep an opaque top edge and title popovers above the sticky toolbar. */
   position: sticky;
   top: 0;
   z-index: 11;
+  background: var(--bg);
+  padding-top: max(0.75rem, var(--safe-top));
   margin-bottom: 0.35rem;
   display: flex;
   align-items: center;
