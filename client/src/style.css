@@ -179,6 +179,10 @@ h1 {
   -webkit-user-select: none;
 }
 .sidebar-header {
+  /* Sticky top headers suppress iOS's native scroll-edge blur. */
+  position: sticky;
+  top: 0;
+  z-index: 1;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -663,6 +667,10 @@ button:disabled {
 }
 
 .note-title-wrap {
+  /* Keep the top edge sticky and title popovers above the sticky toolbar. */
+  position: sticky;
+  top: 0;
+  z-index: 11;
   margin-bottom: 0.35rem;
   display: flex;
   align-items: center;
