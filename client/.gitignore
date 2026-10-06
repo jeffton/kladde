@@ -25,3 +25,4 @@ screenshots
 *.njsproj
 *.sln
 *.sw?
+.vitest/

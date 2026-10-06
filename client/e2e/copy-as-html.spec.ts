@@ -28,7 +28,9 @@ test("copies the current note as semantic HTML with a Markdown fallback", async 
   await page.reload();
   await page.getByText(title, { exact: true }).click();
   await page.locator(".note-menu-button").click();
-  await page.getByRole("menuitem", { name: "Copy as HTML" }).click();
+  const copyAsHtml = page.getByRole("menuitem", { name: "Copy as HTML" });
+  await copyAsHtml.click();
+  await expect(copyAsHtml).toBeHidden();
 
   const clipboard = await page.evaluate(async () => {
     const [item] = await navigator.clipboard.read();
