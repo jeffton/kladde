@@ -52,6 +52,7 @@ test.describe("Share flow", () => {
     await page.locator(".note-title-input").fill(renamedTitle);
     await page.locator(".note-title-input").press("Enter");
     await expect(page.locator(".note-title-input")).toHaveValue(renamedTitle);
+    await expect(page).toHaveURL(new RegExp(`/note/${renamedTitle}$`));
 
     const collectionName = `deling-${Date.now()}`;
     page.once("dialog", (dialog) => dialog.accept(collectionName));
@@ -61,7 +62,9 @@ test.describe("Share flow", () => {
       .filter({ has: page.locator(".lucide-folder-plus") })
       .click();
 
-    await page.waitForTimeout(800);
+    await expect
+      .poll(() => decodeURIComponent(new URL(page.url()).pathname))
+      .toBe(`/note/${collectionName}/${renamedTitle}`);
 
     const readonlyContext = await browser.newContext();
     const readonlyPage = await readonlyContext.newPage();
