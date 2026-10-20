@@ -112,6 +112,7 @@ type Server struct {
 	shares       map[string]ShareRecord
 	sharesMu     sync.RWMutex
 	starsMu      sync.Mutex
+	sessionsFile string
 	sessions     map[string]Session
 	sessionsMu   sync.RWMutex
 	usersMu      sync.Mutex

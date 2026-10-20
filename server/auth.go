@@ -64,9 +64,10 @@ func (s *Server) handleAuthLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	expiresAt := time.Now().Add(30 * 24 * time.Hour)
-	s.sessionsMu.Lock()
-	s.sessions[sessionID] = Session{User: user, ExpiresAt: expiresAt}
-	s.sessionsMu.Unlock()
+	if err := s.storeSession(sessionID, Session{User: user, ExpiresAt: expiresAt}); err != nil {
+		writeError(w, http.StatusInternalServerError, errors.New("failed saving session"))
+		return
+	}
 
 	http.SetCookie(w, &http.Cookie{
 		Name:     sessionCookieName,
@@ -88,9 +89,10 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if cookie, err := r.Cookie(sessionCookieName); err == nil && cookie.Value != "" {
-		s.sessionsMu.Lock()
-		delete(s.sessions, cookie.Value)
-		s.sessionsMu.Unlock()
+		if err := s.storeSession(cookie.Value, Session{}); err != nil {
+			writeError(w, http.StatusInternalServerError, errors.New("failed deleting session"))
+			return
+		}
 	}
 
 	http.SetCookie(w, &http.Cookie{
@@ -199,12 +201,7 @@ func (s *Server) requireAuth(w http.ResponseWriter, r *http.Request) (Session, b
 	s.sessionsMu.RLock()
 	session, ok := s.sessions[cookie.Value]
 	s.sessionsMu.RUnlock()
-	if !ok || now.After(session.ExpiresAt) {
-		if ok {
-			s.sessionsMu.Lock()
-			delete(s.sessions, cookie.Value)
-			s.sessionsMu.Unlock()
-		}
+	if !ok || !now.Before(session.ExpiresAt) {
 		writeError(w, http.StatusUnauthorized, errors.New("unauthorized"))
 		return Session{}, false
 	}

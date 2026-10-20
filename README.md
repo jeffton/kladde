@@ -112,6 +112,9 @@ Derived paths (not configurable in `options.json`):
 
 - `<options-dir>/users.json`
 - `<options-dir>/shares.json`
+- `<options-dir>/sessions.json` — private login sessions, saved atomically with owner-only permissions. Keep the options directory persistent across deployments. Sessions retain their original 30-day expiry; logout removes them from disk. Invalid session files prevent startup.
+
+Deploying this to a server with RAM-only sessions requires one fresh login. Subsequent server restarts preserve sessions.
 
 Backup behavior:
 

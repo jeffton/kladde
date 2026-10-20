@@ -55,8 +55,12 @@ func main() {
 		apiKeysFile:  opts.APIKeysFile,
 		sharesFile:   sharesFile,
 		shares:       make(map[string]ShareRecord),
-		sessions:     make(map[string]Session),
+		sessionsFile: filepath.Join(opts.OptionsDir, "sessions.json"),
 		hub:          NewHub(),
+	}
+
+	if err := s.loadSessions(); err != nil {
+		log.Fatalf("failed loading sessions: %v", err)
 	}
 
 	if err := s.loadShares(); err != nil {
