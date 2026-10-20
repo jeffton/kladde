@@ -105,9 +105,8 @@ function convertListSelection(target: ListTarget): boolean {
 
   if (!selection.empty) {
     state.doc.nodesBetween(selection.from, selection.to, (node, pos) => {
-      if (!isListNodeName(node.type.name)) return;
-      if (listRoots.includes(pos)) return;
-      listRoots.push(pos);
+      if (!node.isTextblock) return;
+      addNearestListRoot(state.doc.resolve(pos + 1), listRoots);
     });
   }
 
@@ -177,9 +176,15 @@ function convertListSelection(target: ListTarget): boolean {
         const itemFrom = mappedRootPos + 1 + offset;
         const itemTo = itemFrom + item.nodeSize;
 
-        const isSelected = collapsed
-          ? mappedFrom >= itemFrom && mappedFrom <= itemTo
-          : itemTo > mappedFrom && itemFrom < mappedTo;
+        let isSelected = collapsed && mappedFrom >= itemFrom && mappedFrom <= itemTo;
+        if (!collapsed) {
+          item.forEach((child, childOffset) => {
+            if (isListNodeName(child.type.name)) return;
+            const childFrom = itemFrom + 1 + childOffset;
+            const childTo = childFrom + child.nodeSize;
+            if (childTo > mappedFrom && childFrom < mappedTo) isSelected = true;
+          });
+        }
 
         if (!isSelected) {
           if (bufferedMode !== "unchanged") {

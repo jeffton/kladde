@@ -102,7 +102,10 @@ test.describe("List type switching honors cursor/selection scope", () => {
     await editor(page).locator("p", { hasText: "beta" }).first().click();
     await secondaryToolbar(page).nth(0).click(); // indent beta under alpha
 
-    await editor(page).locator("p", { hasText: "beta" }).first().dblclick();
+    await editor(page).locator("p", { hasText: "beta" }).first().click();
+    await page.keyboard.press("Home");
+    await page.keyboard.press("Shift+End");
+    await expect.poll(() => page.evaluate(() => window.getSelection()?.toString())).toBe("beta");
 
     await clickListButton(page, "ordered");
 
@@ -110,6 +113,38 @@ test.describe("List type switching honors cursor/selection scope", () => {
     expectEntry(entries, { text: "alpha", kind: "task", depth: 1 });
     expectEntry(entries, { text: "beta", kind: "ordered", depth: 2 });
     expectEntry(entries, { text: "gamma", kind: "task", depth: 1 });
+  });
+
+  test("selection across nested lists converts selected parent-level items", async ({ page }) => {
+    await createNote(page, "list-cross-nested-selection");
+    await typeBaseLines(page);
+    await page.keyboard.press("Enter");
+    await page.keyboard.type("delta");
+    await selectAll(page);
+    await clickListButton(page, "task");
+
+    for (const text of ["beta", "delta"]) {
+      await editor(page).locator("p", { hasText: text }).first().click();
+      await secondaryToolbar(page).nth(0).click();
+    }
+
+    await editor(page).locator("p", { hasText: "beta" }).first().click();
+    await page.keyboard.press("Home");
+    await page.keyboard.press("Shift+ArrowDown");
+    await page.keyboard.press("Shift+ArrowDown");
+    await page.keyboard.press("Shift+End");
+    await expect
+      .poll(() =>
+        page.evaluate(() => window.getSelection()?.toString().replace(/\s+/g, " ").trim()),
+      )
+      .toBe("beta gamma delta");
+    await clickListButton(page, "ordered");
+
+    const entries = await listEntries(page);
+    expectEntry(entries, { text: "alpha", kind: "task", depth: 1 });
+    expectEntry(entries, { text: "beta", kind: "ordered", depth: 2 });
+    expectEntry(entries, { text: "gamma", kind: "ordered", depth: 1 });
+    expectEntry(entries, { text: "delta", kind: "ordered", depth: 2 });
   });
 
   test("indented list: converting parent item does not change sibling item", async ({ page }) => {
