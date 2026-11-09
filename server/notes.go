@@ -597,7 +597,7 @@ func saveStars(notesDir string, stars map[string]bool) error {
 	}
 	data = append(data, '\n')
 
-	return writeFileAtomic(path, data, 0o644)
+	return writeFileAtomic(path, data, 0o664)
 }
 
 func writeFileAtomic(path string, data []byte, perm os.FileMode) error {
@@ -693,7 +693,7 @@ func (s *Server) saveNote(notesDir, title, collection, content string) (*Note, s
 	if err != nil {
 		return nil, "", err
 	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o775); err != nil {
 		return nil, "", err
 	}
 
@@ -701,7 +701,7 @@ func (s *Server) saveNote(notesDir, title, collection, content string) (*Note, s
 	if _, err := os.Stat(path); err == nil {
 		action = "updated"
 	}
-	if err := writeFileAtomic(path, []byte(content), 0o644); err != nil {
+	if err := writeFileAtomic(path, []byte(content), 0o664); err != nil {
 		return nil, "", err
 	}
 
@@ -807,7 +807,7 @@ func (s *Server) renameNote(notesDir, oldTitle, oldCollection, newTitle, newColl
 			if err != nil {
 				return nil, err
 			}
-			if err := os.MkdirAll(filepath.Dir(newPath), 0o755); err != nil {
+			if err := os.MkdirAll(filepath.Dir(newPath), 0o775); err != nil {
 				return nil, err
 			}
 
