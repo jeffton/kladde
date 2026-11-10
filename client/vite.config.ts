@@ -59,7 +59,6 @@ export default defineConfig({
     ignorePatterns: ["dist/**"],
     options: {
       typeAware: true,
-      typeCheck: true,
     },
   },
   build: {

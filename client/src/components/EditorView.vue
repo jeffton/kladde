@@ -881,7 +881,8 @@ async function copyCurrentAsHtml() {
   if (!isFullMode.value || !editor.value) return;
 
   const markdown = props.store.currentContent || "";
-  const document = editor.value.markdown.parse(markdown);
+  // The editor always includes the Markdown extension.
+  const document = editor.value.markdown!.parse(markdown);
   const html = generateHTML(document, editor.value.extensionManager.extensions);
 
   try {

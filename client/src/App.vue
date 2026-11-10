@@ -424,12 +424,13 @@ let storeInitialized = false;
 let storeInitializationInFlight: Promise<void> | null = null;
 
 async function initializeAuthenticatedSession() {
-  if (!isAuthenticated.value) return;
+  const authenticatedUser = user.value;
+  if (!authenticatedUser) return;
   if (storeInitializationInFlight) return storeInitializationInFlight;
   if (storeInitialized) return;
 
   storeInitialized = true;
-  const usernameAtStart = user.value.username;
+  const usernameAtStart = authenticatedUser.username;
   storeInitializationInFlight = (async () => {
     await store.initialize(
       usernameAtStart,

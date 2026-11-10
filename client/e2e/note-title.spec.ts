@@ -25,11 +25,16 @@ test("note title blocks typed and pasted slashes and persists the filename title
   // Input-event sanitation also covers insertion methods that bypass beforeinput.
   await title.fill("/Plan/idéer/");
   await expect(title).toHaveValue("Planidéer");
-  const renamed = page.waitForResponse(
-    (response) => response.url().includes("/rename") && response.request().method() === "PUT",
-  );
   await title.press("Enter");
-  expect((await renamed).ok()).toBe(true);
+  // A new note can be created under its final title without a rename request.
+  await expect
+    .poll(async () => {
+      const response = await page.request.get(
+        `/client-api/notes/${encodeURIComponent("Planidéer")}`,
+      );
+      return response.status();
+    })
+    .toBe(200);
 
   await page.reload();
   await page.locator(".note-item").filter({ hasText: "Planidéer" }).click();

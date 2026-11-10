@@ -17,7 +17,8 @@
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:install": "playwright install chromium",
     "build": "vp build",
-    "check": "vp check",
+    "check": "vp check && pnpm run typecheck",
+    "typecheck": "vue-tsc --noEmit",
     "preview": "vp preview"
   },
   "dependencies": {
@@ -47,6 +48,7 @@
     "vite": "npm:@voidzero-dev/vite-plus-core@1.5.0",
     "vite-plugin-pwa": "^2.0.0",
     "vite-plus": "1.5.0",
+    "vue-tsc": "3.3.14",
     "workbox-window": "^7.4.1"
   },
   "overrides": {

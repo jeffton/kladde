@@ -21,5 +21,8 @@
     "vite.config.ts",
     "playwright.config.ts"
   ],
+  "vueCompilerOptions": {
+    "strictTemplates": true
+  },
   "references": []
 }

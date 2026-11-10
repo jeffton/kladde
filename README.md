@@ -57,8 +57,9 @@ go build -o ./dist/kladde-server .
 From `client/`:
 
 ```bash
-# Unit + static validation
+# Static validation and unit tests
 corepack pnpm run check
+corepack pnpm run test -- --run
 
 # Browser install (once per machine)
 corepack pnpm run test:e2e:install
@@ -67,7 +68,11 @@ corepack pnpm run test:e2e:install
 corepack pnpm run test:e2e
 ```
 
-Dependency lifecycle scripts are disabled during installation. The Playwright suite runs separately from `vp check` because it needs a browser plus the Go backend; `vp check` stays the fast static/unit gate.
+`pnpm run check` runs Vite+ formatting and lint checks, then `vue-tsc --noEmit` for TypeScript and Vue scripts/templates. `pnpm run typecheck` runs only the typecheck. Strict template checking validates component props, events and template bindings; Oxlint keeps type-aware lint rules but leaves compiler diagnostics to `vue-tsc`.
+
+The checker uses stable `vue-tsc` 3.3.14 with TypeScript 6.0.3. TypeScript 7 requires a separate native-compiler bridge and is not used by this checker.
+
+Dependency lifecycle scripts are disabled during installation. The Playwright suite runs separately from `pnpm run check` because it needs a browser plus the Go backend.
 
 This produces:
 
