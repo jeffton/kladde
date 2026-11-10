@@ -115,7 +115,7 @@ func (s *Server) handleNotes(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		title := strings.TrimSpace(payload.Title)
+		title := strings.TrimSpace(strings.ReplaceAll(payload.Title, "/", ""))
 		collection := normalizeCollection(payload.Collection)
 		if err := validateTitle(title); err != nil {
 			writeError(w, http.StatusBadRequest, err)
@@ -203,7 +203,7 @@ func (s *Server) handleNoteByTitle(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		newTitle := strings.TrimSpace(payload.NewTitle)
+		newTitle := strings.TrimSpace(strings.ReplaceAll(payload.NewTitle, "/", ""))
 		if err := validateTitle(newTitle); err != nil {
 			writeError(w, http.StatusBadRequest, err)
 			return

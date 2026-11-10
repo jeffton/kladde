@@ -707,6 +707,17 @@ function onPlainInput(event: Event) {
   });
 }
 
+function onTitleInput(event: Event) {
+  const input = event.target as HTMLInputElement;
+  if (input.value.includes("/")) {
+    const cursor = input.selectionStart ?? input.value.length;
+    const nextCursor = input.value.slice(0, cursor).replaceAll("/", "").length;
+    input.value = input.value.replaceAll("/", "");
+    input.setSelectionRange(nextCursor, nextCursor);
+  }
+  editableTitle.value = input.value;
+}
+
 async function commitTitleChange() {
   if (!isFullMode.value || !props.store.selectedKey) return;
   const next = editableTitle.value.trim();
@@ -1065,11 +1076,13 @@ onUnmounted(() => {
       </button>
       <input
         ref="titleInput"
-        v-model="editableTitle"
+        :value="editableTitle"
         class="note-title-input"
         type="text"
         spellcheck="false"
         :readonly="!isFullMode"
+        @beforeinput="if ($event.data === '/') $event.preventDefault();"
+        @input="onTitleInput"
         @blur="commitTitleChange"
         @keydown.enter.prevent="($event.target as HTMLInputElement).blur()"
       />
