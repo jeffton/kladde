@@ -18,7 +18,7 @@ import Paragraph from "@tiptap/extension-paragraph";
 import { Table, TableCell, TableHeader, TableRow } from "@tiptap/extension-table";
 import { Markdown } from "@tiptap/markdown";
 import {
-  AlertTriangle,
+  TriangleExclamationPoint,
   Check,
   ChevronLeft,
   ClipboardCheck,
@@ -1089,7 +1089,7 @@ onUnmounted(() => {
           <CloudCheck v-if="statusMeta.state === 'synced'" :size="18" />
           <RefreshCw v-else-if="statusMeta.state === 'syncing'" :size="18" class="spin" />
           <CloudOff v-else-if="statusMeta.state === 'offline'" :size="18" />
-          <AlertTriangle v-else :size="18" />
+          <TriangleExclamationPoint v-else :size="18" />
         </button>
 
         <div v-if="showTooltip" id="sync-tooltip" class="status-tooltip" role="tooltip">

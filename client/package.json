@@ -21,36 +21,36 @@
     "preview": "vp preview"
   },
   "dependencies": {
-    "@lucide/vue": "^1.66.0",
-    "@tiptap/core": "3.32.2",
-    "@tiptap/extension-code-block": "3.32.2",
-    "@tiptap/extension-link": "3.32.2",
-    "@tiptap/extension-list": "3.32.2",
-    "@tiptap/extension-paragraph": "3.32.2",
-    "@tiptap/extension-strike": "3.32.2",
-    "@tiptap/extension-table": "3.32.2",
-    "@tiptap/markdown": "3.32.2",
-    "@tiptap/pm": "3.32.2",
-    "@tiptap/starter-kit": "3.32.2",
-    "@tiptap/vue-3": "3.32.2",
+    "@lucide/vue": "^1.70.0",
+    "@tiptap/core": "3.33.0",
+    "@tiptap/extension-code-block": "3.33.0",
+    "@tiptap/extension-link": "3.33.0",
+    "@tiptap/extension-list": "3.33.0",
+    "@tiptap/extension-paragraph": "3.33.0",
+    "@tiptap/extension-strike": "3.33.0",
+    "@tiptap/extension-table": "3.33.0",
+    "@tiptap/markdown": "3.33.0",
+    "@tiptap/pm": "3.33.0",
+    "@tiptap/starter-kit": "3.33.0",
+    "@tiptap/vue-3": "3.33.0",
     "@vue/devtools-api": "^8.2.1",
     "idb": "^8.0.4",
     "pinia": "^4.1.0",
-    "vue": "^3.5.44",
+    "vue": "^3.5.45",
     "vue-router": "^5.4.0"
   },
   "devDependencies": {
-    "@playwright/test": "^1.64.1",
+    "@playwright/test": "^1.65.0",
     "@types/node": "^26.6.6",
     "@vitejs/plugin-vue": "^6.0.10",
     "typescript": "^6.0.3",
-    "vite": "npm:@voidzero-dev/vite-plus-core@1.4.0",
+    "vite": "npm:@voidzero-dev/vite-plus-core@1.5.0",
     "vite-plugin-pwa": "^2.0.0",
-    "vite-plus": "1.4.0",
+    "vite-plus": "1.5.0",
     "workbox-window": "^7.4.1"
   },
   "overrides": {
-    "vite": "npm:@voidzero-dev/vite-plus-core@1.4.0"
+    "vite": "npm:@voidzero-dev/vite-plus-core@1.5.0"
   },
-  "packageManager": "pnpm@11.20.0"
+  "packageManager": "pnpm@12.18.0"
 }
