@@ -38,6 +38,7 @@ import EditorToolbar from "./EditorToolbar.vue";
 import { apiFetch, shareNotePathApi } from "../stores/notesApi";
 import type { AppMode, EditorStoreLike, ShareLinksResponse, ShareMode } from "../types";
 import { intlLocale, t } from "../i18n";
+import { readableMarkdown } from "../markdown-source";
 
 interface Props {
   store: EditorStoreLike;
@@ -63,6 +64,7 @@ const isReadonlyMode = computed(() => props.mode === "share-readonly");
 const editableTitle = ref("");
 const titleInput = ref<HTMLInputElement | null>(null);
 const showPlain = ref(false);
+const plainInput = ref<string | null>(null);
 const plainTextarea = ref<HTMLTextAreaElement | null>(null);
 const plainWrap = ref<HTMLElement | null>(null);
 const wysiwygWrap = ref<HTMLElement | null>(null);
@@ -477,13 +479,20 @@ const editor = useEditor({
   onUpdate: ({ editor: tiptapEditor }) => {
     if (ignoreEditorChanges) return;
 
-    const nextMarkdown = tiptapEditor.getMarkdown();
+    const nextMarkdown = readableMarkdown(tiptapEditor.getMarkdown(), tiptapEditor.markdown!);
     if (nextMarkdown === props.store.currentContent) return;
 
     void props.store.setCurrentContent(nextMarkdown).catch((err: unknown) => {
       emit("ui-error", (err as Error)?.message || t("couldNotSaveLocally"));
     });
   },
+});
+
+const markdownSource = computed(() => {
+  const source = props.store.currentContent || "";
+  const manager = editor.value?.markdown;
+  if (!manager || (showPlain.value && source === plainInput.value)) return source;
+  return readableMarkdown(source, manager);
 });
 
 function setEditorMarkdown(markdown = "") {
@@ -514,8 +523,8 @@ function setEditorMarkdown(markdown = "") {
 
 function syncEditorFromStore() {
   if (!editor.value || showPlain.value) return;
-  const current = editor.value.getMarkdown();
-  if (current === props.store.currentContent) return;
+  const current = readableMarkdown(editor.value.getMarkdown(), editor.value.markdown!);
+  if (current === markdownSource.value) return;
   setEditorMarkdown(props.store.currentContent);
 }
 
@@ -524,6 +533,7 @@ async function updatePlainText(nextValue: string, selectionStart: number, select
   if (!textarea) return;
 
   textarea.value = nextValue;
+  plainInput.value = nextValue;
   await props.store.setCurrentContent(nextValue);
 
   await nextTick();
@@ -702,6 +712,7 @@ function onPlainInput(event: Event) {
   if (isReadonlyMode.value) return;
 
   const value = (event.target as HTMLTextAreaElement).value;
+  plainInput.value = value;
   void props.store.setCurrentContent(value).catch((err: unknown) => {
     emit("ui-error", (err as Error)?.message || t("couldNotSaveLocally"));
   });
@@ -869,7 +880,7 @@ async function copyCurrentAsMarkdown() {
   if (!isFullMode.value) return;
 
   try {
-    await navigator.clipboard.writeText(props.store.currentContent || "");
+    await navigator.clipboard.writeText(markdownSource.value);
     setMenuCopyFeedback("markdown");
     showNoteMenu.value = false;
   } catch {
@@ -889,7 +900,7 @@ async function copyCurrentAsHtml() {
     await navigator.clipboard.write([
       new ClipboardItem({
         "text/html": new Blob([html], { type: "text/html" }),
-        "text/plain": new Blob([markdown], { type: "text/plain" }),
+        "text/plain": new Blob([markdownSource.value], { type: "text/plain" }),
       }),
     ]);
     setMenuCopyFeedback("html");
@@ -988,6 +999,7 @@ watch(
 );
 
 watch(showPlain, (isPlain) => {
+  plainInput.value = null;
   if (isPlain) {
     nextTick(() => plainTextarea.value?.focus());
     return;
@@ -1023,6 +1035,7 @@ watch(
 watch(
   () => props.store.selectedKey,
   () => {
+    plainInput.value = null;
     if (!(document.activeElement === titleInput.value && editableTitle.value.trim() !== "")) {
       editableTitle.value =
         props.store.selectedTitle || fallbackTitleFromKey(props.store.selectedKey);
@@ -1270,7 +1283,7 @@ onUnmounted(() => {
     <section v-if="showPlain" ref="plainWrap" class="plain-wrap">
       <textarea
         ref="plainTextarea"
-        :value="store.currentContent"
+        :value="markdownSource"
         :readonly="isReadonlyMode"
         @input="onPlainInput"
       ></textarea>
