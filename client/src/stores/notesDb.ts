@@ -212,19 +212,37 @@ export async function deleteCachedNote(key: string): Promise<void> {
   await runWithIdbRetry(async () => (await db()).delete(NOTES_STORE, key));
 }
 
-export async function getPendingOps(): Promise<StoredPendingOp[]> {
-  const ops = await runWithIdbRetry(async () => (await db()).getAll(OPS_STORE));
-  return ops.sort((a, b) => a.id - b.id);
+function pendingRecords(stored: StoredPendingOp[]): PendingOp[] {
+  return stored.map(({ id: _id, ...op }) => op);
 }
 
-export async function replacePendingOps(ops: PendingOp[]): Promise<void> {
+export function withPendingOpsLock<T>(task: () => Promise<T>, signal?: AbortSignal): Promise<T> {
+  return navigator.locks.request(`${activeDbName}:sync-ops`, { signal }, task);
+}
+
+export async function getPendingOps(): Promise<PendingOp[]> {
+  return runWithIdbRetry(async () => pendingRecords(await (await db()).getAll(OPS_STORE)));
+}
+
+export async function updatePendingOps(
+  mutate: (ops: PendingOp[]) => PendingOp[],
+  deletedKey?: string,
+): Promise<void> {
   await runWithIdbRetry(async () => {
     const database = await db();
-    const tx = database.transaction(OPS_STORE, "readwrite");
-    await tx.objectStore(OPS_STORE).clear();
-    for (const op of ops) {
-      await tx.objectStore(OPS_STORE).add(op);
-    }
-    await tx.done;
+    const tx = database.transaction(
+      deletedKey === undefined ? [OPS_STORE] : [OPS_STORE, NOTES_STORE],
+      "readwrite",
+    );
+    const queue = tx.objectStore(OPS_STORE);
+    // Read and update the durable queue in one transaction so other tabs cannot overwrite it.
+    const current = pendingRecords(await queue.getAll());
+    const records = mutate(current).map((op) => structuredClone({ ...op }));
+    await Promise.all([
+      tx.done,
+      queue.clear(),
+      ...records.map((op) => queue.add(op)),
+      ...(deletedKey === undefined ? [] : [tx.objectStore(NOTES_STORE).delete(deletedKey)]),
+    ]);
   });
 }

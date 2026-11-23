@@ -40,7 +40,6 @@ function makeHarness(initialNotes: CachedNote[] = [], initialOps: PendingOp[] = 
   };
 
   const controller = createNotesSync({
-    pendingOps,
     selectedKey,
     currentContent,
     currentUpdatedAt,
@@ -60,9 +59,12 @@ function makeHarness(initialNotes: CachedNote[] = [], initialOps: PendingOp[] = 
     deleteCachedNote: async (key) => {
       cache.delete(key);
     },
-    replacePendingOps: async (ops) => {
-      pendingOps.value = [...ops];
+    getPendingOps: async () => pendingOps.value,
+    updatePendingOps: async (mutate, deletedKey) => {
+      pendingOps.value = mutate([...pendingOps.value]);
+      if (deletedKey !== undefined) cache.delete(deletedKey);
     },
+    withPendingOpsLock: async (task) => task(),
     queueWrite: async (task) => task(),
     flushPendingWrites: async () => undefined,
     refreshStateFromCache: async () => undefined,
@@ -292,6 +294,40 @@ describe("notes synchronization", () => {
     expect(harness.pendingOps.value).toEqual([]);
     expect(harness.cache.has("b")).toBe(false);
     expect(harness.cache.get("c")?.existsOnServer).toBe(true);
+  });
+
+  test("deletes the server's renamed note when a delete supersedes an in-flight rename", async () => {
+    const target: CachedNote = {
+      key: "b",
+      title: "b",
+      collection: "",
+      content: "content",
+      updatedAt: UPDATED_AT,
+      dirty: false,
+      existsOnServer: true,
+    };
+    const harness = makeHarness([target], [{ type: "rename", oldKey: "a", newKey: "b" }]);
+    const deletes: string[] = [];
+
+    harness.setApiHandler(async (input, init) => {
+      const url = requestUrl(input);
+      if (url === "/client-api/notes/a/rename") {
+        await harness.controller.mutatePendingOps(() => [{ type: "delete", key: "a" }], "b");
+        return jsonResponse({ ...target, key: "b 2", title: "b 2" });
+      }
+      if (init?.method === "DELETE") {
+        deletes.push(url);
+        return jsonResponse({});
+      }
+      if (url === "/client-api/notes") return jsonResponse([]);
+      throw new Error(`unexpected request: ${url}`);
+    });
+
+    await harness.controller.syncWithServer();
+
+    expect(deletes).toEqual(["/client-api/notes/b%202"]);
+    expect(harness.pendingOps.value).toEqual([]);
+    expect(harness.cache.size).toBe(0);
   });
 
   test("marks a missing rename target dirty so it can be created", async () => {

@@ -9,9 +9,10 @@ import {
   getPendingOps,
   migrateLegacyNotesDb,
   putCachedNote,
-  replacePendingOps,
+  updatePendingOps,
+  withPendingOpsLock,
 } from "./notesDb";
-import type { CachedNote, NoteMeta, NoteResponse, PendingOp, SyncState } from "../types";
+import type { CachedNote, NoteMeta, NoteResponse, SyncState } from "../types";
 import { t } from "../i18n";
 import { apiFetch, clientOrigin, isNotFoundError, notePathApi } from "./notesApi";
 import { createNotesWebSocket } from "./notesWebSocket";
@@ -72,7 +73,6 @@ export const useNotesStore = defineStore("notes", () => {
   });
   const contentVersion = ref(0);
   const noteContents = ref<Record<string, string>>({});
-  const pendingOps = ref<PendingOp[]>([]);
   let syncRetryTimer: number | null = null;
   let syncRetryAttempt = 0;
   const wsConnected = ref(false);
@@ -399,7 +399,7 @@ export const useNotesStore = defineStore("notes", () => {
     const normalizedCollection = normalizeCollection(desiredCollection);
     const targetTitle = resolveUniqueTitle(
       new Set(
-        notes.value
+        (await getAllCachedNotes())
           .filter((note) => note.collection === normalizedCollection && note.key !== oldKey)
           .map((note) => note.title),
       ),
@@ -450,7 +450,6 @@ export const useNotesStore = defineStore("notes", () => {
     start: startSync,
     stop: stopSync,
   } = createNotesSync({
-    pendingOps,
     selectedKey,
     currentContent,
     currentUpdatedAt,
@@ -462,7 +461,9 @@ export const useNotesStore = defineStore("notes", () => {
     getAllCachedNotes,
     putCachedNote,
     deleteCachedNote,
-    replacePendingOps,
+    getPendingOps,
+    updatePendingOps,
+    withPendingOpsLock,
     queueWrite,
     flushPendingWrites,
     refreshStateFromCache,
@@ -504,15 +505,6 @@ export const useNotesStore = defineStore("notes", () => {
   const { connectWebSocket, disconnectWebSocket } = wsController;
   resetWsFailuresAndReconnect = wsController.resetWsFailuresAndReconnect;
 
-  const loadPendingOps = async () => {
-    const storedOps = await getPendingOps();
-    pendingOps.value = storedOps.map((storedOp) => {
-      const { id, ...op } = storedOp;
-      void id;
-      return op;
-    });
-  };
-
   const activateSync = async (migrateLegacy = false) => {
     if (syncActivated) return;
     const generation = sessionGeneration;
@@ -520,7 +512,6 @@ export const useNotesStore = defineStore("notes", () => {
     if (generation !== sessionGeneration) return;
 
     if (migrated) {
-      await loadPendingOps();
       await refreshStateFromCache();
       if (generation !== sessionGeneration) return;
     }
@@ -539,8 +530,6 @@ export const useNotesStore = defineStore("notes", () => {
     syncActivated = false;
     const task = (async () => {
       await configureNotesDb(username);
-      if (generation !== sessionGeneration) return;
-      await loadPendingOps();
       if (generation !== sessionGeneration) return;
       await refreshStateFromCache();
       if (generation !== sessionGeneration) return;
@@ -566,7 +555,6 @@ export const useNotesStore = defineStore("notes", () => {
     syncError.value = "";
     contentVersion.value = 0;
     noteContents.value = {};
-    pendingOps.value = [];
     updateSyncStatus();
   };
 
@@ -649,10 +637,8 @@ export const useNotesStore = defineStore("notes", () => {
     return key;
   };
 
-  const renameCurrent = async (newTitle: string, collectionOverride?: string) => {
+  const renameSelected = async (oldKey: string, newTitle: string, collectionOverride?: string) => {
     await flushPendingWrites();
-    if (!selectedKey.value) throw new Error(t("noNoteSelected"));
-    const oldKey = selectedKey.value;
     const requestedTitle = (newTitle || "").trim();
 
     if (!requestedTitle) throw new Error(t("titleRequired"));
@@ -693,25 +679,31 @@ export const useNotesStore = defineStore("notes", () => {
     return renamedKey;
   };
 
+  // Local identity changes and server replay must not interleave across tabs.
+  const withSelectedNoteLock = async <T>(task: (key: string) => Promise<T>) => {
+    const key = selectedKey.value;
+    const generation = sessionGeneration;
+    if (!key) throw new Error(t("noNoteSelected"));
+    return withPendingOpsLock(() => {
+      if (generation !== sessionGeneration) throw new Error(t("noNoteSelected"));
+      return task(key);
+    });
+  };
+
+  const renameCurrent = (newTitle: string, collectionOverride?: string) =>
+    withSelectedNoteLock((key) => renameSelected(key, newTitle, collectionOverride));
+
   const moveCurrentToCollection = async (nextCollection: string) => {
     if (!selectedKey.value) throw new Error(t("noNoteSelected"));
     const current = selectedNote.value || splitNoteKey(selectedKey.value);
     return renameCurrent(current.title, normalizeCollection(nextCollection));
   };
 
-  const deleteCurrent = async () => {
+  const deleteSelected = async (keyToDelete: string) => {
     await flushPendingWrites();
-    if (!selectedKey.value) throw new Error(t("noNoteSelected"));
-    const keyToDelete = selectedKey.value;
     const local = await getCachedNote(keyToDelete);
+    if (!local) throw new Error(t("noNoteSelected"));
     const likelyServerBacked = isServerBacked(local);
-
-    await queueWrite(async () => {
-      await deleteCachedNote(keyToDelete);
-    });
-
-    clearCurrentSelection();
-    await refreshStateFromCache();
 
     await mutatePendingOps((ops) => {
       let deleteTarget = keyToDelete;
@@ -752,12 +744,17 @@ export const useNotesStore = defineStore("notes", () => {
       }
 
       return pruned;
-    });
+    }, keyToDelete);
+
+    if (selectedKey.value === keyToDelete) clearCurrentSelection();
+    await refreshStateFromCache();
 
     if (online.value) {
       triggerBackgroundSync();
     }
   };
+
+  const deleteCurrent = () => withSelectedNoteLock(deleteSelected);
 
   return {
     notes,

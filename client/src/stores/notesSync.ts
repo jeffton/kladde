@@ -5,7 +5,6 @@ import { normalizeCollection, normalizeTs, splitNoteKey } from "./notesModel";
 import { notePathApi, renameNotePathApi, starNotePathApi } from "./notesApi";
 
 interface NotesSyncDeps {
-  pendingOps: Ref<PendingOp[]>;
   selectedKey: Ref<string>;
   currentContent: Ref<string>;
   currentUpdatedAt: Ref<string | null>;
@@ -17,7 +16,12 @@ interface NotesSyncDeps {
   getAllCachedNotes: () => Promise<CachedNote[]>;
   putCachedNote: (note: CachedNote) => Promise<IDBValidKey>;
   deleteCachedNote: (key: string) => Promise<void>;
-  replacePendingOps: (ops: PendingOp[]) => Promise<void>;
+  getPendingOps: () => Promise<PendingOp[]>;
+  updatePendingOps: (
+    mutate: (ops: PendingOp[]) => PendingOp[],
+    deletedKey?: string,
+  ) => Promise<void>;
+  withPendingOpsLock: (task: () => Promise<void>, signal: AbortSignal) => Promise<void>;
   queueWrite: (task: () => Promise<unknown>) => Promise<unknown>;
   flushPendingWrites: () => Promise<void>;
   refreshStateFromCache: () => Promise<void>;
@@ -79,12 +83,14 @@ export function createNotesSync(deps: NotesSyncDeps) {
   let pushQueue: Promise<void> = Promise.resolve();
   const activeSaves = new Set<Promise<void>>();
   let stopped = true;
+  let pendingOpsLock = new AbortController();
 
-  const mutatePendingOps = async (mutator: (ops: PendingOp[]) => PendingOp[]) => {
+  const mutatePendingOps = async (
+    mutator: (ops: PendingOp[]) => PendingOp[],
+    deletedKey?: string,
+  ) => {
     await deps.queueWrite(async () => {
-      const nextOps = mutator([...deps.pendingOps.value]);
-      deps.pendingOps.value = nextOps;
-      await deps.replacePendingOps(nextOps);
+      await deps.updatePendingOps(mutator, deletedKey);
     });
   };
 
@@ -202,8 +208,9 @@ export function createNotesSync(deps: NotesSyncDeps) {
   };
 
   const processPendingOps = async () => {
-    while (deps.pendingOps.value.length > 0) {
-      const op = deps.pendingOps.value[0];
+    while (!stopped) {
+      const [op] = await deps.getPendingOps();
+      if (!op) return;
 
       if (op.type === "delete") {
         const { title, collection } = splitNoteKey(op.key);
@@ -264,7 +271,7 @@ export function createNotesSync(deps: NotesSyncDeps) {
 
       const payload = normalizeServerNote((await res.json()) as RenameResponse);
       const serverKey = payload.key;
-      const queuedRename = deps.pendingOps.value.find(
+      const queuedRename = (await deps.getPendingOps()).find(
         (candidate) => candidate.type === "rename" && candidate.oldKey === op.oldKey,
       );
 
@@ -318,7 +325,14 @@ export function createNotesSync(deps: NotesSyncDeps) {
 
       await mutatePendingOps((ops) => {
         const idx = ops.findIndex((candidate) => deps.samePendingOp(candidate, op));
-        if (idx === -1) return ops;
+        if (idx === -1) {
+          // A local delete can replace the in-flight rename with a delete of its original key.
+          return ops.map((candidate) =>
+            candidate.type === "delete" && candidate.key === op.oldKey
+              ? { ...candidate, key: serverKey }
+              : candidate,
+          );
+        }
 
         const next = [...ops];
         next.splice(idx, 1);
@@ -405,7 +419,8 @@ export function createNotesSync(deps: NotesSyncDeps) {
           await runPushDirtyNote(local.key);
         }
 
-        await processPendingOps();
+        await deps.withPendingOpsLock(processPendingOps, pendingOpsLock.signal);
+        if (stopped) return;
 
         for (const local of await deps.getAllCachedNotes()) {
           if (!local.dirty) continue;
@@ -478,7 +493,7 @@ export function createNotesSync(deps: NotesSyncDeps) {
         deps.clearSyncRetry();
         deps.clearSyncError();
       } catch (err: unknown) {
-        deps.handleSyncFailure(err, t("couldNotSync"));
+        if (!stopped) deps.handleSyncFailure(err, t("couldNotSync"));
       } finally {
         deps.syncing.value = false;
         deps.updateSyncStatus();
@@ -493,11 +508,13 @@ export function createNotesSync(deps: NotesSyncDeps) {
   };
 
   const start = () => {
+    pendingOpsLock = new AbortController();
     stopped = false;
   };
 
   const stop = async () => {
     stopped = true;
+    pendingOpsLock.abort();
     await Promise.allSettled(Array.from(activeSaves));
     await syncInFlight;
     await pushQueue;
