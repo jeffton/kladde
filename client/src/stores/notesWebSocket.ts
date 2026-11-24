@@ -12,7 +12,7 @@ interface NotesWebSocketDeps {
   currentContent: Ref<string>;
   currentUpdatedAt: Ref<string | null>;
   dirty: Ref<boolean>;
-  apiFetch: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
+  apiFetch: typeof import("./notesApi").apiFetch;
   syncWithServer: () => Promise<void>;
   refreshStateFromCache: () => Promise<void>;
   getCachedNote: (key: string) => Promise<CachedNote | undefined>;

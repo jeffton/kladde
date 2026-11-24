@@ -1,11 +1,21 @@
-import { describe, expect, test } from "vite-plus/test";
+import { describe, expect, test, vi } from "vite-plus/test";
 import {
+  apiFetch,
   notePathApi,
   renameNotePathApi,
   shareNotePathApi,
   sharedNotePathApi,
   starNotePathApi,
 } from "./notesApi";
+
+test("a non-JSON 401 still expires the session", async () => {
+  const fetch = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("", { status: 401 }));
+  try {
+    await expect(apiFetch("/client-api/notes")).rejects.toThrow("UNAUTHORIZED");
+  } finally {
+    fetch.mockRestore();
+  }
+});
 
 describe("notes api path helpers", () => {
   test("encodes titles and omits empty collections", () => {

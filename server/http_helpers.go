@@ -22,25 +22,30 @@ func decodeJSONBody(w http.ResponseWriter, r *http.Request, dest any) error {
 	dec.DisallowUnknownFields()
 
 	if err := dec.Decode(dest); err != nil {
-		var synErr *json.SyntaxError
-		if errors.As(err, &synErr) {
-			return errors.New("invalid JSON body")
-		}
 		if errors.Is(err, io.EOF) {
 			return errors.New("empty JSON body")
 		}
-		if strings.Contains(err.Error(), "http: request body too large") {
-			return fmt.Errorf("request body exceeds %d bytes", maxJSONBodySize)
-		}
-		return errors.New("invalid JSON body")
+		return invalidJSONBody(err)
 	}
 
 	var extra any
 	if err := dec.Decode(&extra); err != io.EOF {
-		return errors.New("invalid JSON body")
+		return invalidJSONBody(err)
 	}
 
 	return nil
+}
+
+func invalidJSONBody(err error) error {
+	var limit *http.MaxBytesError
+	if errors.As(err, &limit) {
+		return bodyLimitError(limit)
+	}
+	return errors.New("invalid JSON body")
+}
+
+func bodyLimitError(limit *http.MaxBytesError) error {
+	return fmt.Errorf("request body exceeds %d bytes", limit.Limit)
 }
 
 func (s *Server) handleSPA(w http.ResponseWriter, r *http.Request) {

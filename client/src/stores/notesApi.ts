@@ -64,61 +64,31 @@ export function sharedNotePathApi(token: string): string {
 
 const API_FETCH_TIMEOUT_MS = 10000;
 
-function isAbortError(err: unknown): boolean {
-  return err instanceof DOMException && err.name === "AbortError";
-}
+type ApiRequestInit = Omit<RequestInit, "signal">;
 
-export async function apiFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
-  const method = (
-    init?.method ||
-    (input instanceof Request ? input.method : "GET") ||
-    "GET"
-  ).toUpperCase();
-  const controller = new AbortController();
-  const timeout = window.setTimeout(() => controller.abort(), API_FETCH_TIMEOUT_MS);
-
-  let requestInit: RequestInit = {
-    ...init,
-    signal: init?.signal ? AbortSignal.any([init.signal, controller.signal]) : controller.signal,
-  };
-
+export async function apiFetch(path: string, init?: ApiRequestInit): Promise<Response> {
+  const method = (init?.method ?? "GET").toUpperCase();
+  const headers = new Headers(init?.headers);
   if (method !== "GET" && method !== "HEAD") {
-    const headers = new Headers(input instanceof Request ? input.headers : undefined);
-    if (init?.headers) {
-      const extra = new Headers(init.headers);
-      extra.forEach((value, key) => headers.set(key, value));
-    }
     headers.set("X-Kladde-Origin", clientOrigin);
-    requestInit = { ...requestInit, headers };
   }
 
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), API_FETCH_TIMEOUT_MS);
   let res: Response;
   try {
-    res = await fetch(input, requestInit);
+    res = await fetch(path, { ...init, headers, signal: controller.signal });
   } catch (err: unknown) {
-    if (isAbortError(err)) {
-      throw new Error("REQUEST_TIMEOUT", { cause: err });
-    }
+    if (controller.signal.aborted) throw new Error("REQUEST_TIMEOUT", { cause: err });
     throw err;
   } finally {
-    window.clearTimeout(timeout);
+    clearTimeout(timeout);
   }
 
-  if (res.status === 401) {
-    await res.json();
-    throw new Error("UNAUTHORIZED");
-  }
-
+  if (res.status === 401) throw new Error("UNAUTHORIZED");
   if (!res.ok) {
-    let message = t("requestFailed");
-    try {
-      const payload = (await res.json()) as { error: string };
-      message = payload.error;
-    } catch {
-      // no-op
-    }
-    throw new ApiError(res.status, message);
+    const payload = (await res.json().catch(() => null)) as { error: string } | null;
+    throw new ApiError(res.status, payload?.error ?? t("requestFailed"));
   }
-
   return res;
 }

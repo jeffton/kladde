@@ -86,20 +86,8 @@ func parseAgentPathValue(raw string, unescape bool) (string, string, error) {
 }
 
 func parseAgentNotePath(r *http.Request) (string, string, error) {
-	rest := strings.TrimPrefix(r.URL.Path, "/api/notes/")
+	rest := strings.TrimPrefix(r.URL.EscapedPath(), "/api/notes/")
 	return parseAgentPathValue(rest, true)
-}
-
-func readMarkdownBody(w http.ResponseWriter, r *http.Request) (string, error) {
-	reader := http.MaxBytesReader(w, r.Body, maxMarkdownBodySize)
-	body, err := io.ReadAll(reader)
-	if err != nil {
-		if strings.Contains(err.Error(), "http: request body too large") {
-			return "", fmt.Errorf("request body exceeds %d bytes", maxMarkdownBodySize)
-		}
-		return "", err
-	}
-	return string(body), nil
 }
 
 func writeMarkdown(w http.ResponseWriter, status int, content string) {
@@ -216,17 +204,18 @@ func (s *Server) handleAgentNoteByPath(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		content, err := readMarkdownBody(w, r)
+		body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxMarkdownBodySize))
 		if err != nil {
-			if strings.Contains(err.Error(), "request body exceeds") {
-				writeError(w, http.StatusRequestEntityTooLarge, err)
+			var limit *http.MaxBytesError
+			if errors.As(err, &limit) {
+				writeError(w, http.StatusRequestEntityTooLarge, bodyLimitError(limit))
 				return
 			}
 			writeError(w, http.StatusBadRequest, err)
 			return
 		}
 
-		note, action, err := s.saveNote(userDir, title, collection, content)
+		note, action, err := s.saveNote(userDir, title, collection, string(body))
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, err)
 			return

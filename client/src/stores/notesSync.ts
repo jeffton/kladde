@@ -31,7 +31,7 @@ interface NotesSyncDeps {
   retargetPendingKey: (ops: PendingOp[], fromKey: string, toKey: string) => PendingOp[];
   normalizeTs: (value?: string | null) => string;
   tsMs: (value?: string | null) => number;
-  apiFetch: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
+  apiFetch: typeof import("./notesApi").apiFetch;
   isNotFoundError: (err: unknown) => boolean;
   resetWsFailuresAndReconnect: () => void;
   updateSyncStatus: () => void;

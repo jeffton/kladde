@@ -80,10 +80,6 @@ export function retargetPendingKey(ops: PendingOp[], fromKey: string, toKey: str
       };
     }
 
-    if (op.type === "delete") {
-      return { ...op, key: op.key === fromKey ? toKey : op.key };
-    }
-
     return { ...op, key: op.key === fromKey ? toKey : op.key };
   });
 }
