@@ -2,21 +2,7 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import { EditorContent, useEditor } from "@tiptap/vue-3";
 import { generateHTML } from "@tiptap/core";
-import type {
-  Editor as TiptapEditor,
-  JSONContent,
-  MarkdownParseHelpers,
-  MarkdownRendererHelpers,
-  MarkdownToken,
-} from "@tiptap/core";
-import StarterKit from "@tiptap/starter-kit";
-import { TaskItem, TaskList } from "@tiptap/extension-list";
-import Link from "@tiptap/extension-link";
-import CodeBlock from "@tiptap/extension-code-block";
-import Strike from "@tiptap/extension-strike";
-import Paragraph from "@tiptap/extension-paragraph";
-import { Table, TableCell, TableHeader, TableRow } from "@tiptap/extension-table";
-import { Markdown } from "@tiptap/markdown";
+import type { Editor as TiptapEditor } from "@tiptap/core";
 import {
   TriangleExclamationPoint,
   Check,
@@ -37,7 +23,10 @@ import {
 import EditorToolbar from "./EditorToolbar.vue";
 import { apiFetch, shareNotePathApi } from "../stores/notesApi";
 import type { AppMode, EditorStoreLike, ShareLinksResponse, ShareMode } from "../types";
-import { intlLocale, t } from "../i18n";
+import { t } from "../i18n";
+import { useEditorStatus } from "../composables/useEditorStatus";
+import { useMarkdownSource } from "../composables/useMarkdownSource";
+import { createEditorExtensions, serializeClipboardText } from "./editorExtensions";
 import { readableMarkdown } from "../markdown-source";
 
 interface Props {
@@ -64,138 +53,19 @@ const isReadonlyMode = computed(() => props.mode === "share-readonly");
 const editableTitle = ref("");
 const titleInput = ref<HTMLInputElement | null>(null);
 const showPlain = ref(false);
-const plainInput = ref<string | null>(null);
-const plainTextarea = ref<HTMLTextAreaElement | null>(null);
 const plainWrap = ref<HTMLElement | null>(null);
 const wysiwygWrap = ref<HTMLElement | null>(null);
 let ignoreEditorChanges = false;
 
-// Preserve empty paragraphs through markdown round-trip using a literal nbsp.
-const NBSP = "\u00A0";
-const EMPTY_PARAGRAPH_HTML_ENTITY = "&nbsp;";
+function reportSaveError(err: unknown) {
+  emit("ui-error", (err as Error)?.message || t("couldNotSaveLocally"));
+}
 
-const PreservingParagraph = Paragraph.extend({
-  parseMarkdown: (token: MarkdownToken, helpers: MarkdownParseHelpers) => {
-    const tokens = token.tokens || [];
-
-    if (tokens.length === 1 && tokens[0].type === "image") {
-      return helpers.parseChildren([tokens[0]]);
-    }
-
-    const content = helpers.parseInline(tokens);
-
-    if (
-      content.length === 1 &&
-      content[0].type === "text" &&
-      (content[0].text === EMPTY_PARAGRAPH_HTML_ENTITY || content[0].text === NBSP)
-    ) {
-      return helpers.createNode("paragraph", undefined, []);
-    }
-
-    return helpers.createNode("paragraph", undefined, content);
-  },
-  renderMarkdown: (node: JSONContent, helpers: MarkdownRendererHelpers) => {
-    const content = Array.isArray(node.content) ? node.content : [];
-
-    if (content.length === 0) {
-      return NBSP;
-    }
-
-    return helpers.renderChildren(content);
-  },
-});
-// Task item extension without forced focus on checkbox toggle.
-// The upstream extension calls chain().focus() on change, which triggers
-// virtual keyboard popup on touch devices when editor is currently blurred.
-const FocusSafeTaskItem = TaskItem.extend({
-  addNodeView() {
-    return ({ node, HTMLAttributes, getPos, editor }) => {
-      const listItem = document.createElement("li");
-      const checkboxWrapper = document.createElement("label");
-      const checkboxStyler = document.createElement("span");
-      const checkbox = document.createElement("input");
-      const content = document.createElement("div");
-
-      const updateA11Y = () => {
-        checkbox.ariaLabel =
-          this.options.a11y?.checkboxLabel?.(node, checkbox.checked) ||
-          `Task item checkbox for ${node.textContent || "empty task item"}`;
-      };
-
-      updateA11Y();
-
-      checkboxWrapper.contentEditable = "false";
-      checkbox.type = "checkbox";
-      checkbox.addEventListener("mousedown", (event) => event.preventDefault());
-      checkbox.addEventListener("change", (event) => {
-        if (!editor.isEditable && !this.options.onReadOnlyChecked) {
-          checkbox.checked = !checkbox.checked;
-          return;
-        }
-
-        const { checked } = event.target as HTMLInputElement;
-
-        if (editor.isEditable && typeof getPos === "function") {
-          editor
-            .chain()
-            .command(({ tr }) => {
-              const position = getPos();
-
-              if (typeof position !== "number") {
-                return false;
-              }
-
-              const currentNode = tr.doc.nodeAt(position);
-
-              tr.setNodeMarkup(position, undefined, {
-                ...currentNode?.attrs,
-                checked,
-              });
-
-              return true;
-            })
-            .run();
-        }
-
-        if (!editor.isEditable && this.options.onReadOnlyChecked) {
-          if (!this.options.onReadOnlyChecked(node, checked)) {
-            checkbox.checked = !checkbox.checked;
-          }
-        }
-      });
-
-      Object.entries(this.options.HTMLAttributes).forEach(([key, value]) => {
-        listItem.setAttribute(key, value);
-      });
-
-      listItem.dataset.checked = String(node.attrs.checked);
-      checkbox.checked = Boolean(node.attrs.checked);
-
-      checkboxWrapper.append(checkbox, checkboxStyler);
-      listItem.append(checkboxWrapper, content);
-
-      Object.entries(HTMLAttributes).forEach(([key, value]) => {
-        listItem.setAttribute(key, value);
-      });
-
-      return {
-        dom: listItem,
-        contentDOM: content,
-        update: (updatedNode) => {
-          if (updatedNode.type !== this.type) {
-            return false;
-          }
-
-          listItem.dataset.checked = String(updatedNode.attrs.checked);
-          checkbox.checked = Boolean(updatedNode.attrs.checked);
-          updateA11Y();
-
-          return true;
-        },
-      };
-    };
-  },
-});
+const { plainInput, plainTextarea, applyPlainAction, onPlainInput } = useMarkdownSource(
+  (value) => props.store.setCurrentContent(value),
+  reportSaveError,
+  () => isReadonlyMode.value,
+);
 
 const showTooltip = ref(false);
 const isTouchLike = ref(false);
@@ -209,22 +79,11 @@ const shareBusyMode = ref<ShareMode | "">("");
 const shareCopyMode = ref<ShareMode | "">("");
 const menuCopyFeedback = ref<"markdown" | "html" | "path" | "">("");
 const shareLoading = ref(false);
-const lastSyncTime = ref("");
 const noteMenuWrap = ref<HTMLElement | null>(null);
 const availableCollections = computed(() => props.store.collections);
 const selectedCollection = computed(() => props.store.selectedCollection || "");
 let shouldBlurAfterTaskCheckboxTap = false;
 let menuCopyFeedbackTimeout: ReturnType<typeof setTimeout> | null = null;
-
-function isSameDay(a: Date, b: Date) {
-  return (
-    a.getFullYear() === b.getFullYear() &&
-    a.getMonth() === b.getMonth() &&
-    a.getDate() === b.getDate()
-  );
-}
-
-const locale = intlLocale;
 
 function isTouchDevice(): boolean {
   if (typeof window === "undefined" || typeof navigator === "undefined") return false;
@@ -339,133 +198,15 @@ function handleGlobalTabKeyDown(event: KeyboardEvent) {
   adjustListItemIndent(editor.value, event.shiftKey);
 }
 
-function firstDayOfWeek(): number {
-  try {
-    const localeInfo = new Intl.Locale(locale) as Intl.Locale & {
-      weekInfo?: { firstDay?: number };
-    };
-    const first = localeInfo.weekInfo?.firstDay;
-    if (typeof first === "number") {
-      // Intl.Locale uses 1..7 (Mon..Sun). Date.getDay uses 0..6 (Sun..Sat).
-      return first % 7;
-    }
-  } catch {
-    // Fallback below
-  }
-
-  return locale.toLowerCase().startsWith("en-us") ? 0 : 1;
-}
-
-function startOfWeek(date: Date) {
-  const copy = new Date(date);
-  copy.setHours(0, 0, 0, 0);
-  const day = copy.getDay();
-  const weekStartsOn = firstDayOfWeek();
-  const diff = (day - weekStartsOn + 7) % 7;
-  copy.setDate(copy.getDate() - diff);
-  return copy;
-}
-
-function fmtTime(date: Date) {
-  return new Intl.DateTimeFormat(locale, { hour: "2-digit", minute: "2-digit" }).format(date);
-}
-
-function formatUpdatedAt(value: string) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-
-  const now = new Date();
-  const time = fmtTime(date);
-  if (isSameDay(date, now)) return time;
-
-  if (date >= startOfWeek(now)) {
-    const weekday = new Intl.DateTimeFormat(locale, { weekday: "long" }).format(date);
-    return `${weekday}, ${time}`;
-  }
-
-  return new Intl.DateTimeFormat(locale, {
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(date);
-}
-
-const statusMeta = computed(() => {
-  const syncState = props.store.syncState;
-  const modifiedRaw =
-    props.store.currentUpdatedAt ||
-    props.store.notes.find((n) => n.key === props.store.selectedKey)?.updatedAt ||
-    "";
-  const modifiedText = modifiedRaw ? formatUpdatedAt(modifiedRaw) : "";
-  const modifiedLine = modifiedText ? `${t("modified")} ${modifiedText}` : "";
-
-  const lines: string[] = [];
-
-  if (isReadonlyMode.value) {
-    if (modifiedLine) lines.push(modifiedLine);
-    lines.push(t("shareReadonly"));
-    return { state: "synced" as const, lines };
-  }
-
-  if (syncState === "offline") {
-    lines.push(t("offline"));
-    if (modifiedLine) lines.push(modifiedLine);
-    lines.push(
-      lastSyncTime.value ? `${t("synced")} ${lastSyncTime.value}` : t("changesSavedLocally"),
-    );
-    return { state: "offline" as const, lines };
-  }
-
-  if (syncState === "syncing") {
-    if (modifiedLine) lines.push(modifiedLine);
-    lines.push(props.store.syncStatus || t("syncingChanges"));
-    return { state: "syncing" as const, lines };
-  }
-
-  if (syncState === "error") {
-    if (modifiedLine) lines.push(modifiedLine);
-    lines.push(props.store.syncStatus || t("syncError"));
-    lines.push(
-      lastSyncTime.value ? `${t("synced")} ${lastSyncTime.value}` : t("noSuccessfulSyncYet"),
-    );
-    return { state: "error" as const, lines };
-  }
-
-  const syncedAt = lastSyncTime.value ? ` ${lastSyncTime.value}` : "";
-  if (modifiedLine) lines.push(modifiedLine);
-  lines.push(`${t("synced")}${syncedAt}`);
-  return { state: "synced" as const, lines };
-});
-
-const statusAriaLabel = computed(() => statusMeta.value.lines.join(", "));
+const { statusMeta, statusAriaLabel } = useEditorStatus(
+  () => props.store,
+  () => isReadonlyMode.value,
+);
 
 const editor = useEditor({
-  extensions: [
-    StarterKit.configure({ strike: false, codeBlock: false, paragraph: false, link: false }),
-    PreservingParagraph,
-    Strike,
-    CodeBlock,
-    TaskList,
-    FocusSafeTaskItem.configure({ nested: true }),
-    Table.configure({ resizable: false }),
-    TableRow,
-    TableHeader,
-    TableCell,
-    Link.configure({
-      autolink: true,
-      openOnClick: true,
-      linkOnPaste: true,
-      HTMLAttributes: { rel: "noopener noreferrer nofollow", target: "_blank" },
-    }),
-    Markdown.configure(),
-  ],
+  extensions: createEditorExtensions(),
   editorProps: {
-    clipboardTextSerializer: (slice) => {
-      const defaultText = slice.content.textBetween(0, slice.content.size, "\n\n");
-      return defaultText.replace(new RegExp(NBSP, "g"), "");
-    },
+    clipboardTextSerializer: serializeClipboardText,
     handleDOMEvents: {
       pointerdown: (_view, event) => handleTaskCheckboxPointerStart(event),
       touchstart: (_view, event) => handleTaskCheckboxPointerStart(event),
@@ -482,9 +223,7 @@ const editor = useEditor({
     const nextMarkdown = readableMarkdown(tiptapEditor.getMarkdown(), tiptapEditor.markdown!);
     if (nextMarkdown === props.store.currentContent) return;
 
-    void props.store.setCurrentContent(nextMarkdown).catch((err: unknown) => {
-      emit("ui-error", (err as Error)?.message || t("couldNotSaveLocally"));
-    });
+    void props.store.setCurrentContent(nextMarkdown).catch(reportSaveError);
   },
 });
 
@@ -526,196 +265,6 @@ function syncEditorFromStore() {
   const current = readableMarkdown(editor.value.getMarkdown(), editor.value.markdown!);
   if (current === markdownSource.value) return;
   setEditorMarkdown(props.store.currentContent);
-}
-
-async function updatePlainText(nextValue: string, selectionStart: number, selectionEnd: number) {
-  const textarea = plainTextarea.value;
-  if (!textarea) return;
-
-  textarea.value = nextValue;
-  plainInput.value = nextValue;
-  await props.store.setCurrentContent(nextValue);
-
-  await nextTick();
-  if (plainTextarea.value) {
-    plainTextarea.value.focus();
-    plainTextarea.value.setSelectionRange(selectionStart, selectionEnd);
-  }
-}
-
-function wrapSelection(prefix: string, suffix = prefix, placeholder = "") {
-  const textarea = plainTextarea.value;
-  if (!textarea) return;
-
-  const { value } = textarea;
-  const start = textarea.selectionStart;
-  const end = textarea.selectionEnd;
-  const selected = value.slice(start, end);
-  const middle = selected || placeholder;
-  const replacement = `${prefix}${middle}${suffix}`;
-  const nextValue = value.slice(0, start) + replacement + value.slice(end);
-
-  const selectFrom = start + prefix.length;
-  const selectTo = start + prefix.length + middle.length;
-  void updatePlainText(nextValue, selectFrom, selectTo);
-}
-
-function prefixLines(prefix: string) {
-  const textarea = plainTextarea.value;
-  if (!textarea) return;
-
-  const { value } = textarea;
-  const start = textarea.selectionStart;
-  const end = textarea.selectionEnd;
-
-  const blockStart = value.lastIndexOf("\n", Math.max(0, start - 1)) + 1;
-  const blockEndIndex = value.indexOf("\n", end);
-  const blockEnd = blockEndIndex === -1 ? value.length : blockEndIndex;
-
-  const block = value.slice(blockStart, blockEnd);
-  const lines = block.split("\n");
-  const prefixed = lines.map((line) => `${prefix}${line}`).join("\n");
-  const nextValue = value.slice(0, blockStart) + prefixed + value.slice(blockEnd);
-
-  const shiftAtStart = start - blockStart >= 0 ? prefix.length : 0;
-  const addedChars = prefix.length * lines.length;
-
-  void updatePlainText(nextValue, start + shiftAtStart, end + addedChars);
-}
-
-function unprefixLines(prefix: string) {
-  const textarea = plainTextarea.value;
-  if (!textarea) return;
-
-  const { value } = textarea;
-  const start = textarea.selectionStart;
-  const end = textarea.selectionEnd;
-
-  const blockStart = value.lastIndexOf("\n", Math.max(0, start - 1)) + 1;
-  const blockEndIndex = value.indexOf("\n", end);
-  const blockEnd = blockEndIndex === -1 ? value.length : blockEndIndex;
-
-  const block = value.slice(blockStart, blockEnd);
-  const lines = block.split("\n");
-
-  let removedBeforeStart = 0;
-  let removedBeforeEnd = 0;
-
-  const unprefixed = lines
-    .map((line, index) => {
-      const hadPrefix = line.startsWith(prefix);
-      if (!hadPrefix) return line;
-
-      if (index === 0) removedBeforeStart = prefix.length;
-      removedBeforeEnd += prefix.length;
-      return line.slice(prefix.length);
-    })
-    .join("\n");
-
-  const nextValue = value.slice(0, blockStart) + unprefixed + value.slice(blockEnd);
-  const nextStart = Math.max(blockStart, start - removedBeforeStart);
-  const nextEnd = Math.max(nextStart, end - removedBeforeEnd);
-
-  void updatePlainText(nextValue, nextStart, nextEnd);
-}
-
-function insertHr() {
-  const textarea = plainTextarea.value;
-  if (!textarea) return;
-
-  const { value } = textarea;
-  const start = textarea.selectionStart;
-  const end = textarea.selectionEnd;
-  const before = value.slice(0, start);
-  const after = value.slice(end);
-
-  const pre = before.length && !before.endsWith("\n") ? "\n" : "";
-  const post = after.length && !after.startsWith("\n") ? "\n" : "";
-  const insert = `${pre}---${post}`;
-
-  const nextValue = before + insert + after;
-  const cursor = before.length + insert.length;
-  void updatePlainText(nextValue, cursor, cursor);
-}
-
-function applyPlainLink() {
-  const textarea = plainTextarea.value;
-  if (!textarea) return;
-
-  const start = textarea.selectionStart;
-  const end = textarea.selectionEnd;
-  const selected = textarea.value.slice(start, end) || t("linkTextPlaceholder");
-  const href = window.prompt(t("insertLinkPrompt"), "https://");
-  if (href === null) return;
-
-  const replacement = `[${selected}](${href || t("linkUrlFallback")})`;
-  const nextValue = textarea.value.slice(0, start) + replacement + textarea.value.slice(end);
-  const textStart = start + 1;
-  const textEnd = textStart + selected.length;
-  void updatePlainText(nextValue, textStart, textEnd);
-}
-
-function applyPlainAction(action: string) {
-  switch (action) {
-    case "bold":
-      wrapSelection("**");
-      break;
-    case "italic":
-      wrapSelection("*");
-      break;
-    case "strike":
-      wrapSelection("~~");
-      break;
-    case "h1":
-      prefixLines("# ");
-      break;
-    case "h2":
-      prefixLines("## ");
-      break;
-    case "h3":
-      prefixLines("### ");
-      break;
-    case "bullet":
-      prefixLines("- ");
-      break;
-    case "ordered":
-      prefixLines("1. ");
-      break;
-    case "task":
-      prefixLines("- [ ] ");
-      break;
-    case "link":
-      applyPlainLink();
-      break;
-    case "code":
-      wrapSelection("`");
-      break;
-    case "codeBlock":
-      wrapSelection("```\n", "\n```");
-      break;
-    case "blockquote":
-      prefixLines("> ");
-      break;
-    case "indent":
-      prefixLines("  ");
-      break;
-    case "outdent":
-      unprefixLines("  ");
-      break;
-    case "hr":
-      insertHr();
-      break;
-  }
-}
-
-function onPlainInput(event: Event) {
-  if (isReadonlyMode.value) return;
-
-  const value = (event.target as HTMLTextAreaElement).value;
-  plainInput.value = value;
-  void props.store.setCurrentContent(value).catch((err: unknown) => {
-    emit("ui-error", (err as Error)?.message || t("couldNotSaveLocally"));
-  });
 }
 
 function onTitleInput(event: Event) {
@@ -1006,20 +555,6 @@ watch(showPlain, (isPlain) => {
   }
   syncEditorFromStore();
 });
-
-watch(
-  () => props.store.syncState,
-  (syncState, previousState) => {
-    const enteredSynced = syncState === "synced" && previousState !== "synced";
-    if (!enteredSynced) return;
-
-    lastSyncTime.value = new Date().toLocaleTimeString(locale, {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  },
-  { immediate: true },
-);
 
 function fallbackTitleFromKey(key: string): string {
   if (!key) return "";
