@@ -9,13 +9,17 @@ export function useMarkdownSource(
   const plainInput = ref<string | null>(null);
   const plainTextarea = ref<HTMLTextAreaElement | null>(null);
 
+  function saveSource(value: string) {
+    plainInput.value = value;
+    return saveContent(value).catch(onSaveError);
+  }
+
   async function updatePlainText(nextValue: string, selectionStart: number, selectionEnd: number) {
     const textarea = plainTextarea.value;
     if (!textarea) return;
 
     textarea.value = nextValue;
-    plainInput.value = nextValue;
-    await saveContent(nextValue);
+    await saveSource(nextValue);
 
     await nextTick();
     if (plainTextarea.value) {
@@ -162,9 +166,7 @@ export function useMarkdownSource(
   function onPlainInput(event: Event) {
     if (isReadonly()) return;
 
-    const value = (event.target as HTMLTextAreaElement).value;
-    plainInput.value = value;
-    void saveContent(value).catch(onSaveError);
+    void saveSource((event.target as HTMLTextAreaElement).value);
   }
 
   return { plainInput, plainTextarea, applyPlainAction, onPlainInput };
